@@ -78,11 +78,6 @@ function buildHtml(opts: { variant: "1" | "2"; lang: "es" | "en"; quote: any }) 
         <div class="muted">${t("Destino", "Destination")}: <b>${quote.destination}</b></div>
         <div style="margin-top:10px" class="total">${t("Total", "Total")}: ${sym} ${total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
       </div>
-
-      <h1>${t("Condiciones", "Terms")}</h1>
-      <div class="box">
-        <div style="white-space:pre-wrap; font-size:12px; line-height:1.35">${quote.terms || ""}</div>
-      </div>
       `
       : `
       <div class="top">
@@ -138,11 +133,6 @@ function buildHtml(opts: { variant: "1" | "2"; lang: "es" | "en"; quote: any }) 
           <div class="total">${t("Total", "Total")}: ${sym} ${total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
         </div>
       </div>
-
-      <h1>${t("Condiciones", "Terms")}</h1>
-      <div class="box">
-        <div style="white-space:pre-wrap; font-size:12px; line-height:1.35">${quote.terms || ""}</div>
-      </div>
       `;
 
   return `<!doctype html><html><head><meta charset="utf-8"/><style>${css}</style></head><body>${body}</body></html>`;
@@ -159,37 +149,20 @@ async function resolveExecutablePath(): Promise<string> {
   const p = await chromium.executablePath();
   if (p && String(p).trim()) return String(p).trim();
 
-  // fallback: SIEMPRE string (evita "path undefined")
   return "/usr/bin/google-chrome-stable";
 }
 
 export const handler: Handler = async (event) => {
   try {
-    if (event.httpMethod === "OPTIONS") {
-      return {
-        statusCode: 200,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
-          "Access-Control-Allow-Methods": "GET,OPTIONS",
-        },
-        body: "ok",
-      };
-    }
-
-    // 1) auth admin
     const { user, profile } = await getUserAndProfile(event);
-    if (!user) return text(401, "Unauthorized");
-    if (!profile) return text(401, "Unauthorized (missing profile)");
+    if (!user || !profile) return text(401, "Unauthorized");
     if (!isPrivileged(profile.role)) return text(403, "Forbidden");
 
-    // 2) params
     const id = String(event.queryStringParameters?.id || "").trim();
-    const variant = (String(event.queryStringParameters?.variant || "2").trim() as "1" | "2");
-    const lang = (String(event.queryStringParameters?.lang || "es").trim().toLowerCase() as "es" | "en");
+    const variant = (String(event.queryStringParameters?.variant || "2") as "1" | "2");
+    const lang = (String(event.queryStringParameters?.lang || "es") as "es" | "en");
     if (!id) return text(400, "Missing id");
 
-    // 3) fetch quote
     const sb = supabaseAdmin();
     const { data, error } = await sb
       .from("quotes")
@@ -197,25 +170,22 @@ export const handler: Handler = async (event) => {
       .eq("id", id)
       .single();
 
-    if (error || !data) return text(404, error?.message || "Quote not found");
+    if (error || !data) return text(404, "Quote not found");
 
-    // 4) build html
-    const html = buildHtml({ variant, lang: lang === "en" ? "en" : "es", quote: data });
+    const html = buildHtml({ variant, lang, quote: data });
 
-    // 5) puppeteer -> pdf (robusto + sin errores TS)
-    const executablePath = String(await resolveExecutablePath()).trim();
-    if (!executablePath) return text(500, "Chromium executablePath resolved to empty string.");
+    const executablePath = await resolveExecutablePath();
 
     const browser = await puppeteer.launch({
       args: chromium.args as any,
-      defaultViewport: (chromium.defaultViewport ?? { width: 1280, height: 720 }) as any,
-      executablePath,     // nunca undefined
-      headless: true,     // evita incompatibilidades de tipo/version
+      executablePath,
+      headless: true,
       ignoreHTTPSErrors: true,
-    } as any);
+    });
 
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "load" as any });
+    await page.setViewport({ width: 1280, height: 720 });
+    await page.setContent(html, { waitUntil: "networkidle0" });
 
     const pdf = await page.pdf({
       format: "A4",
@@ -226,19 +196,19 @@ export const handler: Handler = async (event) => {
     await page.close();
     await browser.close();
 
-    const clientName = data?.clients?.name || data?.client_snapshot?.name || "cliente";
-    const filename = `${safeFileName(clientName)}_quote_${String(id).slice(0, 8)}_${variant}_${lang}.pdf`;
+    const filename = `${safeFileName(
+      data?.clients?.name || "cliente"
+    )}_quote_${String(id).slice(0, 8)}_${variant}_${lang}.pdf`;
 
     return {
       statusCode: 200,
       headers: {
-        "Access-Control-Allow-Origin": "*",
         "Content-Type": "application/pdf",
-        // descarga directa:
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "no-store",
+        "Access-Control-Allow-Origin": "*",
       },
-      body: Buffer.from(pdf).toString("base64"),
+      body: pdf.toString("base64"),
       isBase64Encoded: true,
     };
   } catch (e: any) {
