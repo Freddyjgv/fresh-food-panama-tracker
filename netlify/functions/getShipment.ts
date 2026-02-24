@@ -34,39 +34,37 @@ export const handler: Handler = async (event) => {
     const { data: shipment, error } = await sb
       .from("shipments")
       .select(
-        [
-          "id",
-          "code",
-          "destination",
-          "status",
-          "created_at",
-          "boxes",
-          "pallets",
-          "weight_kg",
-          "flight_number",
-          "awb",
-          "client_id",
-          "product_name",
-          "product_variety",
-          "product_mode",
-        ].join(",")
+        `
+        id,
+        code,
+        destination,
+        status,
+        created_at,
+        boxes,
+        pallets,
+        weight_kg,
+        flight_number,
+        awb,
+        client_id,
+        product_name,
+        product_variety,
+        product_mode
+        `
       )
-      // 👇 clave: forzamos el tipo real del row para que TS no lo convierta a GenericStringError
-      .returns<ShipmentRow>()
       .eq("id", id)
-      .maybeSingle();
+      .maybeSingle<ShipmentRow>();
 
     if (error) return text(500, error.message);
     if (!shipment) return text(404, "Not found");
 
-    // ✅ Roles normalizados
+    // Roles
     const role = String(profile.role || "").trim().toLowerCase();
     const privileged = role === "admin" || role === "superadmin";
 
-    // Si alguien intenta modo admin sin privilegios => bloqueado
+    // Bloquear acceso admin sin permisos
     if (mode === "admin" && !privileged) return text(403, "Forbidden");
 
-    // ✅ Cliente: solo puede ver su shipment
+    // Cliente solo ve su shipment
     if (!privileged) {
       if (!profile.client_id) return text(403, "Forbidden");
       if (shipment.client_id !== profile.client_id) return text(403, "Forbidden");
@@ -88,23 +86,22 @@ export const handler: Handler = async (event) => {
 
     if (fErr) return text(500, fErr.message);
 
-    const documents = (files || []).filter((x: any) => x.kind === "doc");
-    const photos = (files || []).filter((x: any) => x.kind === "photo");
+    const documents = (files || []).filter((x) => x.kind === "doc");
+    const photos = (files || []).filter((x) => x.kind === "photo");
 
-    // Signed URLs para fotos
     const SIGNED_SECONDS = 60 * 60; // 1 hora
 
     const photosWithUrl = await Promise.all(
-      (photos || []).map(async (p: any) => {
-        const bucket = p.bucket || "shipment-photos";
-        const path = p.storage_path;
+      photos.map(async (p) => {
+        if (!p.storage_path) return { ...p, url: null };
 
-        if (!path) return { ...p, url: null };
+        const { data, error } = await sb.storage
+          .from(p.bucket || "shipment-photos")
+          .createSignedUrl(p.storage_path, SIGNED_SECONDS);
 
-        const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, SIGNED_SECONDS);
         if (error) return { ...p, url: null };
 
-        return { ...p, url: data?.signedUrl ?? null };
+        return { ...p, url: data.signedUrl };
       })
     );
 
