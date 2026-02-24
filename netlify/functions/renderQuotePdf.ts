@@ -177,11 +177,10 @@ export const handler: Handler = async (event) => {
     const executablePath = await resolveExecutablePath();
 
     const browser = await puppeteer.launch({
-      args: chromium.args as any,
-      executablePath,
-      headless: true,
-      ignoreHTTPSErrors: true,
-    });
+  args: chromium.args as any,
+  executablePath,
+  headless: true,
+});
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720 });
