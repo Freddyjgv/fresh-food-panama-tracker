@@ -235,7 +235,7 @@ export default function ShipmentDetailPage() {
             <div className="ff-divider" />
 
             {/* Progreso */}
-            <ProgressStepper milestones={data.milestones ?? []} status={data.status} flightNumber={data.flight_number ?? null} />
+            <ProgressStepper milestones={data.milestones ?? []} flightNumber={data.flight_number ?? null} />
 
             <div className="ff-divider" />
 
