@@ -11,6 +11,17 @@ function cleanEmail(v: any) {
 
 type CreateMode = "invite" | "manual";
 
+async function findUserByEmail(sb: ReturnType<typeof supabaseAdmin>, email: string) {
+  // listUsers existe en supabase-js v2.48
+  // Nota: por defecto trae una página; en la práctica suele bastar.
+  const { data, error } = await sb.auth.admin.listUsers();
+  if (error) throw error;
+
+  const users = data?.users || [];
+  const u = users.find((x: any) => String(x.email || "").toLowerCase() === email);
+  return u || null;
+}
+
 export const handler: Handler = async (event) => {
   try {
     if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
@@ -113,11 +124,15 @@ export const handler: Handler = async (event) => {
       clientId = createdClient.id;
     }
 
-    // 2) Auth user: crear si no existe
-    const { data: got, error: getUErr } = await sb.auth.admin.getUserByEmail(email);
-    if (getUErr) return text(500, getUErr.message);
+    // 2) Auth user: crear si no existe (reemplazo de getUserByEmail)
+    let authUserId: string | null = null;
 
-    let authUserId = got?.user?.id || null;
+    try {
+      const u = await findUserByEmail(sb as any, email);
+      authUserId = u?.id || null;
+    } catch (e: any) {
+      return text(500, e?.message || "Error buscando usuario por email");
+    }
 
     if (!authUserId) {
       if (mode === "manual") {
@@ -149,8 +164,7 @@ export const handler: Handler = async (event) => {
 
     if (!authUserId) return text(500, "No se pudo resolver auth user id");
 
-    // 3) Profiles (según tu esquema REAL)
-    // user_id (uuid, NOT NULL), role (text, NOT NULL), client_id (uuid, nullable), created_at default now()
+    // 3) Profiles (según tu esquema REAL
     const { error: pErr } = await sb.from("profiles").upsert(
       {
         user_id: authUserId,
