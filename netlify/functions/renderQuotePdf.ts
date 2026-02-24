@@ -207,7 +207,7 @@ export const handler: Handler = async (event) => {
         "Cache-Control": "no-store",
         "Access-Control-Allow-Origin": "*",
       },
-      body: pdf.toString("base64"),
+      body: Buffer.from(pdf).toString("base64"),
       isBase64Encoded: true,
     };
   } catch (e: any) {
