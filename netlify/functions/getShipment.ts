@@ -1,5 +1,23 @@
+// netlify/functions/getShipment.ts
 import type { Handler } from "@netlify/functions";
 import { getUserAndProfile, json, text, supabaseAdmin } from "./_util";
+
+type ShipmentRow = {
+  id: string;
+  code: string | null;
+  destination: string | null;
+  status: string | null;
+  created_at: string | null;
+  boxes: number | null;
+  pallets: number | null;
+  weight_kg: number | null;
+  flight_number: string | null;
+  awb: string | null;
+  client_id: string | null;
+  product_name: string | null;
+  product_variety: string | null;
+  product_mode: string | null;
+};
 
 export const handler: Handler = async (event) => {
   try {
@@ -33,6 +51,8 @@ export const handler: Handler = async (event) => {
           "product_mode",
         ].join(",")
       )
+      // 👇 clave: forzamos el tipo real del row para que TS no lo convierta a GenericStringError
+      .returns<ShipmentRow>()
       .eq("id", id)
       .maybeSingle();
 
