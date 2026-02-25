@@ -28,6 +28,10 @@ type ShipmentDetail = {
   status: string;
   created_at: string;
 
+  // ✅ cliente (puede venir como client_name o client.name dependiendo del backend)
+  client_name?: string | null;
+  client?: { name?: string | null } | null;
+
   // ✅ producto (single product por ahora)
   product_name?: string | null;
   product_variety?: string | null;
@@ -39,18 +43,33 @@ type ShipmentDetail = {
   flight_number?: string | null;
   awb?: string | null;
 
+  // ✅ nuevos (si existen en tu DB / backend)
+  caliber?: string | null;
+  color?: string | null;
+
   milestones: { type: string; at: string; note?: string | null }[];
   documents: { id: string; filename: string; doc_type?: string | null; created_at: string }[];
   photos: { id: string; filename: string; created_at: string; url?: string | null }[];
 };
 
 const DOC_TYPES = [
-  { v: "packing", l: "Packing List" },
   { v: "invoice", l: "Factura" },
-  { v: "cert", l: "Certificados" },
-  { v: "inspection", l: "Reporte inspección" },
-  { v: "awb", l: "AWB" },
-];
+  { v: "packing_list", l: "Packing list" },
+  { v: "awb", l: "AWB (guía aérea)" },
+  { v: "phytosanitary", l: "Certificado fitosanitario" },
+  { v: "eur1", l: "EUR1" },
+  { v: "export_declaration", l: "Declaración de exportación (aduana)" },
+  { v: "non_recyclable_plastics", l: "Declaración de plásticos no reciclables" },
+  { v: "sanitary_general_info", l: "Declaración de la Información general de carácter sanitario" },
+  { v: "additives_declaration", l: "Declaración de aditivos usados" },
+  { v: "quality_report", l: "Informe de calidad" },
+] as const;
+
+type DocTypeValue = (typeof DOC_TYPES)[number]["v"];
+
+type MilestoneType = "PACKED" | "DOCS_READY" | "AT_ORIGIN" | "IN_TRANSIT" | "AT_DESTINATION";
+
+const CHAIN: MilestoneType[] = ["PACKED", "DOCS_READY", "AT_ORIGIN", "IN_TRANSIT", "AT_DESTINATION"];
 
 function fmtDT(iso: string) {
   try {
@@ -64,11 +83,17 @@ function clean(v: any) {
   return String(v ?? "").trim();
 }
 
+function productShort(d: ShipmentDetail) {
+  const name = clean(d.product_name);
+  const variety = clean(d.product_variety);
+  return [name, variety].filter(Boolean).join(" ") || "—";
+}
+
 function productLine(d: ShipmentDetail) {
-  const name = clean(d.product_name) || "Piña";
-  const variety = clean(d.product_variety) || "MD2 Golden";
-  const mode = clean(d.product_mode) || "Aérea";
-  return `Producto: ${name} · Variedad: ${variety} · Modalidad: ${mode}`;
+  const name = clean(d.product_name) || "—";
+  const variety = clean(d.product_variety) || "—";
+  const mode = clean(d.product_mode) || "—";
+  return `${name} ${variety} · ${mode}`;
 }
 
 export default function AdminShipmentDetail() {
@@ -85,7 +110,13 @@ export default function AdminShipmentDetail() {
   const [flight, setFlight] = useState("");
   const [awb, setAwb] = useState("");
 
-  const [docType, setDocType] = useState("packing");
+  // ✅ nuevos campos de Datos
+  const [caliber, setCaliber] = useState("");
+  const [color, setColor] = useState("");
+
+  // ✅ doc type por “casillas”
+  const [docType, setDocType] = useState<DocTypeValue | null>("packing_list");
+
   const [busy, setBusy] = useState(false);
 
   const [toast, setToast] = useState<string | null>(null);
@@ -132,9 +163,12 @@ export default function AdminShipmentDetail() {
     }
 
     const json = (await res.json()) as ShipmentDetail;
+
     setData(json);
     setFlight(json.flight_number ?? "");
     setAwb(json.awb ?? "");
+    setCaliber(json.caliber ?? "");
+    setColor(json.color ?? "");
     setLoading(false);
   }
 
@@ -147,15 +181,43 @@ export default function AdminShipmentDetail() {
   const has = (t: string) =>
     (data?.milestones ?? []).some((m) => (m.type || "").toUpperCase() === t.toUpperCase());
 
-  // ✅ Estados reales que estás usando
-  async function mark(type: "PACKED" | "DOCS_READY" | "AT_ORIGIN" | "IN_TRANSIT" | "AT_DESTINATION") {
-    if (!data) return;
+  function prevOf(type: MilestoneType): MilestoneType | null {
+    const idx = CHAIN.indexOf(type);
+    if (idx <= 0) return null;
+    return CHAIN[idx - 1];
+  }
 
-    // ✅ Requisito: para IN_TRANSIT debe existir flight
+  function canMark(type: MilestoneType) {
+    if (!data) return { ok: false, reason: "No hay embarque cargado." };
+    if (has(type)) return { ok: false, reason: "Ese hito ya está marcado." };
+
+    const prev = prevOf(type);
+    if (prev && !has(prev)) {
+      return { ok: false, reason: `Debes completar primero: ${labelStatus(prev)}.` };
+    }
+
+    // ✅ PACKED requiere Calibre y Color
+    if (type === "PACKED") {
+      if (!caliber.trim() || !color.trim()) {
+        return { ok: false, reason: "Para marcar 'En Empaque' debes completar Calibre y Color." };
+      }
+    }
+
+    // ✅ IN_TRANSIT requiere vuelo (y ya queda en cadena por AT_ORIGIN)
     if (type === "IN_TRANSIT" && !flight.trim()) {
-      showToast("Para marcar 'En tránsito' debes colocar el número de vuelo.");
+      return { ok: false, reason: "Para marcar 'En tránsito' debes colocar el número de vuelo." };
+    }
+
+    return { ok: true, reason: "" };
+  }
+
+  async function mark(type: MilestoneType) {
+    const chk = canMark(type);
+    if (!chk.ok) {
+      showToast(chk.reason || "No se puede marcar ese hito todavía.");
       return;
     }
+    if (!data) return;
 
     setBusy(true);
     const token = await getTokenOrRedirect();
@@ -170,6 +232,10 @@ export default function AdminShipmentDetail() {
         note: note.trim() || null,
         flight_number: flight.trim() || null,
         awb: awb.trim() || null,
+
+        // ✅ nuevos (si tu backend los persiste)
+        caliber: caliber.trim() || null,
+        color: color.trim() || null,
       }),
     });
 
@@ -188,6 +254,11 @@ export default function AdminShipmentDetail() {
 
   async function upload(kind: "doc" | "photo", file: File) {
     if (!data) return;
+
+    if (kind === "doc" && !docType) {
+      showToast("Selecciona el tipo de documento antes de subir.");
+      return;
+    }
 
     setBusy(true);
     const token = await getTokenOrRedirect();
@@ -282,6 +353,11 @@ export default function AdminShipmentDetail() {
     }));
   }, [data?.milestones]);
 
+  const clientName =
+    clean(data?.client_name) ||
+    clean((data as any)?.client?.name) ||
+    "—";
+
   return (
     <AdminLayout title="Detalle de embarque" subtitle="Acciones, hitos, documentos y fotos.">
       {/* Top bar */}
@@ -326,13 +402,20 @@ export default function AdminShipmentDetail() {
                     </span>
 
                     <div style={{ minWidth: 0 }}>
+                      {/* 1) Numero de embarque */}
                       <div className="code">{data.code}</div>
 
-                      {/* ✅ Línea producto (compacta, pro) */}
-                      <div className="meta">
+                      {/* 2) Cliente debajo */}
+                      <div className="meta" style={{ marginTop: 2 }}>
+                        Cliente: <b>{clientName}</b>
+                      </div>
+
+                      {/* 3) Producto+Variedad - Modalidad */}
+                      <div className="meta" style={{ marginTop: 2 }}>
                         <b>{productLine(data)}</b>
                       </div>
 
+                      {/* 4) fecha creado */}
                       <div className="meta" style={{ marginTop: 2 }}>
                         Destino: <b>{data.destination}</b> · Creado: {fmtDT(data.created_at)}
                       </div>
@@ -340,7 +423,6 @@ export default function AdminShipmentDetail() {
                   </div>
                 </div>
 
-                {/* dejamos solo un badge “soft” para no duplicar el estado con la topbar */}
                 <div className="ff-row2" style={{ gap: 8, justifyContent: "flex-end" }}>
                   <span className="chipSoft">Estado: {labelStatus(data.status)}</span>
                 </div>
@@ -353,7 +435,7 @@ export default function AdminShipmentDetail() {
             <div className="ff-card2" style={{ padding: 12, background: "rgba(15,23,42,.02)" }}>
               <div className="sectionTitle">Acciones rápidas</div>
               <div className="muted" style={{ marginTop: 2 }}>
-                Agrega nota (opcional). Para <b>En tránsito</b> el <b>Vuelo</b> es obligatorio.
+                Los hitos avanzan en cadena. Para <b>En tránsito</b> el <b>Vuelo</b> es obligatorio. Para <b>En empaque</b>, <b>Calibre</b> y <b>Color</b> son obligatorios.
               </div>
 
               <div className="ff-divider" style={{ margin: "12px 0" }} />
@@ -393,27 +475,57 @@ export default function AdminShipmentDetail() {
               <div className="ff-divider" style={{ margin: "12px 0" }} />
 
               <div className="actionsGrid">
-                <button className="ff-primary" type="button" disabled={busy || has("PACKED")} onClick={() => mark("PACKED")}>
+                <button
+                  className="ff-primary"
+                  type="button"
+                  disabled={busy || !canMark("PACKED").ok}
+                  onClick={() => mark("PACKED")}
+                  title={!canMark("PACKED").ok ? canMark("PACKED").reason : ""}
+                >
                   <PackageCheck size={16} />
                   En Empaque
                 </button>
 
-                <button className="ff-primary" type="button" disabled={busy || has("DOCS_READY")} onClick={() => mark("DOCS_READY")}>
+                <button
+                  className="ff-primary"
+                  type="button"
+                  disabled={busy || !canMark("DOCS_READY").ok}
+                  onClick={() => mark("DOCS_READY")}
+                  title={!canMark("DOCS_READY").ok ? canMark("DOCS_READY").reason : ""}
+                >
                   <ClipboardCheck size={16} />
                   Documentación lista
                 </button>
 
-                <button className="ff-primary" type="button" disabled={busy || has("AT_ORIGIN")} onClick={() => mark("AT_ORIGIN")}>
+                <button
+                  className="ff-primary"
+                  type="button"
+                  disabled={busy || !canMark("AT_ORIGIN").ok}
+                  onClick={() => mark("AT_ORIGIN")}
+                  title={!canMark("AT_ORIGIN").ok ? canMark("AT_ORIGIN").reason : ""}
+                >
                   <MapPin size={16} />
                   En Origen
                 </button>
 
-                <button className="ff-primary" type="button" disabled={busy || has("IN_TRANSIT")} onClick={() => mark("IN_TRANSIT")}>
+                <button
+                  className="ff-primary"
+                  type="button"
+                  disabled={busy || !canMark("IN_TRANSIT").ok}
+                  onClick={() => mark("IN_TRANSIT")}
+                  title={!canMark("IN_TRANSIT").ok ? canMark("IN_TRANSIT").reason : ""}
+                >
                   <Plane size={16} />
                   En tránsito
                 </button>
 
-                <button className="ff-primary" type="button" disabled={busy || has("AT_DESTINATION")} onClick={() => mark("AT_DESTINATION")}>
+                <button
+                  className="ff-primary"
+                  type="button"
+                  disabled={busy || !canMark("AT_DESTINATION").ok}
+                  onClick={() => mark("AT_DESTINATION")}
+                  title={!canMark("AT_DESTINATION").ok ? canMark("AT_DESTINATION").reason : ""}
+                >
                   <PackageCheck size={16} />
                   En Destino
                 </button>
@@ -431,9 +543,37 @@ export default function AdminShipmentDetail() {
                   <Info size={16} /> Datos
                 </div>
 
+                <div className="kv"><span>Producto + Variedad</span><b>{productShort(data)}</b></div>
                 <div className="kv"><span>Cajas</span><b>{data.boxes ?? "-"}</b></div>
                 <div className="kv"><span>Pallets</span><b>{data.pallets ?? "-"}</b></div>
-                <div className="kv"><span>Peso</span><b>{data.weight_kg ? `${data.weight_kg} kg` : "-"}</b></div>
+                <div className="kv"><span>Peso total estimado</span><b>{data.weight_kg ? `${data.weight_kg} kg` : "-"}</b></div>
+
+                <div className="ff-divider" style={{ margin: "10px 0" }} />
+
+                <div className="row2">
+                  <div>
+                    <label className="lbl">Calibre * (obligatorio para En Empaque)</label>
+                    <input
+                      className="in2"
+                      value={caliber}
+                      onChange={(e) => setCaliber(e.target.value)}
+                      placeholder="Ej: 5-7"
+                    />
+                  </div>
+                  <div>
+                    <label className="lbl">Color * (obligatorio para En Empaque)</label>
+                    <input
+                      className="in2"
+                      value={color}
+                      onChange={(e) => setColor(e.target.value)}
+                      placeholder="Ej: 2.75 - 3"
+                    />
+                  </div>
+                </div>
+
+                <div className="muted" style={{ marginTop: 10 }}>
+                  * Se valida en UI para evitar errores operativos.
+                </div>
               </div>
 
               <div className="ff-card2">
@@ -450,17 +590,35 @@ export default function AdminShipmentDetail() {
                 <FileText size={16} /> Documentos
               </div>
 
+              <div className="muted" style={{ marginTop: 6 }}>
+                Selecciona el tipo correcto antes de subir. (Una opción a la vez)
+              </div>
+
               <div className="ff-divider" style={{ margin: "10px 0" }} />
 
-              <div className="ff-row2" style={{ gap: 10, flexWrap: "wrap" }}>
-                <select className="in2" value={docType} onChange={(e) => setDocType(e.target.value)} style={{ maxWidth: 240 }}>
-                  {DOC_TYPES.map((t) => (
-                    <option key={t.v} value={t.v}>
+              {/* ✅ checklist tipo “casillas” */}
+              <div className="docGrid">
+                {DOC_TYPES.map((t) => {
+                  const active = docType === t.v;
+                  return (
+                    <button
+                      key={t.v}
+                      type="button"
+                      className={active ? "docPill docPillOn" : "docPill"}
+                      onClick={() => setDocType(t.v)}
+                      aria-pressed={active}
+                      disabled={busy}
+                      title={t.l}
+                    >
                       {t.l}
-                    </option>
-                  ))}
-                </select>
+                    </button>
+                  );
+                })}
+              </div>
 
+              <div className="ff-divider" style={{ margin: "12px 0" }} />
+
+              <div className="ff-row2" style={{ gap: 10, flexWrap: "wrap" }}>
                 <input
                   className="in2"
                   type="file"
@@ -469,7 +627,7 @@ export default function AdminShipmentDetail() {
                     if (f) upload("doc", f);
                     e.currentTarget.value = "";
                   }}
-                  style={{ maxWidth: 420 }}
+                  style={{ maxWidth: 520 }}
                 />
               </div>
 
@@ -481,7 +639,7 @@ export default function AdminShipmentDetail() {
                         <div style={{ minWidth: 0 }}>
                           <div className="itemTitle">{d.filename}</div>
                           <div className="itemMeta">
-                            {d.doc_type ?? "doc"} · {fmtDT(d.created_at)}
+                            {(d.doc_type ?? "doc")} · {fmtDT(d.created_at)}
                           </div>
                         </div>
                         <button className="btnSmall" type="button" onClick={() => download(d.id)}>
@@ -545,7 +703,6 @@ export default function AdminShipmentDetail() {
         ) : null}
       </div>
 
-      {/* estilos locales: coherentes con tu AdminShipmentsPage */}
       <style jsx>{`
         .ff-card2 {
           background: var(--ff-surface);
@@ -638,6 +795,17 @@ export default function AdminShipmentDetail() {
           }
         }
 
+        .row2 {
+          display: grid;
+          gap: 10px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 980px) {
+          .row2 {
+            grid-template-columns: 1fr 1fr;
+          }
+        }
+
         .actionsGrid {
           display: grid;
           gap: 10px;
@@ -702,7 +870,7 @@ export default function AdminShipmentDetail() {
           white-space: nowrap;
         }
         .ff-primary:disabled {
-          opacity: 0.6;
+          opacity: 0.55;
           cursor: not-allowed;
         }
 
@@ -751,6 +919,50 @@ export default function AdminShipmentDetail() {
           justify-content: space-between;
           padding: 8px 0;
           border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+          gap: 10px;
+        }
+
+        .docGrid {
+          display: grid;
+          gap: 8px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 980px) {
+          .docGrid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+        @media (min-width: 1200px) {
+          .docGrid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+        }
+
+        .docPill {
+          height: 36px;
+          border-radius: 12px;
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          font-size: 12px;
+          font-weight: 900;
+          padding: 0 10px;
+          cursor: pointer;
+          text-align: left;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .docPill:hover {
+          background: rgba(15, 23, 42, 0.03);
+        }
+        .docPillOn {
+          border-color: rgba(31, 122, 58, 0.35);
+          background: rgba(31, 122, 58, 0.08);
+          color: var(--ff-green-dark);
+        }
+        .docPill:disabled {
+          opacity: 0.65;
+          cursor: not-allowed;
         }
 
         .list {
