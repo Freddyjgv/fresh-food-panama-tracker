@@ -1,9 +1,6 @@
 // netlify/functions/renderQuotePdf.ts
 import type { Handler } from "@netlify/functions";
-import chromium from "@sparticuz/chromium";
-import puppeteer from "puppeteer-core";
-import path from "node:path";
-import fs from "node:fs";
+import PDFDocument from "pdfkit";
 import { getUserAndProfile, text, supabaseAdmin } from "./_util";
 
 function isPrivileged(role: string) {
@@ -20,245 +17,332 @@ function safeFileName(name: string) {
     .slice(0, 80);
 }
 
-function buildHtml(opts: { variant: "1" | "2"; lang: "es" | "en"; quote: any }) {
-  const { variant, lang, quote } = opts;
-
-  const clientName = quote?.clients?.name || quote?.client_snapshot?.name || "—";
-  const clientEmail = quote?.clients?.contact_email || quote?.client_snapshot?.contact_email || "—";
-
-  const totals = quote?.totals || {};
-  const meta = totals?.meta || {};
-  const incoterm = meta?.incoterm || "CIP";
-  const place = meta?.place || quote?.destination || "—";
-
-  const currency = quote?.currency || "USD";
+function money(n: number, currency: string) {
   const sym = currency === "EUR" ? "€" : "$";
-  const total = Number(totals?.total || 0);
-
-  const items = Array.isArray(totals?.items) ? totals.items : [];
-  const t = (es: string, en: string) => (lang === "en" ? en : es);
-
-  const css = `
-  @page { size: A4; margin: 18mm; }
-  body { font-family: Arial, sans-serif; color: #111; }
-  .top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
-  .brand { font-weight:800; font-size:16px; }
-  .muted { color:#555; font-size:12px; }
-  h1 { font-size:18px; margin: 14px 0 8px; }
-  .box { border:1px solid #ddd; border-radius:10px; padding:12px; margin-top:10px; }
-  table { width:100%; border-collapse:collapse; margin-top:8px; }
-  th, td { border-bottom:1px solid #eee; padding:8px; font-size:12px; text-align:left; }
-  th { font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:#444; }
-  .right { text-align:right; }
-  .total { font-size:16px; font-weight:800; }
-  .pill { display:inline-block; border:1px solid #ddd; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:700; }
-  `;
-
-  const body =
-    variant === "1"
-      ? `
-      <div class="top">
-        <div>
-          <div class="brand">Fresh Food Panamá</div>
-          <div class="muted">${t("Cotización", "Quotation")} #${String(quote.id).slice(0, 8)}</div>
-          <div class="muted">${t("Fecha", "Date")}: ${new Date().toLocaleDateString(lang === "en" ? "en-US" : "es-PA")}</div>
-        </div>
-        <div class="pill">${incoterm} · ${place}</div>
-      </div>
-
-      <h1>${t("Cliente", "Client")}</h1>
-      <div class="box">
-        <div><b>${clientName}</b></div>
-        <div class="muted">${clientEmail}</div>
-      </div>
-
-      <h1>${t("Resumen", "Summary")}</h1>
-      <div class="box">
-        <div class="muted">${t("Moneda", "Currency")}: <b>${currency}</b></div>
-        <div class="muted">${t("Modo", "Mode")}: <b>${quote.mode ?? ""}</b></div>
-        <div class="muted">${t("Destino", "Destination")}: <b>${quote.destination ?? ""}</b></div>
-        <div style="margin-top:10px" class="total">${t("Total", "Total")}: ${sym} ${total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-      </div>
-      `
-      : `
-      <div class="top">
-        <div>
-          <div class="brand">Fresh Food Panamá</div>
-          <div class="muted">${t("Cotización", "Quotation")} #${String(quote.id).slice(0, 8)}</div>
-          <div class="muted">${t("Fecha", "Date")}: ${new Date().toLocaleDateString(lang === "en" ? "en-US" : "es-PA")}</div>
-        </div>
-        <div class="pill">${incoterm} · ${place}</div>
-      </div>
-
-      <h1>${t("Cliente", "Client")}</h1>
-      <div class="box">
-        <div><b>${clientName}</b></div>
-        <div class="muted">${clientEmail}</div>
-      </div>
-
-      <h1>${t("Detalle", "Details")}</h1>
-      <div class="box">
-        <table>
-          <thead>
-            <tr>
-              <th>${t("Item", "Item")}</th>
-              <th class="right">${t("Cantidad (cajas)", "Qty (boxes)")}</th>
-              <th class="right">${t("Precio unit.", "Unit price")}</th>
-              <th class="right">${t("Total", "Total")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${
-              items.length
-                ? items
-                    .map((it: any) => {
-                      const qty = Number(it.qty || 0);
-                      const up = Number(it.unit_price || 0);
-                      const rowTotal = Number(it.total || qty * up);
-                      return `
-                        <tr>
-                          <td>${String(it.name || "")}</td>
-                          <td class="right">${qty.toLocaleString("en-US")}</td>
-                          <td class="right">${sym} ${up.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td class="right"><b>${sym} ${rowTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b></td>
-                        </tr>
-                      `;
-                    })
-                    .join("")
-                : `<tr><td colspan="4" class="muted">${t("Sin items", "No items")}</td></tr>`
-            }
-          </tbody>
-        </table>
-
-        <div style="margin-top:12px; display:flex; justify-content:flex-end;">
-          <div class="total">${t("Total", "Total")}: ${sym} ${total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-        </div>
-      </div>
-      `;
-
-  return `<!doctype html><html><head><meta charset="utf-8"/><style>${css}</style></head><body>${body}</body></html>`;
+  const v = Number.isFinite(n) ? n : 0;
+  return `${sym} ${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function resolveBrotliDir(): string | null {
-  // En Netlify normalmente existe /var/task como cwd del lambda.
-  const candidates = [
-    path.join(process.cwd(), "node_modules/@sparticuz/chromium/bin"),
-    "/var/task/node_modules/@sparticuz/chromium/bin",
-  ];
-
-  for (const dir of candidates) {
-    try {
-      if (
-        fs.existsSync(dir) &&
-        fs.existsSync(path.join(dir, "chromium.br"))
-      ) {
-        return dir;
-      }
-    } catch {}
-  }
-  return null;
+function t(lang: "es" | "en", es: string, en: string) {
+  return lang === "en" ? en : es;
 }
 
-async function resolveExecutablePathRobust() {
-  // 1) si el user configuró path manual
-  const envPath =
-    process.env.CHROME_EXECUTABLE_PATH ||
-    process.env.PUPPETEER_EXECUTABLE_PATH ||
-    process.env.CHROMIUM_PATH;
+type QuoteRow = any;
 
-  if (envPath && String(envPath).trim()) return String(envPath).trim();
+function docToBuffer(doc: PDFKit.PDFDocument) {
+  return new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    doc.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+    doc.end();
+  });
+}
 
-  // 2) si en el bundle hay brotli files, pásalos explícitamente
-  const brotliDir = resolveBrotliDir();
-  if (brotliDir) {
-    const p = await chromium.executablePath(brotliDir);
-    if (p && String(p).trim()) return String(p).trim();
+function drawHeader(doc: PDFKit.PDFDocument, opts: {
+  lang: "es" | "en";
+  quoteIdShort: string;
+  incoterm: string;
+  place: string;
+  dateStr: string;
+}) {
+  const { lang, quoteIdShort, incoterm, place, dateStr } = opts;
+
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(16)
+    .fillColor("#111")
+    .text("Fresh Food Panamá", 0, 0, { align: "left" });
+
+  doc
+    .font("Helvetica")
+    .fontSize(10)
+    .fillColor("#555")
+    .text(`${t(lang, "Cotización", "Quotation")} #${quoteIdShort}`, { align: "left" })
+    .text(`${t(lang, "Fecha", "Date")}: ${dateStr}`, { align: "left" });
+
+  // “pill” simple a la derecha
+  const pillText = `${incoterm} · ${place}`;
+  const rightX = doc.page.width - doc.page.margins.right;
+  const y = doc.y - 30;
+  doc.font("Helvetica-Bold").fontSize(10);
+  const w = doc.widthOfString(pillText) + 18;
+  const h = 20;
+  const x = rightX - w;
+  doc.roundedRect(x, y, w, h, 10).strokeColor("#DDD").lineWidth(1).stroke();
+  doc.fillColor("#111").text(pillText, x + 9, y + 5, { width: w - 18, align: "center" });
+
+  doc.moveDown(1.2);
+  doc.strokeColor("#EEE").moveTo(doc.page.margins.left, doc.y).lineTo(rightX, doc.y).stroke();
+  doc.moveDown(1);
+}
+
+function drawSectionTitle(doc: PDFKit.PDFDocument, title: string) {
+  doc.moveDown(0.4);
+  doc.font("Helvetica-Bold").fontSize(13).fillColor("#111").text(title);
+  doc.moveDown(0.4);
+}
+
+function drawBox(doc: PDFKit.PDFDocument, opts: { x: number; y: number; w: number; h: number }) {
+  doc.roundedRect(opts.x, opts.y, opts.w, opts.h, 10).strokeColor("#DDD").lineWidth(1).stroke();
+}
+
+function ensureSpace(doc: PDFKit.PDFDocument, neededHeight: number) {
+  const bottom = doc.page.height - doc.page.margins.bottom;
+  if (doc.y + neededHeight > bottom) {
+    doc.addPage();
+  }
+}
+
+function drawKeyValueLines(doc: PDFKit.PDFDocument, lines: Array<{ k: string; v: string }>, boxWidth: number) {
+  const x = doc.page.margins.left;
+  const startY = doc.y;
+  const pad = 10;
+
+  // calcula alto
+  const lineH = 14;
+  const h = pad * 2 + lines.length * lineH;
+
+  ensureSpace(doc, h + 10);
+  const y = doc.y;
+
+  drawBox(doc, { x, y, w: boxWidth, h });
+
+  let ty = y + pad;
+  for (const line of lines) {
+    doc.font("Helvetica").fontSize(10).fillColor("#555").text(`${line.k}: `, x + pad, ty, { continued: true });
+    doc.font("Helvetica-Bold").fontSize(10).fillColor("#111").text(line.v || "—");
+    ty += lineH;
   }
 
-  // 3) intento normal (paquete completo)
-  const p2 = await chromium.executablePath();
-  if (p2 && String(p2).trim()) return String(p2).trim();
+  doc.y = y + h + 8;
+  if (doc.y < startY) doc.y = startY + h + 8;
+}
 
-  return ""; // vacío => manejamos error claro
+function drawTermsBox(doc: PDFKit.PDFDocument, title: string, terms: string, boxWidth: number) {
+  drawSectionTitle(doc, title);
+
+  const x = doc.page.margins.left;
+  const pad = 10;
+  const maxW = boxWidth - pad * 2;
+
+  // “Medimos” altura aproximada escribiendo en modo calc.
+  ensureSpace(doc, 80);
+  const y = doc.y;
+
+  // altura dinámica: usamos heightOfString
+  doc.font("Helvetica").fontSize(10);
+  const textH = doc.heightOfString(terms || "", { width: maxW, align: "left" });
+  const h = Math.max(40, pad * 2 + textH);
+
+  ensureSpace(doc, h + 10);
+  const y2 = doc.y;
+
+  drawBox(doc, { x, y: y2, w: boxWidth, h });
+
+  doc
+    .font("Helvetica")
+    .fontSize(10)
+    .fillColor("#111")
+    .text(terms || "", x + pad, y2 + pad, { width: maxW, align: "left" });
+
+  doc.y = y2 + h + 8;
+  if (doc.y < y) doc.y = y + h + 8;
+}
+
+function drawItemsTable(doc: PDFKit.PDFDocument, opts: {
+  lang: "es" | "en";
+  currency: string;
+  items: any[];
+  total: number;
+  boxWidth: number;
+}) {
+  const { lang, currency, items, total, boxWidth } = opts;
+
+  drawSectionTitle(doc, t(lang, "Detalle", "Details"));
+
+  const x = doc.page.margins.left;
+  const rightX = x + boxWidth;
+  const pad = 10;
+
+  // Column widths
+  const colItem = Math.floor(boxWidth * 0.46);
+  const colQty = Math.floor(boxWidth * 0.18);
+  const colUP = Math.floor(boxWidth * 0.18);
+  const colTot = boxWidth - colItem - colQty - colUP;
+
+  const headerH = 22;
+  const rowH = 20;
+
+  const tableTopY = doc.y;
+  ensureSpace(doc, headerH + rowH * 2 + 50);
+
+  // outer box height will be dynamic; dibujamos marco por página (simple)
+  // header background (muy suave)
+  doc.roundedRect(x, doc.y, boxWidth, headerH, 10).strokeColor("#DDD").lineWidth(1).stroke();
+  doc.rect(x, doc.y, boxWidth, headerH).fillOpacity(0.04).fill("#000").fillOpacity(1);
+
+  doc.font("Helvetica-Bold").fontSize(9).fillColor("#444");
+  doc.text(t(lang, "Item", "Item"), x + pad, doc.y + 7, { width: colItem - pad });
+  doc.text(t(lang, "Cantidad (cajas)", "Qty (boxes)"), x + colItem, doc.y + 7, { width: colQty - pad, align: "right" });
+  doc.text(t(lang, "Precio unit.", "Unit price"), x + colItem + colQty, doc.y + 7, { width: colUP - pad, align: "right" });
+  doc.text(t(lang, "Total", "Total"), x + colItem + colQty + colUP, doc.y + 7, { width: colTot - pad, align: "right" });
+
+  doc.y += headerH;
+
+  const safeItems = Array.isArray(items) ? items : [];
+  if (!safeItems.length) {
+    ensureSpace(doc, rowH + 20);
+    doc.font("Helvetica").fontSize(10).fillColor("#555").text(t(lang, "Sin items", "No items"), x + pad, doc.y + 6);
+    doc.y += rowH;
+  } else {
+    for (const it of safeItems) {
+      ensureSpace(doc, rowH + 40);
+
+      const name = String(it?.name || "");
+      const qty = Number(it?.qty || 0);
+      const up = Number(it?.unit_price || 0);
+      const rowTotal = Number(it?.total || qty * up);
+
+      // row separator
+      doc.strokeColor("#EEE").moveTo(x, doc.y).lineTo(rightX, doc.y).stroke();
+
+      doc.font("Helvetica").fontSize(10).fillColor("#111");
+      doc.text(name, x + pad, doc.y + 6, { width: colItem - pad });
+
+      doc.font("Helvetica").fontSize(10).fillColor("#111");
+      doc.text(qty.toLocaleString("en-US"), x + colItem, doc.y + 6, { width: colQty - pad, align: "right" });
+
+      doc.text(money(up, currency), x + colItem + colQty, doc.y + 6, { width: colUP - pad, align: "right" });
+
+      doc.font("Helvetica-Bold").text(money(rowTotal, currency), x + colItem + colQty + colUP, doc.y + 6, {
+        width: colTot - pad,
+        align: "right",
+      });
+
+      doc.y += rowH;
+    }
+  }
+
+  // bottom separator
+  doc.strokeColor("#EEE").moveTo(x, doc.y).lineTo(rightX, doc.y).stroke();
+
+  // Total line
+  ensureSpace(doc, 40);
+  doc.moveDown(0.6);
+  doc.font("Helvetica-Bold").fontSize(13).fillColor("#111");
+  doc.text(`${t(lang, "Total", "Total")}: ${money(Number(total || 0), currency)}`, x, doc.y, { width: boxWidth, align: "right" });
+
+  doc.moveDown(0.8);
+
+  // Outline box (from tableTopY to current y)
+  const endY = doc.y;
+  const h = Math.max(60, endY - tableTopY);
+  doc.roundedRect(x, tableTopY, boxWidth, h, 10).strokeColor("#DDD").lineWidth(1).stroke();
+
+  doc.y = endY + 4;
 }
 
 export const handler: Handler = async (event) => {
   try {
-    // CORS preflight
-    if (event.httpMethod === "OPTIONS") {
-      return {
-        statusCode: 200,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
-          "Access-Control-Allow-Methods": "GET,OPTIONS",
-        },
-        body: "ok",
-      };
-    }
-
-    const debug = String(event.queryStringParameters?.debug || "").trim() === "1";
-
+    // Auth
     const { user, profile } = await getUserAndProfile(event);
     if (!user || !profile) return text(401, "Unauthorized");
     if (!isPrivileged(profile.role)) return text(403, "Forbidden");
 
+    // Params
     const id = String(event.queryStringParameters?.id || "").trim();
     const variant = (String(event.queryStringParameters?.variant || "2").trim() as "1" | "2");
     const lang = (String(event.queryStringParameters?.lang || "es").trim().toLowerCase() as "es" | "en");
     if (!id) return text(400, "Missing id");
 
+    // Fetch quote
     const sb = supabaseAdmin();
     const { data, error } = await sb
       .from("quotes")
       .select("*, clients:clients(*)")
       .eq("id", id)
-      .single();
+      .single<QuoteRow>();
 
     if (error || !data) return text(404, error?.message || "Quote not found");
 
-    const executablePath = await resolveExecutablePathRobust();
+    const totals = data?.totals || {};
+    const meta = totals?.meta || {};
+    const incoterm = String(meta?.incoterm || "CIP");
+    const place = String(meta?.place || data?.destination || "—");
+    const currency = String(data?.currency || "USD");
+    const total = Number(totals?.total || 0);
+    const items = Array.isArray(totals?.items) ? totals.items : [];
 
-    if (debug) {
-      const brotliDir = resolveBrotliDir();
-      return {
-        statusCode: 200,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({
-          ok: true,
-          node: process.version,
-          cwd: process.cwd(),
-          brotliDir,
-          executablePath,
-          chromiumArgsCount: Array.isArray(chromium.args) ? chromium.args.length : null,
-        }),
-      };
-    }
+    const clientName = String(data?.clients?.name || data?.client_snapshot?.name || "—");
+    const clientEmail = String(data?.clients?.contact_email || data?.client_snapshot?.contact_email || "—");
 
-    if (!executablePath) return text(500, "Chromium executablePath could not be resolved (missing chromium brotli files in bundle).");
+    const quoteIdShort = String(data?.id || id).slice(0, 8);
+    const dateStr = new Date().toLocaleDateString(lang === "en" ? "en-US" : "es-PA");
 
-    const html = buildHtml({ variant, lang, quote: data });
-
-    const browser = await puppeteer.launch({
-      args: chromium.args as any,
-      executablePath,
-      headless: true,
-    } as any);
-
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 720 });
-    await page.setContent(html, { waitUntil: "networkidle0" as any });
-
-    const pdf = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      margin: { top: "18mm", right: "18mm", bottom: "18mm", left: "18mm" },
+    // PDF
+    const doc = new PDFDocument({
+      size: "A4",
+      margin: 52, // ~18mm
+      info: {
+        Title: `${t(lang, "Cotización", "Quotation")} ${quoteIdShort}`,
+        Author: "Fresh Food Panamá",
+      },
     });
 
-    await page.close();
-    await browser.close();
+    const boxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-    const filename = `${safeFileName(data?.clients?.name || "cliente")}_quote_${String(id).slice(0, 8)}_${variant}_${lang}.pdf`;
+    // Header
+    drawHeader(doc, { lang, quoteIdShort, incoterm, place, dateStr });
+
+    // Client box
+    drawSectionTitle(doc, t(lang, "Cliente", "Client"));
+    drawKeyValueLines(
+      doc,
+      [
+        { k: t(lang, "Nombre", "Name"), v: clientName },
+        { k: t(lang, "Email", "Email"), v: clientEmail },
+      ],
+      boxWidth
+    );
+
+    if (variant === "1") {
+      // Summary
+      drawSectionTitle(doc, t(lang, "Resumen", "Summary"));
+      drawKeyValueLines(
+        doc,
+        [
+          { k: t(lang, "Moneda", "Currency"), v: currency },
+          { k: t(lang, "Modo", "Mode"), v: String(data?.mode || "—") },
+          { k: t(lang, "Destino", "Destination"), v: String(data?.destination || "—") },
+          { k: t(lang, "Total", "Total"), v: money(total, currency) },
+        ],
+        boxWidth
+      );
+    } else {
+      // Detailed items table
+      drawItemsTable(doc, { lang, currency, items, total, boxWidth });
+    }
+
+    // Terms
+    const terms = String(data?.terms || "");
+    if (terms.trim()) {
+      drawTermsBox(doc, t(lang, "Condiciones", "Terms"), terms, boxWidth);
+    }
+
+    // Footer simple
+    ensureSpace(doc, 40);
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("#777")
+      .text(t(lang, "Documento generado automáticamente.", "Automatically generated document."), {
+        align: "center",
+      });
+
+    const pdfBuffer = await docToBuffer(doc);
+
+    const filename = `${safeFileName(clientName)}_quote_${quoteIdShort}_${variant}_${lang}.pdf`;
 
     return {
       statusCode: 200,
@@ -267,8 +351,9 @@ export const handler: Handler = async (event) => {
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "no-store",
         "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "authorization, content-type",
       },
-      body: Buffer.from(pdf).toString("base64"),
+      body: pdfBuffer.toString("base64"),
       isBase64Encoded: true,
     };
   } catch (e: any) {
