@@ -4,13 +4,12 @@
 
 [functions]
   directory = "netlify/functions"
-  node_bundler = "zisi"
+  node_bundler = "esbuild"
 
-[functions.renderQuotePdf]
+# Si todavía usas puppeteer/chromium en renderQuotePdf:
+[functions."renderQuotePdf"]
   external_node_modules = ["puppeteer-core", "@sparticuz/chromium"]
-  included_files = [
-    "node_modules/@sparticuz/chromium/**"
-  ]
+  included_files = ["node_modules/@sparticuz/chromium/**"]
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
