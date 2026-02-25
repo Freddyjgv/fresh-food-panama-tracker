@@ -20,6 +20,13 @@
     "node_modules/@sparticuz/chromium/**"
   ]
 
+  [functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+  included_files = [
+    "node_modules/@sparticuz/chromium/**"
+  ]
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
