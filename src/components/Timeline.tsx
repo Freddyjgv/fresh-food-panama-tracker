@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   CheckCircle2,
   Circle,
@@ -25,10 +26,17 @@ type Milestone = {
 };
 
 function fmt(iso?: string | null) {
-  if (!iso) return "";
+  if (!iso) return "—";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString("es-PA");
+  if (Number.isNaN(d.getTime())) return "—";
+  // compacto
+  return d.toLocaleString("es-PA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function labelFor(type: MilestoneType) {
@@ -70,22 +78,14 @@ function iconFor(type: MilestoneType, done: boolean) {
   );
 }
 
-function badgeClass(type: MilestoneType) {
+function statusTone(type: MilestoneType) {
   const t = String(type || "").toUpperCase();
-
-  // Verde: completados / logrado
-  if (t === "AT_DESTINATION") return "ff-badge ff-badge-green";
-
-  // Naranja: movimiento
-  if (t === "IN_TRANSIT") return "ff-badge ff-badge-orange";
-
-  // Azul / verde suaves para etapas internas (ajusta si tus clases cambian)
-  if (t === "AT_ORIGIN") return "ff-badge ff-badge-orange";
-  if (t === "DOCS_READY") return "ff-badge ff-badge-purple";
-  if (t === "PACKED") return "ff-badge ff-badge-blue";
-  if (t === "CREATED") return "ff-badge";
-
-  return "ff-badge";
+  if (t === "AT_DESTINATION") return "green";
+  if (t === "IN_TRANSIT") return "orange";
+  if (t === "AT_ORIGIN") return "orange";
+  if (t === "DOCS_READY") return "purple";
+  if (t === "PACKED") return "blue";
+  return "neutral";
 }
 
 export function Timeline({ milestones }: { milestones: Milestone[] }) {
@@ -93,56 +93,147 @@ export function Timeline({ milestones }: { milestones: Milestone[] }) {
     return <p className="ff-sub">Aún no hay hitos registrados.</p>;
   }
 
-  // Orden: más reciente primero
-  const sorted = [...milestones].sort((a, b) => {
-    const da = a.created_at ? new Date(a.created_at).getTime() : 0;
-    const db = b.created_at ? new Date(b.created_at).getTime() : 0;
-    return db - da;
-  });
+  // ✅ Orden: más reciente primero
+  const sorted = useMemo(() => {
+    return [...milestones].sort((a, b) => {
+      const da = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const db = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return db - da;
+    });
+  }, [milestones]);
+
+  const lastKey = sorted[0]?.id ?? `${sorted[0]?.type}-0`;
 
   return (
-    <div style={{ display: "grid", gap: 10 }}>
+    <div style={{ display: "grid", gap: 8 }}>
       {sorted.map((m, idx) => {
         const done = true;
         const title = labelFor(m.type);
+        const key = m.id ?? `${m.type}-${idx}`;
+        const isLast = key === lastKey;
+
+        const tone = statusTone(m.type);
+        const bg =
+          tone === "green"
+            ? "rgba(39,118,50,.06)"
+            : tone === "orange"
+            ? "rgba(209,119,17,.06)"
+            : tone === "purple"
+            ? "rgba(126,34,206,.05)"
+            : tone === "blue"
+            ? "rgba(37,99,235,.05)"
+            : "transparent";
+
+        const bd =
+          tone === "green"
+            ? "rgba(39,118,50,.18)"
+            : tone === "orange"
+            ? "rgba(209,119,17,.18)"
+            : tone === "purple"
+            ? "rgba(126,34,206,.16)"
+            : tone === "blue"
+            ? "rgba(37,99,235,.16)"
+            : "var(--ff-border)";
 
         return (
-          <div key={m.id ?? `${m.type}-${idx}`} className="ff-card ff-card-pad">
-            <div className="ff-spread">
-              <div className="ff-row" style={{ gap: 10 }}>
+          <div
+            key={key}
+            className="ff-card ff-card-pad"
+            style={{
+              padding: 10,
+              boxShadow: "none",
+              borderColor: isLast ? bd : "var(--ff-border)",
+              background: isLast ? bg : "var(--ff-surface)",
+            }}
+          >
+            <div className="row">
+              <div className="left">
                 <div
+                  className="iconBox"
                   style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 12,
                     background: done ? "rgba(39,118,50,.10)" : "rgba(0,0,0,.06)",
                     border: done
                       ? "1px solid rgba(39,118,50,.18)"
                       : "1px solid var(--ff-border)",
-                    display: "grid",
-                    placeItems: "center",
-                    flex: "0 0 auto",
                   }}
                 >
                   {iconFor(m.type, done)}
                 </div>
 
-                <div>
-                  <div style={{ fontWeight: 700 }}>{title}</div>
-                  <div className="ff-sub" style={{ marginTop: 2 }}>
-                    {fmt(m.created_at)}
-                  </div>
+                <div className="txt">
+                  <div className="title">{title}</div>
+                  <div className="meta">{fmt(m.created_at)}</div>
                 </div>
               </div>
 
-              <span className={badgeClass(m.type)}>{title}</span>
+              {/* ✅ Badge SOLO para “Último evento” */}
+              {isLast ? <span className="lastBadge">Último evento</span> : null}
             </div>
 
-            {m.note ? (
-              <div style={{ marginTop: 10, color: "var(--ff-black)" }}>
-                {m.note}
-              </div>
-            ) : null}
+            {m.note ? <div className="note">{m.note}</div> : null}
+
+            <style jsx>{`
+              .row {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 10px;
+              }
+              .left {
+                display: flex;
+                align-items: flex-start;
+                gap: 10px;
+                min-width: 0;
+              }
+              .iconBox {
+                width: 34px;
+                height: 34px;
+                border-radius: 12px;
+                display: grid;
+                place-items: center;
+                flex: 0 0 auto;
+              }
+              .txt {
+                min-width: 0;
+              }
+              .title {
+                font-weight: 900;
+                font-size: 13px;
+                line-height: 16px;
+                letter-spacing: -0.15px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+              }
+              .meta {
+                margin-top: 3px;
+                font-size: 11px;
+                font-weight: 800;
+                color: var(--ff-muted);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+              }
+              .lastBadge {
+                font-size: 11px;
+                font-weight: 900;
+                border: 1px solid rgba(39, 118, 50, 0.22);
+                background: rgba(39, 118, 50, 0.1);
+                color: var(--ff-green-dark);
+                padding: 5px 10px;
+                border-radius: 999px;
+                white-space: nowrap;
+                flex: 0 0 auto;
+              }
+              .note {
+                margin-top: 8px;
+                font-size: 12px;
+                line-height: 16px;
+                color: var(--ff-black);
+                opacity: 0.92;
+                white-space: pre-wrap;
+              }
+            `}</style>
           </div>
         );
       })}

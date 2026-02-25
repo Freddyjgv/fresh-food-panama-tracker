@@ -139,6 +139,7 @@ export default function ShipmentDetailPage() {
 
   /* =======================
      Hitos (ÚNICA FUENTE)
+     ✅ Timeline: solo hitos existentes (con fecha)
   ======================= */
   const steps = useMemo(
     () => [
@@ -152,18 +153,31 @@ export default function ShipmentDetailPage() {
     []
   );
 
-  const milestonesForTimeline = useMemo(() => {
-    const hitMap = new Map((data?.milestones ?? []).map((m) => [String(m.type).toUpperCase(), m]));
-    return steps.map((s, idx) => {
-      const hit = hitMap.get(String(s.type).toUpperCase());
-      return {
-        id: `${s.type}-${idx}`,
-        type: s.type,
-        created_at: hit ? hit.at : null,
-        note: hit?.note ?? null,
-        label: s.label,
-      };
-    });
+  // ✅ Adaptamos tu estructura (at) a la que usa Timeline (created_at)
+  const normalizedMilestonesForTimeline = useMemo(() => {
+    const list = data?.milestones ?? [];
+
+    // Mapa de hitos reales (registrados en DB)
+    const hitMap = new Map<string, Milestone>();
+    list.forEach((m) => hitMap.set(String(m.type).toUpperCase(), m));
+
+    // SOLO devolvemos los hitos que existen (tienen "at")
+    const present = steps
+      .map((s, idx) => {
+        const hit = hitMap.get(String(s.type).toUpperCase());
+        const at = hit?.at ?? null;
+        if (!at) return null;
+
+        return {
+          id: `${s.type}-${idx}`,
+          type: s.type,
+          created_at: at, // 👈 clave para Timeline
+          note: hit?.note ?? null,
+        };
+      })
+      .filter(Boolean) as Array<{ id: string; type: string; created_at: string; note?: string | null }>;
+
+    return present;
   }, [data?.milestones, steps]);
 
   const product = data ? productLine(data) : "—";
@@ -178,10 +192,7 @@ export default function ShipmentDetailPage() {
         </Link>
 
         {data ? (
-          <span
-            className={statusBadgeClass(data.status)}
-            style={{ height: 30, display: "inline-flex", alignItems: "center" }}
-          >
+          <span className={statusBadgeClass(data.status)} style={{ height: 30, display: "inline-flex", alignItems: "center" }}>
             {labelStatus(data.status)}
           </span>
         ) : null}
@@ -265,7 +276,7 @@ export default function ShipmentDetailPage() {
 
               <div className="ff-card ff-card-pad" style={{ boxShadow: "none" }}>
                 <div className="sectionTitle">Timeline logístico</div>
-                <ModernTimeline milestones={milestonesForTimeline as any} />
+                <ModernTimeline milestones={normalizedMilestonesForTimeline as any} />
               </div>
             </div>
 
@@ -306,18 +317,14 @@ export default function ShipmentDetailPage() {
 
               <div className="ff-card ff-card-pad" style={{ boxShadow: "none" }}>
                 <div className="sectionTitle">
-                  <ImageIcon size={16} /> Evidencia (Fotos)
+                  <Image as ImageIcon size={16} /> Evidencia (Fotos)
                 </div>
 
                 {data.photos?.length ? (
                   <div className="photoGrid">
                     {data.photos.map((p) => (
                       <div key={p.id} className="photoCard">
-                        {p.url ? (
-                          <img src={p.url} alt={p.filename} className="photoImg" />
-                        ) : (
-                          <div className="photoPlaceholder" />
-                        )}
+                        {p.url ? <img src={p.url} alt={p.filename} className="photoImg" /> : <div className="photoPlaceholder" />}
 
                         <div className="photoBody">
                           <div className="photoTitle" title={p.filename}>
