@@ -532,63 +532,25 @@ export default function AdminQuoteDetail() {
   }
 
   async function generatePdf() {
-    if (!quote?.id) return;
-    setPdfBusy(true);
-    setError(null);
-    setToast(null);
+  const token = await getTokenOrRedirect();
+  if (!token) return;
 
-    try {
-      // 1) guardar todo (incluye meta + items)
-      await saveAll();
+  const url =
+    "/.netlify/functions/renderQuotePdf" +
+    "?id=ce7579ee-bb7c-4cca-b79c-4273d76ae240" +
+    "&variant=1" +
+    "&lang=es" +
+    "&debug=1";
 
-      // 2) token para auth (esto era la causa del Unauthorized)
-      const token = await getTokenOrRedirect();
-      if (!token) {
-        setPdfBusy(false);
-        return;
-      }
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 
-      // 3) pedir PDF al backend y descargar
-      const url =
-        `/.netlify/functions/renderQuotePdf` +
-        `?id=${encodeURIComponent(quote.id)}` +
-        `&variant=${encodeURIComponent(pdfVariant)}` +
-        `&lang=${encodeURIComponent(pdfLang)}`;
-
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!res.ok) {
-        const t = await res.text().catch(() => "");
-        throw new Error(t || `No se pudo generar el PDF (${res.status})`);
-      }
-
-      const ab = await res.arrayBuffer();
-      const blob = new Blob([ab], { type: "application/pdf" });
-
-      const fallbackName = `cotizacion_${quote.id.slice(0, 8)}_${pdfVariant}_${pdfLang}.pdf`;
-      const filename = inferFilenameFromHeader(res.headers.get("content-disposition"), fallbackName);
-
-      const href = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = href;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(href);
-
-      setToast("PDF generado ✔");
-      setTimeout(() => setToast(null), 1400);
-    } catch (e: any) {
-      setError(e?.message || "Error generando PDF");
-    } finally {
-      setPdfBusy(false);
-    }
-  }
+  const text = await res.text();
+  alert(text);
+}
 
   if (!authOk) return null;
 
