@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowUpDown, Filter, PlusCircle, Search, Package2, X, Check, UserPlus, Users, Plus } from "lucide-react";
+import {
+  ArrowUpDown,
+  Filter,
+  PlusCircle,
+  Search,
+  Package2,
+  X,
+  Check,
+  UserPlus,
+  Users,
+  Plus,
+} from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { labelStatus } from "../../../lib/shipmentFlow";
 import { requireAdminOrRedirect } from "../../../lib/requireAdmin";
@@ -127,7 +138,7 @@ export default function AdminShipments() {
   const [ccBusy, setCcBusy] = useState(false);
   const [ccMsg, setCcMsg] = useState<string | null>(null);
 
-  // Products (UI-safe: no editable inputs for name/variety)
+  // Products
   const [products, setProducts] = useState<ProductDef[]>([{ name: "Piña", varieties: ["MD2 Golden"] }]);
   const [productName, setProductName] = useState("Piña");
   const [productVariety, setProductVariety] = useState("MD2 Golden");
@@ -244,6 +255,7 @@ export default function AdminShipments() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authOk, queryString]);
 
+  // Keep variety in-sync when product changes
   useEffect(() => {
     const p = products.find((x) => x.name === productName);
     const vars = p?.varieties || [];
@@ -257,15 +269,18 @@ export default function AdminShipments() {
   );
 
   const filteredClients = useMemo(() => {
-    const q = norm(pickQuery).toLowerCase();
-    if (!q) return clients;
+    const qq = norm(pickQuery).toLowerCase();
+    if (!qq) return clients;
     return clients.filter((c) => {
       const hay = `${c.name} ${c.contact_email} ${c.contact_name || ""}`.toLowerCase();
-      return hay.includes(q);
+      return hay.includes(qq);
     });
   }, [clients, pickQuery]);
 
-  const currentProduct = useMemo(() => products.find((p) => p.name === productName) || null, [products, productName]);
+  const currentProduct = useMemo(
+    () => products.find((p) => p.name === productName) || null,
+    [products, productName]
+  );
 
   async function createShipment(e: React.FormEvent) {
     e.preventDefault();
@@ -285,7 +300,7 @@ export default function AdminShipments() {
       product_variety: norm(productVariety) || null,
       product_mode: norm(productMode) || null,
 
-      // ✅ nuevos
+      // ✅ (si tu backend lo guarda, perfecto; si no, no rompe nada)
       caliber: norm(caliberNew) || null,
       color: norm(colorNew) || null,
     };
@@ -325,7 +340,6 @@ export default function AdminShipments() {
     setColorNew("");
     setPage(1);
 
-    // defaults
     setProductName("Piña");
     setProductVariety("MD2 Golden");
     setProductMode("Aérea");
@@ -380,9 +394,7 @@ export default function AdminShipments() {
     try {
       const js = JSON.parse(payloadText);
       createdClientId = js?.client_id || null;
-    } catch {
-      // ignore
-    }
+    } catch {}
 
     await loadClients();
 
@@ -529,7 +541,7 @@ export default function AdminShipments() {
             </div>
           </div>
 
-          {/* Producto (no editable) */}
+          {/* Producto */}
           <div className="ff-card2" style={{ padding: 10, background: "rgba(15,23,42,.02)" }}>
             <div className="ff-row2" style={{ gap: 10, alignItems: "center" }}>
               <div
@@ -579,13 +591,7 @@ export default function AdminShipments() {
                     </option>
                   ))}
                 </select>
-                <button
-                  className="iconBtn"
-                  type="button"
-                  title="Agregar variedad"
-                  onClick={() => setOpenAddVariety(true)}
-                  disabled={!productName}
-                >
+                <button className="iconBtn" type="button" title="Agregar variedad" onClick={() => setOpenAddVariety(true)} disabled={!productName}>
                   <Plus size={16} />
                 </button>
               </div>
@@ -598,8 +604,8 @@ export default function AdminShipments() {
             </div>
           </div>
 
-          {/* datos base */}
-          <div className="row3" style={{ gridTemplateColumns: "1fr .9fr .9fr .9fr" }}>
+          {/* Datos */}
+          <div className="row5">
             <select className="in2" value={destNew} onChange={(e) => setDestNew(e.target.value)}>
               <option value="MAD">Madrid (MAD)</option>
               <option value="AMS">Amsterdam (AMS)</option>
@@ -609,26 +615,8 @@ export default function AdminShipments() {
             <input className="in2" placeholder="Cajas" value={boxes} onChange={(e) => setBoxes(e.target.value)} />
             <input className="in2" placeholder="Pallets" value={pallets} onChange={(e) => setPallets(e.target.value)} />
             <input className="in2" placeholder="Peso (kg)" value={weight} onChange={(e) => setWeight(e.target.value)} />
-          </div>
-
-          {/* ✅ Calibre / Color (fila aparte, limpia) */}
-          <div className="row2">
-            <input
-              className="in2"
-              placeholder="Calibre (ej: 5-7)"
-              value={caliberNew}
-              onChange={(e) => setCaliberNew(e.target.value)}
-            />
-            <input
-              className="in2"
-              placeholder="Color (ej: 2.75 - 3)"
-              value={colorNew}
-              onChange={(e) => setColorNew(e.target.value)}
-            />
-          </div>
-
-          <div style={{ color: "var(--ff-muted)", fontSize: 12 }}>
-            Tip: Calibre y Color se recomiendan desde el inicio para poder marcar <b>En Empaque (PACKED)</b> sin errores.
+            <input className="in2" placeholder="Calibre (ej: 5-7)" value={caliberNew} onChange={(e) => setCaliberNew(e.target.value)} />
+            <input className="in2" placeholder="Color (ej: 2.75 - 3)" value={colorNew} onChange={(e) => setColorNew(e.target.value)} />
           </div>
 
           <div className="ff-spread2">
@@ -683,7 +671,7 @@ export default function AdminShipments() {
 
         <div className="ff-divider" style={{ margin: "12px 0" }} />
 
-        <div className="row3" style={{ gridTemplateColumns: ".7fr .8fr .8fr 1.2fr auto auto" }}>
+        <div className="rowFilters">
           <select className="in2" value={destination} onChange={(e) => setDestination(e.target.value)}>
             <option value="">Todos</option>
             <option value="MAD">MAD</option>
@@ -705,12 +693,7 @@ export default function AdminShipments() {
             />
           </div>
 
-          <button
-            className="ff-btnSmall"
-            type="button"
-            onClick={() => setDir((d) => (d === "desc" ? "asc" : "desc"))}
-            title="Ordenar por fecha"
-          >
+          <button className="ff-btnSmall" type="button" onClick={() => setDir((d) => (d === "desc" ? "asc" : "desc"))}>
             <ArrowUpDown size={16} />
             Fecha {dir === "desc" ? "↓" : "↑"}
           </button>
@@ -732,8 +715,7 @@ export default function AdminShipments() {
         <div className="ff-spread2">
           <div>
             <div style={{ fontWeight: 900, fontSize: 14, letterSpacing: "-.2px" }}>
-              Listado
-              <span style={{ marginLeft: 8, color: "var(--ff-muted)", fontWeight: 800 }}>({items.length})</span>
+              Listado <span style={{ marginLeft: 8, color: "var(--ff-muted)", fontWeight: 800 }}>({items.length})</span>
             </div>
             <div style={{ marginTop: 2, color: "var(--ff-muted)", fontSize: 12 }}>
               Vista compacta, consistente con todo el panel.
@@ -796,10 +778,238 @@ export default function AdminShipments() {
         ) : null}
       </div>
 
-      {/* ===== MODALS (sin cambios) ===== */}
-      {/* ... (mantén el resto exactamente como lo tienes) ... */}
+      {/* ===== MODALS ===== */}
 
-      {/* styles compact */}
+      {/* Modal: Pick existing client */}
+      {openPickClient ? (
+        <div className="overlay" onMouseDown={(e) => closeOnBackdrop(e, () => setOpenPickClient(false))}>
+          <div className="modal">
+            <div className="modalHead">
+              <div style={{ minWidth: 0 }}>
+                <div className="modalTitle">Seleccionar cliente</div>
+                <div className="modalSub">Busca por empresa, email o contacto. Click para asignar.</div>
+              </div>
+              <button className="iconBtn2" type="button" onClick={() => setOpenPickClient(false)} aria-label="Cerrar">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="ff-divider" style={{ margin: "12px 0" }} />
+
+            <div className="inputIcon" style={{ height: 40 }}>
+              <Search size={16} />
+              <input
+                className="in2"
+                style={{ border: 0, height: 38, padding: 0 }}
+                placeholder="Buscar cliente…"
+                value={pickQuery}
+                onChange={(e) => setPickQuery(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div style={{ height: 10 }} />
+
+            <div className="listBox">
+              {filteredClients.length ? (
+                filteredClients.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={`pickRow ${c.id === selectedClientId ? "is-on" : ""}`}
+                    onClick={() => {
+                      setSelectedClientId(c.id);
+                      setOpenPickClient(false);
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div className="pickTitle">{c.name}</div>
+                      <div className="pickMeta">
+                        {c.contact_email}
+                        {c.contact_name ? ` · ${c.contact_name}` : ""}
+                      </div>
+                    </div>
+
+                    {c.id === selectedClientId ? (
+                      <span className="tinyOk">
+                        <Check size={14} /> Asignado
+                      </span>
+                    ) : (
+                      <span className="tinyBtn">Seleccionar</span>
+                    )}
+                  </button>
+                ))
+              ) : (
+                <div className="muted" style={{ padding: 10 }}>
+                  No hay resultados.
+                </div>
+              )}
+            </div>
+
+            <div className="modalFoot">
+              <button className="btnSmall" type="button" onClick={() => setOpenPickClient(false)}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Modal: Create client */}
+      {openCreateClient ? (
+        <div className="overlay" onMouseDown={(e) => closeOnBackdrop(e, () => setOpenCreateClient(false))}>
+          <div className="modal">
+            <div className="modalHead">
+              <div style={{ minWidth: 0 }}>
+                <div className="modalTitle">Crear nuevo cliente</div>
+                <div className="modalSub">Campos obligatorios: empresa, contacto, email, teléfono, país.</div>
+              </div>
+              <button className="iconBtn2" type="button" onClick={() => setOpenCreateClient(false)} aria-label="Cerrar">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="ff-divider" style={{ margin: "12px 0" }} />
+
+            <div className="row2">
+              <div>
+                <label className="lbl">Empresa *</label>
+                <input className="in2" value={ccCompany} onChange={(e) => setCcCompany(e.target.value)} placeholder="Ej: ACME Trading" />
+              </div>
+              <div>
+                <label className="lbl">Contacto *</label>
+                <input className="in2" value={ccContact} onChange={(e) => setCcContact(e.target.value)} placeholder="Ej: Juan Pérez" />
+              </div>
+            </div>
+
+            <div className="row2" style={{ marginTop: 10 }}>
+              <div>
+                <label className="lbl">Email *</label>
+                <input className="in2" value={ccEmail} onChange={(e) => setCcEmail(e.target.value)} placeholder="correo@empresa.com" />
+              </div>
+              <div>
+                <label className="lbl">Teléfono *</label>
+                <input className="in2" value={ccPhone} onChange={(e) => setCcPhone(e.target.value)} placeholder="+507 6xxx-xxxx" />
+              </div>
+            </div>
+
+            <div style={{ marginTop: 10 }}>
+              <label className="lbl">País *</label>
+              <input className="in2" value={ccCountry} onChange={(e) => setCcCountry(e.target.value)} placeholder="Panamá" />
+            </div>
+
+            <div className="ff-divider" style={{ margin: "12px 0" }} />
+
+            <div className="ff-row2" style={{ justifyContent: "space-between" }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 900, fontSize: 13 }}>Acceso</div>
+                <div className="muted">Invitar por email o asignar password manual.</div>
+              </div>
+
+              <div className="ff-row2" style={{ gap: 8 }}>
+                <button type="button" className={`ff-btnSmall ${ccMode === "invite" ? "is-on" : ""}`} onClick={() => setCcMode("invite")}>
+                  Invitar
+                </button>
+                <button type="button" className={`ff-btnSmall ${ccMode === "manual" ? "is-on" : ""}`} onClick={() => setCcMode("manual")}>
+                  Password manual
+                </button>
+              </div>
+            </div>
+
+            {ccMode === "manual" ? (
+              <div style={{ marginTop: 10 }}>
+                <label className="lbl">Password *</label>
+                <input className="in2" value={ccPassword} onChange={(e) => setCcPassword(e.target.value)} placeholder="Mínimo recomendado: 8+ caracteres" />
+              </div>
+            ) : null}
+
+            {ccMsg ? (
+              <div
+                className="msg"
+                style={{
+                  marginTop: 12,
+                  borderColor: ccMsg.toLowerCase().includes("✅") ? "rgba(31,122,58,.30)" : "rgba(209,119,17,.35)",
+                  background: ccMsg.toLowerCase().includes("✅") ? "rgba(31,122,58,.08)" : "rgba(209,119,17,.08)",
+                }}
+              >
+                {ccMsg}
+              </div>
+            ) : null}
+
+            <div className="modalFoot">
+              <button className="btnSmall" type="button" onClick={() => setOpenCreateClient(false)} disabled={ccBusy}>
+                Cancelar
+              </button>
+              <button className="ff-primary" type="button" onClick={submitCreateClient} disabled={ccBusy}>
+                {ccBusy ? "Guardando…" : "Crear cliente"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Modal: Add product */}
+      {openAddProduct ? (
+        <div className="overlay" onMouseDown={(e) => closeOnBackdrop(e, () => setOpenAddProduct(false))}>
+          <div className="modal small">
+            <div className="modalHead">
+              <div style={{ minWidth: 0 }}>
+                <div className="modalTitle">Agregar producto</div>
+                <div className="modalSub">Esto agrega a la lista del UI (no DB) para evitar romper nada.</div>
+              </div>
+              <button className="iconBtn2" type="button" onClick={() => setOpenAddProduct(false)} aria-label="Cerrar">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="ff-divider" style={{ margin: "12px 0" }} />
+
+            <label className="lbl">Nombre *</label>
+            <input className="in2" value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder="Ej: Piña" />
+
+            <div className="modalFoot">
+              <button className="btnSmall" type="button" onClick={() => setOpenAddProduct(false)}>
+                Cancelar
+              </button>
+              <button className="ff-primary" type="button" onClick={addProduct}>
+                Agregar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Modal: Add variety */}
+      {openAddVariety ? (
+        <div className="overlay" onMouseDown={(e) => closeOnBackdrop(e, () => setOpenAddVariety(false))}>
+          <div className="modal small">
+            <div className="modalHead">
+              <div style={{ minWidth: 0 }}>
+                <div className="modalTitle">Agregar variedad</div>
+                <div className="modalSub">Se agrega a la lista del producto seleccionado (UI only).</div>
+              </div>
+              <button className="iconBtn2" type="button" onClick={() => setOpenAddVariety(false)} aria-label="Cerrar">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="ff-divider" style={{ margin: "12px 0" }} />
+
+            <label className="lbl">Variedad *</label>
+            <input className="in2" value={newVarietyName} onChange={(e) => setNewVarietyName(e.target.value)} placeholder="Ej: MD2 Golden" />
+
+            <div className="modalFoot">
+              <button className="btnSmall" type="button" onClick={() => setOpenAddVariety(false)}>
+                Cancelar
+              </button>
+              <button className="ff-primary" type="button" onClick={addVariety}>
+                Agregar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <style jsx>{`
         .row2 {
           display: grid;
@@ -812,17 +1022,6 @@ export default function AdminShipments() {
           }
         }
 
-        .row3 {
-          display: grid;
-          gap: 10px;
-          grid-template-columns: 1fr;
-        }
-        @media (min-width: 900px) {
-          .row3 {
-            grid-template-columns: 1fr 1fr 1fr;
-          }
-        }
-
         .row4 {
           display: grid;
           gap: 10px;
@@ -831,6 +1030,28 @@ export default function AdminShipments() {
         @media (min-width: 900px) {
           .row4 {
             grid-template-columns: 1.1fr 1.1fr 0.8fr;
+          }
+        }
+
+        .row5 {
+          display: grid;
+          gap: 10px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 900px) {
+          .row5 {
+            grid-template-columns: 0.9fr 0.7fr 0.7fr 0.7fr 0.9fr 0.9fr;
+          }
+        }
+
+        .rowFilters {
+          display: grid;
+          gap: 10px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 900px) {
+          .rowFilters {
+            grid-template-columns: 0.6fr 0.8fr 0.8fr 1.2fr auto auto;
           }
         }
 
@@ -855,10 +1076,6 @@ export default function AdminShipments() {
         }
         .iconBtn:hover {
           background: rgba(15, 23, 42, 0.03);
-        }
-        .iconBtn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
         }
 
         .inputIcon {
@@ -954,6 +1171,159 @@ export default function AdminShipments() {
           padding: 10px;
           font-weight: 800;
           font-size: 12px;
+        }
+
+        .overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(2, 6, 23, 0.55);
+          display: grid;
+          place-items: center;
+          padding: 16px;
+          z-index: 60;
+        }
+        .modal {
+          width: min(860px, 100%);
+          background: var(--ff-surface);
+          border: 1px solid var(--ff-border);
+          border-radius: var(--ff-radius);
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+          padding: 12px;
+        }
+        .modal.small {
+          width: min(520px, 100%);
+        }
+        .modalHead {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 10px;
+        }
+        .modalTitle {
+          font-weight: 950;
+          font-size: 14px;
+          letter-spacing: -0.2px;
+        }
+        .modalSub {
+          margin-top: 2px;
+          font-size: 12px;
+          color: var(--ff-muted);
+        }
+        .iconBtn2 {
+          width: 34px;
+          height: 34px;
+          border-radius: var(--ff-radius);
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          flex: 0 0 auto;
+        }
+        .iconBtn2:hover {
+          background: rgba(15, 23, 42, 0.03);
+        }
+        .modalFoot {
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+          margin-top: 12px;
+        }
+
+        .listBox {
+          border: 1px solid var(--ff-border);
+          border-radius: var(--ff-radius);
+          background: #fff;
+          overflow: hidden;
+          max-height: 380px;
+          overflow-y: auto;
+        }
+        .pickRow {
+          width: 100%;
+          text-align: left;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 10px;
+          border: 0;
+          background: #fff;
+          cursor: pointer;
+          border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+        }
+        .pickRow:hover {
+          background: rgba(15, 23, 42, 0.02);
+        }
+        .pickRow.is-on {
+          background: rgba(31, 122, 58, 0.06);
+        }
+        .pickTitle {
+          font-weight: 900;
+          font-size: 13px;
+          line-height: 18px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 620px;
+        }
+        .pickMeta {
+          margin-top: 2px;
+          font-size: 12px;
+          color: var(--ff-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 620px;
+        }
+        .tinyBtn {
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          border-radius: 999px;
+          padding: 6px 10px;
+          font-size: 12px;
+          font-weight: 900;
+          white-space: nowrap;
+        }
+        .tinyOk {
+          border: 1px solid rgba(31, 122, 58, 0.22);
+          background: rgba(31, 122, 58, 0.08);
+          color: var(--ff-green-dark);
+          border-radius: 999px;
+          padding: 6px 10px;
+          font-size: 12px;
+          font-weight: 900;
+          white-space: nowrap;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .lbl {
+          display: block;
+          font-size: 12px;
+          font-weight: 900;
+          color: var(--ff-muted);
+          margin-bottom: 6px;
+        }
+        .btnSmall {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          height: 34px;
+          padding: 0 10px;
+          border-radius: var(--ff-radius);
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          font-size: 12px;
+          font-weight: 900;
+          cursor: pointer;
+          color: var(--ff-text);
+          text-decoration: none;
+          white-space: nowrap;
+        }
+        .btnSmall:hover {
+          background: rgba(15, 23, 42, 0.03);
         }
 
         .muted {
