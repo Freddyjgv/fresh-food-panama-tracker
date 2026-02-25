@@ -5,10 +5,12 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "zisi"
+
+[functions.renderQuotePdf]
+  external_node_modules = ["puppeteer-core", "@sparticuz/chromium"]
   included_files = [
     "node_modules/@sparticuz/chromium/**"
   ]
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
-
