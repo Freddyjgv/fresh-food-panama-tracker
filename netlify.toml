@@ -2,27 +2,9 @@
   command = "npm run build"
   publish = ".next"
 
-[build]
-  command = "npm run build"
-  publish = ".next"
-
-[build]
-  command = "npm run build"
-  publish = ".next"
-
 [functions]
   directory = "netlify/functions"
-  node_bundler = "esbuild"
-
-[functions."renderQuotePdf"]
-  external_node_modules = ["puppeteer-core", "@sparticuz/chromium"]
-  included_files = [
-    "node_modules/@sparticuz/chromium/**"
-  ]
-
-  [functions]
-  directory = "netlify/functions"
-  node_bundler = "esbuild"
+  node_bundler = "zisi"
   included_files = [
     "node_modules/@sparticuz/chromium/**"
   ]
