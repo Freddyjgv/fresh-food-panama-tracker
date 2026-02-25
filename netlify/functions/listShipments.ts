@@ -14,9 +14,7 @@ export const handler: Handler = async (event) => {
     const pageSize = 20;
     const page = Math.max(1, Number(event.queryStringParameters?.page || 1));
     const dir =
-      (event.queryStringParameters?.dir || "desc").toLowerCase() === "asc"
-        ? "asc"
-        : "desc";
+      (event.queryStringParameters?.dir || "desc").toLowerCase() === "asc" ? "asc" : "desc";
     const destination = event.queryStringParameters?.destination || "";
     const from = event.queryStringParameters?.from || "";
     const to = event.queryStringParameters?.to || "";
@@ -30,30 +28,32 @@ export const handler: Handler = async (event) => {
 
     const role = String(profile.role || "").trim().toLowerCase();
     const privileged = role === "admin" || role === "superadmin";
-
     if (mode === "admin" && !privileged) return text(403, "Forbidden");
 
-    // ✅ Incluimos los campos de producto (para lista compacta pro)
-    let selectFields =
-      [
-        "id",
-        "code",
-        "destination",
-        "status",
-        "created_at",
-        "flight_number",
-        "awb",
-        "client_id",
-        "product_name",
-        "product_variety",
-        "product_mode",
-        "milestones(at)",
-      ].join(",");
-
-    if (privileged) selectFields += ", clients(name)";
+    // ✅ Campos de lista + caliber/color
+    // ✅ Join robusto: clients!shipments_client_id_fkey(name)
+    // Nota: si tu FK tiene otro nombre, ajusta el !....
+    let selectFields = [
+      "id",
+      "code",
+      "destination",
+      "status",
+      "created_at",
+      "flight_number",
+      "awb",
+      "client_id",
+      "product_name",
+      "product_variety",
+      "product_mode",
+      "caliber",
+      "color",
+      "milestones(at)",
+      "clients:clients!shipments_client_id_fkey(name)",
+    ].join(",");
 
     let query = sb.from("shipments").select(selectFields, { count: "exact" });
 
+    // Cliente solo ve lo suyo
     if (!privileged) {
       if (!profile.client_id) return text(403, "Forbidden");
       query = query.eq("client_id", profile.client_id);
@@ -64,9 +64,7 @@ export const handler: Handler = async (event) => {
     if (to) query = query.lte("created_at", `${to}T23:59:59`);
     if (q) query = query.ilike("code", `%${q}%`);
 
-    query = query
-      .order("created_at", { ascending: dir === "asc" })
-      .range(fromIndex, toIndex);
+    query = query.order("created_at", { ascending: dir === "asc" }).range(fromIndex, toIndex);
 
     const { data, count, error } = await query;
     if (error) return text(500, error.message);
@@ -87,11 +85,15 @@ export const handler: Handler = async (event) => {
         awb: s.awb,
         last_event_at: lastMilestone?.at || s.created_at,
 
-        // ✅ nuevo (para render en lista)
         product_name: s.product_name ?? null,
         product_variety: s.product_variety ?? null,
         product_mode: s.product_mode ?? null,
 
+        // ✅ nuevos
+        caliber: s.caliber ?? null,
+        color: s.color ?? null,
+
+        // ✅ cliente
         client_name: s.clients?.name ?? null,
       };
     });

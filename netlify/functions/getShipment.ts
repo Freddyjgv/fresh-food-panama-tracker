@@ -1,4 +1,3 @@
-// netlify/functions/getShipment.ts
 import type { Handler } from "@netlify/functions";
 import { getUserAndProfile, json, text, supabaseAdmin } from "./_util";
 
@@ -14,9 +13,17 @@ type ShipmentRow = {
   flight_number: string | null;
   awb: string | null;
   client_id: string | null;
+
+  // ✅ nuevos
+  caliber: string | null;
+  color: string | null;
+
   product_name: string | null;
   product_variety: string | null;
   product_mode: string | null;
+
+  // ✅ join
+  client?: { name?: string | null } | null;
 };
 
 export const handler: Handler = async (event) => {
@@ -46,9 +53,12 @@ export const handler: Handler = async (event) => {
         flight_number,
         awb,
         client_id,
+        caliber,
+        color,
         product_name,
         product_variety,
-        product_mode
+        product_mode,
+        client:clients(name)
         `
       )
       .eq("id", id)
@@ -107,6 +117,7 @@ export const handler: Handler = async (event) => {
 
     return json(200, {
       ...shipment,
+      client_name: shipment.client?.name ?? null,
       milestones: milestones || [],
       documents,
       photos: photosWithUrl,
