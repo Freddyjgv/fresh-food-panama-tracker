@@ -31,10 +31,19 @@ type ShipmentDetail = {
   status: string;
   created_at: string;
 
+  // ✅ Cliente (soporta varias formas del backend)
+  client_name?: string | null;
+  clients?: { name?: string | null } | null;
+  client?: { name?: string | null } | null;
+
   // ✅ Multi-product (single product for now)
   product_name?: string | null;
   product_variety?: string | null;
   product_mode?: string | null;
+
+  // ✅ Datos extra (lectura en client)
+  caliber?: string | null;
+  color?: string | null;
 
   boxes?: number | null;
   pallets?: number | null;
@@ -57,6 +66,18 @@ function fmtDate(iso?: string | null) {
   } catch {
     return String(iso);
   }
+}
+
+function clientNameLine(d: ShipmentDetail) {
+  return (
+    String(d.client_name || d.clients?.name || d.client?.name || "").trim() || "—"
+  );
+}
+
+function productVarietyLine(d: ShipmentDetail) {
+  const name = String(d.product_name || "").trim();
+  const variety = String(d.product_variety || "").trim();
+  return [name, variety].filter(Boolean).join(" ") || "—";
 }
 
 function productLine(d: ShipmentDetail) {
@@ -99,9 +120,12 @@ export default function ShipmentDetailPage() {
       return;
     }
 
-    const res = await fetch(`/.netlify/functions/getShipment?id=${encodeURIComponent(shipmentId)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetch(
+      `/.netlify/functions/getShipment?id=${encodeURIComponent(shipmentId)}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
@@ -124,9 +148,10 @@ export default function ShipmentDetailPage() {
     const token = sessionData.session?.access_token;
     if (!token) return;
 
-    const res = await fetch(`/.netlify/functions/getDownloadUrl?fileId=${encodeURIComponent(fileId)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetch(
+      `/.netlify/functions/getDownloadUrl?fileId=${encodeURIComponent(fileId)}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
 
     if (!res.ok) {
       alert("No se pudo generar el link de descarga");
@@ -162,12 +187,11 @@ export default function ShipmentDetailPage() {
     list.forEach((m) => hitMap.set(String(m.type).toUpperCase(), m));
 
     // SOLO devolvemos los hitos que existen (tienen "at")
-    const present = steps
+    return steps
       .map((s, idx) => {
         const hit = hitMap.get(String(s.type).toUpperCase());
         const at = hit?.at ?? null;
         if (!at) return null;
-
         return {
           id: `${s.type}-${idx}`,
           type: s.type,
@@ -175,15 +199,23 @@ export default function ShipmentDetailPage() {
           note: hit?.note ?? null,
         };
       })
-      .filter(Boolean) as Array<{ id: string; type: string; created_at: string; note?: string | null }>;
-
-    return present;
+      .filter(Boolean) as Array<{
+      id: string;
+      type: string;
+      created_at: string;
+      note?: string | null;
+    }>;
   }, [data?.milestones, steps]);
 
+  const clientName = data ? clientNameLine(data) : "—";
   const product = data ? productLine(data) : "—";
+  const pv = data ? productVarietyLine(data) : "—";
 
   return (
-    <ClientLayout title="Detalle del embarque" subtitle="Estado, documentos y fotos del proceso de exportación">
+    <ClientLayout
+      title="Detalle del embarque"
+      subtitle="Estado, documentos y fotos del proceso de exportación"
+    >
       {/* Toolbar */}
       <div className="ff-spread" style={{ marginBottom: 12 }}>
         <Link href="/shipments" className="ff-btn ff-btn-ghost" style={{ height: 34 }}>
@@ -192,7 +224,10 @@ export default function ShipmentDetailPage() {
         </Link>
 
         {data ? (
-          <span className={statusBadgeClass(data.status)} style={{ height: 30, display: "inline-flex", alignItems: "center" }}>
+          <span
+            className={statusBadgeClass(data.status)}
+            style={{ height: 30, display: "inline-flex", alignItems: "center" }}
+          >
             {labelStatus(data.status)}
           </span>
         ) : null}
@@ -217,37 +252,57 @@ export default function ShipmentDetailPage() {
                   </span>
 
                   <div style={{ minWidth: 0 }}>
+                    {/* Número + Status */}
                     <div className="heroTop">
-                      <div className="code">{data.code}</div>
-                      <span className={statusBadgeClass(data.status)} style={{ height: 28, display: "inline-flex", alignItems: "center" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="heroLabel">Número de embarque</div>
+                        <div className="code">{data.code}</div>
+                      </div>
+
+                      <span
+                        className={statusBadgeClass(data.status)}
+                        style={{ height: 28, display: "inline-flex", alignItems: "center" }}
+                      >
                         {labelStatus(data.status)}
                       </span>
                     </div>
 
-                    {/* ✅ Producto protagonista */}
+                    {/* Cliente (debajo) */}
+                    <div className="clientLine" title={clientName}>
+                      <span className="heroLabel">Cliente</span> <b>{clientName}</b>
+                    </div>
+
+                    {/* Producto+Variedad - Modalidad */}
                     <div className="productLine" title={product}>
                       {product}
                     </div>
 
+                    {/* Fecha creado */}
                     <div className="meta">
-                      Destino: <b>{data.destination}</b> · Creado: {fmtDate(data.created_at)}
+                      Creado: <b>{fmtDate(data.created_at)}</b> · Destino:{" "}
+                      <b>{data.destination}</b>
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="heroRight">
-                {data.flight_number ? <span className="pill">Vuelo: {data.flight_number}</span> : null}
+                {data.flight_number ? (
+                  <span className="pill">Vuelo: {data.flight_number}</span>
+                ) : null}
                 {data.awb ? <span className="pill">AWB: {data.awb}</span> : null}
               </div>
             </div>
 
             {/* Progreso (ancho completo) */}
             <div className="block">
-              <ProgressStepper milestones={data.milestones ?? []} flightNumber={data.flight_number ?? null} />
+              <ProgressStepper
+                milestones={data.milestones ?? []}
+                flightNumber={data.flight_number ?? null}
+              />
             </div>
 
-            {/* Datos (KPI) + Hitos */}
+            {/* Datos (KPI) + Timeline */}
             <div className="grid2">
               <div className="ff-card ff-card-pad soft" style={{ boxShadow: "none" }}>
                 <div className="sectionTitle">
@@ -256,6 +311,12 @@ export default function ShipmentDetailPage() {
 
                 <div className="kpiRow">
                   <div className="kpi">
+                    <div className="kpiLabel">Producto + Variedad</div>
+                    <div className="kpiValue" style={{ fontSize: 13 }}>
+                      {pv}
+                    </div>
+                  </div>
+                  <div className="kpi">
                     <div className="kpiLabel">Cajas</div>
                     <div className="kpiValue">{data.boxes ?? "—"}</div>
                   </div>
@@ -263,14 +324,23 @@ export default function ShipmentDetailPage() {
                     <div className="kpiLabel">Pallets</div>
                     <div className="kpiValue">{data.pallets ?? "—"}</div>
                   </div>
-                  <div className="kpi">
-                    <div className="kpiLabel">Peso</div>
-                    <div className="kpiValue">{data.weight_kg ? `${data.weight_kg} kg` : "—"}</div>
-                  </div>
                 </div>
 
-                <div className="miniNote">
-                  <span className="mono">Producto:</span> <b>{product}</b>
+                <div className="kpiRow" style={{ marginTop: 10 }}>
+                  <div className="kpi">
+                    <div className="kpiLabel">Peso total estimado</div>
+                    <div className="kpiValue">
+                      {data.weight_kg ? `${data.weight_kg} kg` : "—"}
+                    </div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpiLabel">Calibre</div>
+                    <div className="kpiValue">{data.caliber ?? "—"}</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpiLabel">Color</div>
+                    <div className="kpiValue">{data.color ?? "—"}</div>
+                  </div>
                 </div>
               </div>
 
@@ -280,7 +350,7 @@ export default function ShipmentDetailPage() {
               </div>
             </div>
 
-            {/* Documentos vs Evidencia (Balance B) */}
+            {/* Documentos vs Evidencia */}
             <div className="grid2">
               <div className="ff-card ff-card-pad" style={{ boxShadow: "none" }}>
                 <div className="sectionTitle">
@@ -324,7 +394,11 @@ export default function ShipmentDetailPage() {
                   <div className="photoGrid">
                     {data.photos.map((p) => (
                       <div key={p.id} className="photoCard">
-                        {p.url ? <img src={p.url} alt={p.filename} className="photoImg" /> : <div className="photoPlaceholder" />}
+                        {p.url ? (
+                          <img src={p.url} alt={p.filename} className="photoImg" />
+                        ) : (
+                          <div className="photoPlaceholder" />
+                        )}
 
                         <div className="photoBody">
                           <div className="photoTitle" title={p.filename}>
@@ -334,7 +408,12 @@ export default function ShipmentDetailPage() {
 
                           <button
                             className="ff-btn ff-btn-ghost"
-                            style={{ height: 34, width: "100%", justifyContent: "center", marginTop: 10 }}
+                            style={{
+                              height: 34,
+                              width: "100%",
+                              justifyContent: "center",
+                              marginTop: 10,
+                            }}
                             onClick={() => download(p.id)}
                             type="button"
                           >
@@ -361,7 +440,7 @@ export default function ShipmentDetailPage() {
         }
 
         .warn {
-          borderColor: rgba(209, 119, 17, 0.35);
+          border-color: rgba(209, 119, 17, 0.35);
           background: rgba(209, 119, 17, 0.08);
         }
 
@@ -390,9 +469,25 @@ export default function ShipmentDetailPage() {
 
         .heroTop {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           justify-content: space-between;
           gap: 10px;
+        }
+
+        .heroLabel {
+          font-size: 11px;
+          font-weight: 900;
+          color: var(--ff-muted);
+          line-height: 14px;
+        }
+
+        .clientLine {
+          margin-top: 6px;
+          font-size: 12px;
+          color: var(--ff-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .block {
@@ -435,7 +530,7 @@ export default function ShipmentDetailPage() {
         }
 
         .productLine {
-          margin-top: 2px;
+          margin-top: 4px;
           font-weight: 950;
           font-size: 13px;
           line-height: 18px;
@@ -502,17 +597,7 @@ export default function ShipmentDetailPage() {
           font-size: 15px;
           font-weight: 950;
           letter-spacing: -0.25px;
-        }
-        .miniNote {
-          margin-top: 10px;
-          padding-top: 10px;
-          border-top: 1px solid rgba(15, 23, 42, 0.06);
-          font-size: 12px;
-          color: var(--ff-muted);
-        }
-        .mono {
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-          font-weight: 800;
+          word-break: break-word;
         }
 
         .itemRow {
