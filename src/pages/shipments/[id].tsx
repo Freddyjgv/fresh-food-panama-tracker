@@ -317,7 +317,7 @@ export default function ShipmentDetailPage() {
 
               <div className="ff-card ff-card-pad" style={{ boxShadow: "none" }}>
                 <div className="sectionTitle">
-                  <Image as ImageIcon size={16} /> Evidencia (Fotos)
+                  <ImageIcon size={16} /> Evidencia (Fotos)
                 </div>
 
                 {data.photos?.length ? (
