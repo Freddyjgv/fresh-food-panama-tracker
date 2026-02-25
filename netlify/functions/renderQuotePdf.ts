@@ -32,131 +32,109 @@ function buildHtml(opts: { variant: "1" | "2"; lang: "es" | "en"; quote: any }) 
   const currency = quote?.currency || "USD";
   const sym = currency === "EUR" ? "€" : "$";
   const total = Number(totals?.total || 0);
-  const items = Array.isArray(totals?.items) ? totals.items : [];
 
+  const items = Array.isArray(totals?.items) ? totals.items : [];
   const t = (es: string, en: string) => (lang === "en" ? en : es);
 
   const css = `
-    @page { size: A4; margin: 18mm; }
-    body { font-family: Arial, sans-serif; color: #111; }
-    .top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
-    .brand { font-weight:800; font-size:16px; }
-    .muted { color:#555; font-size:12px; }
-    h1 { font-size:18px; margin: 14px 0 8px; }
-    .box { border:1px solid #ddd; border-radius:10px; padding:12px; margin-top:10px; }
-    table { width:100%; border-collapse:collapse; margin-top:8px; }
-    th, td { border-bottom:1px solid #eee; padding:8px; font-size:12px; text-align:left; }
-    th { font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:#444; }
-    .right { text-align:right; }
-    .total { font-size:16px; font-weight:800; }
-    .pill { display:inline-block; border:1px solid #ddd; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:700; }
+  @page { size: A4; margin: 18mm; }
+  body { font-family: Arial, sans-serif; color: #111; }
+  .top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .brand { font-weight:800; font-size:16px; }
+  .muted { color:#555; font-size:12px; }
+  h1 { font-size:18px; margin: 14px 0 8px; }
+  .box { border:1px solid #ddd; border-radius:10px; padding:12px; margin-top:10px; }
+  table { width:100%; border-collapse:collapse; margin-top:8px; }
+  th, td { border-bottom:1px solid #eee; padding:8px; font-size:12px; text-align:left; }
+  th { font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:#444; }
+  .right { text-align:right; }
+  .total { font-size:16px; font-weight:800; }
+  .pill { display:inline-block; border:1px solid #ddd; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:700; }
   `;
 
   const body =
     variant === "1"
       ? `
-        <div class="top">
-          <div>
-            <div class="brand">Fresh Food Panamá</div>
-            <div class="muted">${t("Cotización", "Quotation")} #${String(quote.id).slice(0, 8)}</div>
-            <div class="muted">${t("Fecha", "Date")}: ${new Date().toLocaleDateString(lang === "en" ? "en-US" : "es-PA")}</div>
-          </div>
-          <div class="pill">${incoterm} · ${place}</div>
+      <div class="top">
+        <div>
+          <div class="brand">Fresh Food Panamá</div>
+          <div class="muted">${t("Cotización", "Quotation")} #${String(quote.id).slice(0, 8)}</div>
+          <div class="muted">${t("Fecha", "Date")}: ${new Date().toLocaleDateString(lang === "en" ? "en-US" : "es-PA")}</div>
         </div>
+        <div class="pill">${incoterm} · ${place}</div>
+      </div>
 
-        <h1>${t("Cliente", "Client")}</h1>
-        <div class="box">
-          <div><b>${clientName}</b></div>
-          <div class="muted">${clientEmail}</div>
-        </div>
+      <h1>${t("Cliente", "Client")}</h1>
+      <div class="box">
+        <div><b>${clientName}</b></div>
+        <div class="muted">${clientEmail}</div>
+      </div>
 
-        <h1>${t("Resumen", "Summary")}</h1>
-        <div class="box">
-          <div class="muted">${t("Moneda", "Currency")}: <b>${currency}</b></div>
-          <div class="muted">${t("Modo", "Mode")}: <b>${quote.mode}</b></div>
-          <div class="muted">${t("Destino", "Destination")}: <b>${quote.destination}</b></div>
-          <div style="margin-top:10px" class="total">${t("Total", "Total")}: ${sym} ${total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-        </div>
+      <h1>${t("Resumen", "Summary")}</h1>
+      <div class="box">
+        <div class="muted">${t("Moneda", "Currency")}: <b>${currency}</b></div>
+        <div class="muted">${t("Modo", "Mode")}: <b>${quote.mode}</b></div>
+        <div class="muted">${t("Destino", "Destination")}: <b>${quote.destination}</b></div>
+        <div style="margin-top:10px" class="total">${t("Total", "Total")}: ${sym} ${total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+      </div>
       `
       : `
-        <div class="top">
-          <div>
-            <div class="brand">Fresh Food Panamá</div>
-            <div class="muted">${t("Cotización", "Quotation")} #${String(quote.id).slice(0, 8)}</div>
-            <div class="muted">${t("Fecha", "Date")}: ${new Date().toLocaleDateString(lang === "en" ? "en-US" : "es-PA")}</div>
-          </div>
-          <div class="pill">${incoterm} · ${place}</div>
+      <div class="top">
+        <div>
+          <div class="brand">Fresh Food Panamá</div>
+          <div class="muted">${t("Cotización", "Quotation")} #${String(quote.id).slice(0, 8)}</div>
+          <div class="muted">${t("Fecha", "Date")}: ${new Date().toLocaleDateString(lang === "en" ? "en-US" : "es-PA")}</div>
         </div>
+        <div class="pill">${incoterm} · ${place}</div>
+      </div>
 
-        <h1>${t("Cliente", "Client")}</h1>
-        <div class="box">
-          <div><b>${clientName}</b></div>
-          <div class="muted">${clientEmail}</div>
+      <h1>${t("Cliente", "Client")}</h1>
+      <div class="box">
+        <div><b>${clientName}</b></div>
+        <div class="muted">${clientEmail}</div>
+      </div>
+
+      <h1>${t("Detalle", "Details")}</h1>
+      <div class="box">
+        <table>
+          <thead>
+            <tr>
+              <th>${t("Item", "Item")}</th>
+              <th class="right">${t("Cantidad (cajas)", "Qty (boxes)")}</th>
+              <th class="right">${t("Precio unit.", "Unit price")}</th>
+              <th class="right">${t("Total", "Total")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              items.length
+                ? items
+                    .map((it: any) => {
+                      const qty = Number(it.qty || 0);
+                      const up = Number(it.unit_price || 0);
+                      const rowTotal = Number(it.total || qty * up);
+                      return `
+                        <tr>
+                          <td>${String(it.name || "")}</td>
+                          <td class="right">${qty.toLocaleString("en-US")}</td>
+                          <td class="right">${sym} ${up.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td class="right"><b>${sym} ${rowTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b></td>
+                        </tr>
+                      `;
+                    })
+                    .join("")
+                : `<tr><td colspan="4" class="muted">${t("Sin items", "No items")}</td></tr>`
+            }
+          </tbody>
+        </table>
+
+        <div style="margin-top:12px; display:flex; justify-content:flex-end;">
+          <div class="total">${t("Total", "Total")}: ${sym} ${total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
         </div>
-
-        <h1>${t("Detalle", "Details")}</h1>
-        <div class="box">
-          <table>
-            <thead>
-              <tr>
-                <th>${t("Item", "Item")}</th>
-                <th class="right">${t("Cantidad (cajas)", "Qty (boxes)")}</th>
-                <th class="right">${t("Precio unit.", "Unit price")}</th>
-                <th class="right">${t("Total", "Total")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${
-                items.length
-                  ? items
-                      .map((it: any) => {
-                        const qty = Number(it.qty || 0);
-                        const up = Number(it.unit_price || 0);
-                        const rowTotal = Number(it.total || qty * up);
-                        return `
-                          <tr>
-                            <td>${String(it.name || "")}</td>
-                            <td class="right">${qty.toLocaleString("en-US")}</td>
-                            <td class="right">${sym} ${up.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                            <td class="right"><b>${sym} ${rowTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b></td>
-                          </tr>
-                        `;
-                      })
-                      .join("")
-                  : `<tr><td colspan="4" class="muted">${t("Sin items", "No items")}</td></tr>`
-              }
-            </tbody>
-          </table>
-
-          <div style="margin-top:12px; display:flex; justify-content:flex-end;">
-            <div class="total">${t("Total", "Total")}: ${sym} ${total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-          </div>
-        </div>
+      </div>
       `;
 
   return `<!doctype html><html><head><meta charset="utf-8"/><style>${css}</style></head><body>${body}</body></html>`;
-}
-
-async function resolveExecutablePath(): Promise<string> {
-  const envPath =
-    process.env.CHROME_EXECUTABLE_PATH ||
-    process.env.PUPPETEER_EXECUTABLE_PATH ||
-    process.env.CHROMIUM_PATH;
-
-  if (envPath && String(envPath).trim()) return String(envPath).trim();
-
-  // Netlify/Lambda: sparticuz debe resolverlo (si el binario está incluido)
-  try {
-    const p = await chromium.executablePath();
-    if (p && String(p).trim()) return String(p).trim();
-  } catch (e: any) {
-    console.log("[renderQuotePdf] chromium.executablePath() failed:", e?.message || e);
-  }
-
-  // Si llegamos aquí, ES porque el binario no está en el bundle o no hay chrome disponible
-  throw new Error(
-    "Chromium executablePath is undefined. En Netlify debes incluir node_modules/@sparticuz/chromium/** en el bundle (netlify.toml: included_files + external_node_modules)."
-  );
 }
 
 export const handler: Handler = async (event) => {
@@ -181,8 +159,14 @@ export const handler: Handler = async (event) => {
 
     const html = buildHtml({ variant, lang: lang === "en" ? "en" : "es", quote: data });
 
-    const executablePath = await resolveExecutablePath();
-    console.log("[renderQuotePdf] executablePath:", executablePath);
+    // 👇 ESTA es la clave: en Netlify debe resolverse desde sparticuz
+    const executablePath = await chromium.executablePath();
+    if (!executablePath) {
+      return text(
+        500,
+        "Chromium executablePath undefined. Check netlify.toml included_files for @sparticuz/chromium/bin/**"
+      );
+    }
 
     const browser = await puppeteer.launch({
       args: chromium.args as any,
@@ -192,9 +176,9 @@ export const handler: Handler = async (event) => {
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720 });
-    await page.setContent(html, { waitUntil: "load" as any });
+    await page.setContent(html, { waitUntil: "load" });
 
-    const pdfBytes = await page.pdf({
+    const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
       margin: { top: "18mm", right: "18mm", bottom: "18mm", left: "18mm" },
@@ -203,7 +187,7 @@ export const handler: Handler = async (event) => {
     await page.close();
     await browser.close();
 
-    const clientName = data?.clients?.name || data?.client_snapshot?.name || "cliente";
+    const clientName = data?.clients?.name || "cliente";
     const filename = `${safeFileName(clientName)}_quote_${String(id).slice(0, 8)}_${variant}_${lang}.pdf`;
 
     return {
@@ -214,11 +198,10 @@ export const handler: Handler = async (event) => {
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "no-store",
       },
-      body: Buffer.from(pdfBytes).toString("base64"),
+      body: Buffer.from(pdfBuffer).toString("base64"),
       isBase64Encoded: true,
     };
   } catch (e: any) {
-    console.log("[renderQuotePdf] ERROR:", e?.message || e);
     return text(500, e?.message || "Server error");
   }
 };

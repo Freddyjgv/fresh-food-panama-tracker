@@ -2,11 +2,21 @@
   command = "npm run build"
   publish = ".next"
 
+[build]
+  command = "npm run build"
+  publish = ".next"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  external_node_modules = ["@sparticuz/chromium"]
-  included_files = ["node_modules/@sparticuz/chromium/**"]
+  external_node_modules = ["puppeteer-core", "@sparticuz/chromium"]
+  included_files = [
+    "node_modules/@sparticuz/chromium/bin/**",
+    "node_modules/@sparticuz/chromium/lib/**"
+  ]
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
