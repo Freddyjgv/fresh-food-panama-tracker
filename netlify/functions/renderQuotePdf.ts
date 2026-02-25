@@ -2,6 +2,8 @@
 import type { Handler } from "@netlify/functions";
 import chromium from "@sparticuz/chromium";
 import puppeteer from "puppeteer-core";
+import fs from "node:fs";
+import path from "node:path";
 import { getUserAndProfile, text, supabaseAdmin } from "./_util";
 
 function isPrivileged(role: string) {
@@ -137,8 +139,24 @@ function buildHtml(opts: { variant: "1" | "2"; lang: "es" | "en"; quote: any }) 
   return `<!doctype html><html><head><meta charset="utf-8"/><style>${css}</style></head><body>${body}</body></html>`;
 }
 
+function checkChromiumBundlePresence() {
+  // Estos paths existen dentro del bundle cuando included_files está bien.
+  const base = process.cwd();
+  const p1 = path.join(base, "node_modules/@sparticuz/chromium/bin/chromium.br");
+  const p2 = path.join(base, "node_modules/@sparticuz/chromium/lib");
+  return {
+    cwd: base,
+    chromiumBr: p1,
+    chromiumBrExists: fs.existsSync(p1),
+    chromiumLib: p2,
+    chromiumLibExists: fs.existsSync(p2),
+  };
+}
+
 export const handler: Handler = async (event) => {
   try {
+    const debug = String(event.queryStringParameters?.debug || "").trim() === "1";
+
     const { user, profile } = await getUserAndProfile(event);
     if (!user || !profile) return text(401, "Unauthorized");
     if (!isPrivileged(profile.role)) return text(403, "Forbidden");
@@ -159,12 +177,35 @@ export const handler: Handler = async (event) => {
 
     const html = buildHtml({ variant, lang: lang === "en" ? "en" : "es", quote: data });
 
-    // 👇 ESTA es la clave: en Netlify debe resolverse desde sparticuz
+    const bundleCheck = checkChromiumBundlePresence();
     const executablePath = await chromium.executablePath();
+
+    console.log("PDF DEBUG bundleCheck:", bundleCheck);
+    console.log("PDF DEBUG chromium.executablePath():", executablePath);
+
+    if (debug) {
+      // Te devuelve diagnóstico en texto (para verlo rápido en el navegador)
+      return text(
+        200,
+        JSON.stringify(
+          {
+            node: process.version,
+            platform: process.platform,
+            arch: process.arch,
+            bundleCheck,
+            executablePath,
+            chromiumKeys: Object.keys(chromium as any),
+          },
+          null,
+          2
+        )
+      );
+    }
+
     if (!executablePath) {
       return text(
         500,
-        "Chromium executablePath undefined. Check netlify.toml included_files for @sparticuz/chromium/bin/**"
+        `Chromium executablePath undefined. BundleCheck=${JSON.stringify(bundleCheck)}`
       );
     }
 
@@ -187,8 +228,7 @@ export const handler: Handler = async (event) => {
     await page.close();
     await browser.close();
 
-    const clientName = data?.clients?.name || "cliente";
-    const filename = `${safeFileName(clientName)}_quote_${String(id).slice(0, 8)}_${variant}_${lang}.pdf`;
+    const filename = `${safeFileName(data?.clients?.name || "cliente")}_quote_${String(id).slice(0, 8)}_${variant}_${lang}.pdf`;
 
     return {
       statusCode: 200,
@@ -202,6 +242,7 @@ export const handler: Handler = async (event) => {
       isBase64Encoded: true,
     };
   } catch (e: any) {
+    console.log("PDF ERROR:", e);
     return text(500, e?.message || "Server error");
   }
 };
