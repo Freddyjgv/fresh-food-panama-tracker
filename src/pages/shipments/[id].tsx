@@ -64,7 +64,6 @@ function productLine(d: ShipmentDetail) {
   const variety = String(d.product_variety || "").trim();
   const modeRaw = String(d.product_mode || "").trim();
 
-  // Normaliza modo
   const mode = (() => {
     const s = modeRaw.toLowerCase();
     if (!s) return "";
@@ -140,7 +139,6 @@ export default function ShipmentDetailPage() {
 
   /* =======================
      Hitos (ÚNICA FUENTE)
-     Consistente con DB / admin / stepper
   ======================= */
   const steps = useMemo(
     () => [
@@ -168,6 +166,8 @@ export default function ShipmentDetailPage() {
     });
   }, [data?.milestones, steps]);
 
+  const product = data ? productLine(data) : "—";
+
   return (
     <ClientLayout title="Detalle del embarque" subtitle="Estado, documentos y fotos del proceso de exportación">
       {/* Toolbar */}
@@ -187,163 +187,212 @@ export default function ShipmentDetailPage() {
         ) : null}
       </div>
 
-      <div className="ff-card ff-card-pad" style={{ padding: 12 }}>
+      <div className="page">
         {loading ? (
           <div className="ff-sub">Cargando…</div>
         ) : error ? (
-          <div
-            className="ff-card ff-card-pad"
-            style={{
-              borderColor: "rgba(209,119,17,.35)",
-              background: "rgba(209,119,17,.08)",
-              boxShadow: "none",
-            }}
-          >
+          <div className="ff-card ff-card-pad warn" style={{ boxShadow: "none" }}>
             <b style={{ display: "block", marginBottom: 4 }}>Error</b>
             <div className="ff-sub">{error}</div>
           </div>
         ) : data ? (
           <>
-            {/* Resumen */}
-            <div className="ff-card ff-card-pad summary" style={{ boxShadow: "none" }}>
-              <div className="ff-spread" style={{ alignItems: "flex-start" }}>
-                <div style={{ minWidth: 0 }}>
-                  <div className="codeRow">
-                    <span className="codeIcon" aria-hidden="true">
-                      <Package size={16} color="var(--ff-green-dark)" />
-                    </span>
-                    <div style={{ minWidth: 0 }}>
+            {/* HERO / HEADER ejecutivo */}
+            <div className="hero">
+              <div className="heroLeft">
+                <div className="codeRow">
+                  <span className="codeIcon" aria-hidden="true">
+                    <Package size={16} color="var(--ff-green-dark)" />
+                  </span>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div className="heroTop">
                       <div className="code">{data.code}</div>
-                      <div className="meta">
-                        {/* ✅ Producto / variedad / aérea — SIN peso por caja */}
-                        <b>{productLine(data)}</b>
-                      </div>
-                      <div className="meta" style={{ marginTop: 2 }}>
-                        Destino: <b>{data.destination}</b> · Creado: {fmtDate(data.created_at)}
-                      </div>
+                      <span className={statusBadgeClass(data.status)} style={{ height: 28, display: "inline-flex", alignItems: "center" }}>
+                        {labelStatus(data.status)}
+                      </span>
+                    </div>
+
+                    {/* ✅ Producto protagonista */}
+                    <div className="productLine" title={product}>
+                      {product}
+                    </div>
+
+                    <div className="meta">
+                      Destino: <b>{data.destination}</b> · Creado: {fmtDate(data.created_at)}
                     </div>
                   </div>
                 </div>
+              </div>
 
-                <div className="ff-row" style={{ gap: 8, justifyContent: "flex-end" }}>
-                  {data.flight_number ? <span className="pill">Vuelo: {data.flight_number}</span> : null}
-                  {data.awb ? <span className="pill">AWB: {data.awb}</span> : null}
-                </div>
+              <div className="heroRight">
+                {data.flight_number ? <span className="pill">Vuelo: {data.flight_number}</span> : null}
+                {data.awb ? <span className="pill">AWB: {data.awb}</span> : null}
               </div>
             </div>
 
-            <div className="ff-divider" />
+            {/* Progreso (ancho completo) */}
+            <div className="block">
+              <ProgressStepper milestones={data.milestones ?? []} flightNumber={data.flight_number ?? null} />
+            </div>
 
-            {/* Progreso */}
-            <ProgressStepper milestones={data.milestones ?? []} flightNumber={data.flight_number ?? null} />
-
-            <div className="ff-divider" />
-
-            {/* Datos + Hitos */}
+            {/* Datos (KPI) + Hitos */}
             <div className="grid2">
               <div className="ff-card ff-card-pad soft" style={{ boxShadow: "none" }}>
                 <div className="sectionTitle">
                   <Info size={16} /> Datos
                 </div>
 
-                <div className="kv">
-                  <span className="k">Cajas</span>
-                  <b className="v">{data.boxes ?? "-"}</b>
+                <div className="kpiRow">
+                  <div className="kpi">
+                    <div className="kpiLabel">Cajas</div>
+                    <div className="kpiValue">{data.boxes ?? "—"}</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpiLabel">Pallets</div>
+                    <div className="kpiValue">{data.pallets ?? "—"}</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpiLabel">Peso</div>
+                    <div className="kpiValue">{data.weight_kg ? `${data.weight_kg} kg` : "—"}</div>
+                  </div>
                 </div>
-                <div className="kv">
-                  <span className="k">Pallets</span>
-                  <b className="v">{data.pallets ?? "-"}</b>
-                </div>
-                <div className="kv" style={{ borderBottom: 0 }}>
-                  <span className="k">Peso</span>
-                  <b className="v">{data.weight_kg ? `${data.weight_kg} kg` : "-"}</b>
+
+                <div className="miniNote">
+                  <span className="mono">Producto:</span> <b>{product}</b>
                 </div>
               </div>
 
               <div className="ff-card ff-card-pad" style={{ boxShadow: "none" }}>
-                <div className="sectionTitle">Hitos</div>
+                <div className="sectionTitle">Timeline logístico</div>
                 <ModernTimeline milestones={milestonesForTimeline as any} />
               </div>
             </div>
 
-            <div className="ff-divider" />
-
-            {/* Documentos */}
-            <div className="ff-card ff-card-pad" style={{ boxShadow: "none" }}>
-              <div className="sectionTitle">
-                <FileText size={16} /> Documentos
-              </div>
-
-              {data.documents?.length ? (
-                <div style={{ display: "grid", gap: 8 }}>
-                  {data.documents.map((d) => (
-                    <div key={d.id} className="itemRow">
-                      <div style={{ minWidth: 0 }}>
-                        <div className="itemTitle">{d.filename}</div>
-                        <div className="itemMeta">
-                          {d.doc_type ?? "Documento"} · {fmtDate(d.created_at)}
-                        </div>
-                      </div>
-
-                      <button
-                        className="ff-btn ff-btn-ghost"
-                        style={{ height: 34, flex: "0 0 auto" }}
-                        onClick={() => download(d.id)}
-                        type="button"
-                      >
-                        <Download size={16} />
-                        Descargar
-                      </button>
-                    </div>
-                  ))}
+            {/* Documentos vs Evidencia (Balance B) */}
+            <div className="grid2">
+              <div className="ff-card ff-card-pad" style={{ boxShadow: "none" }}>
+                <div className="sectionTitle">
+                  <FileText size={16} /> Documentos
                 </div>
-              ) : (
-                <div className="ff-sub">No hay documentos cargados.</div>
-              )}
-            </div>
 
-            <div className="ff-divider" />
-
-            {/* Fotos */}
-            <div className="ff-card ff-card-pad" style={{ boxShadow: "none" }}>
-              <div className="sectionTitle">
-                <ImageIcon size={16} /> Fotos
-              </div>
-
-              {data.photos?.length ? (
-                <div className="photoGrid">
-                  {data.photos.map((p) => (
-                    <div key={p.id} className="photoCard">
-                      {p.url ? <img src={p.url} alt={p.filename} className="photoImg" /> : <div className="photoPlaceholder" />}
-
-                      <div className="photoBody">
-                        <div className="photoTitle" title={p.filename}>
-                          {p.filename}
+                {data.documents?.length ? (
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {data.documents.map((d) => (
+                      <div key={d.id} className="itemRow">
+                        <div style={{ minWidth: 0 }}>
+                          <div className="itemTitle">{d.filename}</div>
+                          <div className="itemMeta">
+                            {d.doc_type ?? "Documento"} · {fmtDate(d.created_at)}
+                          </div>
                         </div>
-                        <div className="photoMeta">{fmtDate(p.created_at)}</div>
 
                         <button
                           className="ff-btn ff-btn-ghost"
-                          style={{ height: 34, width: "100%", justifyContent: "center", marginTop: 10 }}
-                          onClick={() => download(p.id)}
+                          style={{ height: 34, flex: "0 0 auto" }}
+                          onClick={() => download(d.id)}
                           type="button"
                         >
                           <Download size={16} />
-                          Ver / Descargar
+                          Descargar
                         </button>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                ) : (
+                  <div className="ff-sub">No hay documentos cargados.</div>
+                )}
+              </div>
+
+              <div className="ff-card ff-card-pad" style={{ boxShadow: "none" }}>
+                <div className="sectionTitle">
+                  <ImageIcon size={16} /> Evidencia (Fotos)
                 </div>
-              ) : (
-                <div className="ff-sub">No hay fotos cargadas.</div>
-              )}
+
+                {data.photos?.length ? (
+                  <div className="photoGrid">
+                    {data.photos.map((p) => (
+                      <div key={p.id} className="photoCard">
+                        {p.url ? (
+                          <img src={p.url} alt={p.filename} className="photoImg" />
+                        ) : (
+                          <div className="photoPlaceholder" />
+                        )}
+
+                        <div className="photoBody">
+                          <div className="photoTitle" title={p.filename}>
+                            {p.filename}
+                          </div>
+                          <div className="photoMeta">{fmtDate(p.created_at)}</div>
+
+                          <button
+                            className="ff-btn ff-btn-ghost"
+                            style={{ height: 34, width: "100%", justifyContent: "center", marginTop: 10 }}
+                            onClick={() => download(p.id)}
+                            type="button"
+                          >
+                            <Download size={16} />
+                            Ver / Descargar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="ff-sub">No hay fotos cargadas.</div>
+                )}
+              </div>
             </div>
           </>
         ) : null}
       </div>
 
       <style jsx>{`
+        .page {
+          display: grid;
+          gap: 12px;
+        }
+
+        .warn {
+          borderColor: rgba(209, 119, 17, 0.35);
+          background: rgba(209, 119, 17, 0.08);
+        }
+
+        .hero {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px;
+          border: 1px solid var(--ff-border);
+          background: var(--ff-surface);
+          border-radius: var(--ff-radius);
+          box-shadow: none;
+        }
+        .heroLeft {
+          min-width: 0;
+          flex: 1 1 auto;
+        }
+        .heroRight {
+          display: flex;
+          gap: 8px;
+          align-items: flex-start;
+          justify-content: flex-end;
+          flex: 0 0 auto;
+          flex-wrap: wrap;
+        }
+
+        .heroTop {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+
+        .block {
+          display: grid;
+          gap: 12px;
+        }
+
         .grid2 {
           display: grid;
           gap: 12px;
@@ -351,13 +400,8 @@ export default function ShipmentDetailPage() {
         }
         @media (min-width: 1100px) {
           .grid2 {
-            grid-template-columns: 0.95fr 1.05fr;
+            grid-template-columns: 1fr 1fr;
           }
-        }
-
-        .summary {
-          background: var(--ff-surface);
-          border: 1px solid var(--ff-border);
         }
 
         .codeRow {
@@ -367,9 +411,9 @@ export default function ShipmentDetailPage() {
           min-width: 0;
         }
         .codeIcon {
-          width: 32px;
-          height: 32px;
-          border-radius: 8px;
+          width: 34px;
+          height: 34px;
+          border-radius: 10px;
           border: 1px solid rgba(31, 122, 58, 0.18);
           background: rgba(31, 122, 58, 0.08);
           display: grid;
@@ -382,11 +426,25 @@ export default function ShipmentDetailPage() {
           line-height: 20px;
           letter-spacing: -0.2px;
         }
+
+        .productLine {
+          margin-top: 2px;
+          font-weight: 950;
+          font-size: 13px;
+          line-height: 18px;
+          letter-spacing: -0.15px;
+          color: var(--ff-green-dark);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
         .meta {
           font-size: 12px;
           color: var(--ff-muted);
           line-height: 16px;
           word-break: break-word;
+          margin-top: 2px;
         }
 
         .pill {
@@ -416,21 +474,38 @@ export default function ShipmentDetailPage() {
           margin-bottom: 10px;
         }
 
-        .kv {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          padding: 8px 0;
-          border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+        .kpiRow {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
         }
-        .k {
-          color: var(--ff-muted);
-          font-weight: 800;
-          font-size: 12px;
+        .kpi {
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          background: rgba(255, 255, 255, 0.7);
+          border-radius: 12px;
+          padding: 10px;
         }
-        .v {
+        .kpiLabel {
+          font-size: 11px;
           font-weight: 900;
+          color: var(--ff-muted);
+        }
+        .kpiValue {
+          margin-top: 4px;
+          font-size: 15px;
+          font-weight: 950;
+          letter-spacing: -0.25px;
+        }
+        .miniNote {
+          margin-top: 10px;
+          padding-top: 10px;
+          border-top: 1px solid rgba(15, 23, 42, 0.06);
           font-size: 12px;
+          color: var(--ff-muted);
+        }
+        .mono {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+          font-weight: 800;
         }
 
         .itemRow {
