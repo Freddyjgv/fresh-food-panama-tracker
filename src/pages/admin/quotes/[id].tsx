@@ -11,3 +11,6 @@ function lineLabel(key: string, lang: UiLang) {
   const row = SALES_LINES.find((x) => x.key === key);
   return row ? (lang === "en" ? row.en : row.es) : key;
 }
+export default function Page() {
+  return null;
+}
