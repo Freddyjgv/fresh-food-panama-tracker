@@ -21,6 +21,26 @@ import {
   Package,
 } from "lucide-react";
 
+type ShipmentMilestone = {
+  type: string;
+  at?: string | null;
+  note?: string | null;
+};
+
+type ShipmentDocument = {
+  id: string;
+  filename: string;
+  doc_type?: string | null;
+  created_at: string;
+};
+
+type ShipmentPhoto = {
+  id: string;
+  filename: string;
+  created_at: string;
+  url?: string | null;
+};
+
 type ShipmentDetail = {
   id: string;
   code: string;
@@ -28,26 +48,32 @@ type ShipmentDetail = {
   status: string;
   created_at: string;
 
-  // Cliente
+  // cliente
   client_name?: string | null;
   client?: { name?: string | null } | null;
 
-  // Producto
+  // producto
   product_name?: string | null;
   product_variety?: string | null;
   product_mode?: string | null;
 
-  // Logística
+  // cantidades
   boxes?: number | null;
+  pallets?: number | null;
   weight_kg?: number | null;
+
+  // logística
   flight_number?: string | null;
   awb?: string | null;
 
-  // Calidad
+  // packing
   caliber?: string | null;
   color?: string | null;
 
-  note?: string | null;
+  // relaciones
+  milestones?: ShipmentMilestone[];
+  documents?: ShipmentDocument[];
+  photos?: ShipmentPhoto[];
 };
 
 type UiLang = "es" | "en";
@@ -1082,4 +1108,9 @@ export default function AdminShipmentDetail() {
       `}</style>
     </AdminLayout>
   );
+  
+}
+
+export default function Page() {
+  return null;
 }
