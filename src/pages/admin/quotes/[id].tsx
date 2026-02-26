@@ -28,6 +28,8 @@ type QuoteDetail = {
 type UiLang = "es" | "en";
 type PdfVariant = "1" | "2";
 
+type Incoterm = "CIP" | "CPT" | "DAP" | "DDP" | "FCA" | "FOB" | "CIF";
+
 const SALES_LINES = [
   { key: "fruit_value", es: "1. Valor de la fruta (FOB/FCA)", en: "1. Fruit Value (FOB/FCA)" },
   { key: "intl_logistics", es: "2. Logística internacional", en: "2. International Logistics" },
@@ -50,6 +52,36 @@ function lineLabel(key: string, lang: UiLang) {
   return row ? (lang === "en" ? row.en : row.es) : key;
 }
 
+function safeIncoterm(v: any): Incoterm {
+  const s = String(v || "").toUpperCase();
+  const allowed: Incoterm[] = ["CIP", "CPT", "DAP", "DDP", "FCA", "FOB", "CIF"];
+  return (allowed.includes(s as Incoterm) ? (s as Incoterm) : "CIP");
+}
+
+function incotermHelp(incoterm: Incoterm, lang: UiLang) {
+  const es = {
+    CIP: "CIP requiere Place of Destination (Aeropuerto/Puerto destino).",
+    CPT: "CPT requiere Place of Destination.",
+    DAP: "DAP requiere Place (lugar de entrega).",
+    DDP: "DDP requiere Place (lugar de entrega, impuestos incluidos).",
+    FCA: "FCA: Place suele ser punto de entrega en origen (terminal / almacén).",
+    FOB: "FOB (marítimo): Place suele ser puerto de salida.",
+    CIF: "CIF (marítimo): Place suele ser puerto de destino.",
+  } as const;
+
+  const en = {
+    CIP: "CIP requires Place of Destination (Airport/Port).",
+    CPT: "CPT requires Place of Destination.",
+    DAP: "DAP requires Place (place of delivery).",
+    DDP: "DDP requires Place (delivery, duties paid).",
+    FCA: "FCA: Place is usually delivery point at origin (terminal / warehouse).",
+    FOB: "FOB (sea): Place is usually port of loading.",
+    CIF: "CIF (sea): Place is usually port of destination.",
+  } as const;
+
+  return lang === "en" ? en[incoterm] : es[incoterm];
+}
+
 export default function AdminQuoteDetailPage() {
   const router = useRouter();
   const { id } = router.query;
@@ -64,16 +96,23 @@ export default function AdminQuoteDetailPage() {
 
   // UI
   const [uiLang, setUiLang] = useState<UiLang>("es");
-  const [pdfVariant, setPdfVariant] = useState<PdfVariant>("1"); // 1 simple, 2 detallada
+  const [pdfVariant, setPdfVariant] = useState<PdfVariant>("1");
   const [pdfLang, setPdfLang] = useState<UiLang>("es");
 
   // Editables principales
   const [boxes, setBoxes] = useState(0);
   const [weightKg, setWeightKg] = useState<number>(0);
-  const [margin, setMargin] = useState<number>(15);
+  const [margin, setMargin] = useState<number>(15); // markup %
   const [mode, setMode] = useState<"AIR" | "SEA">("AIR");
   const [currency, setCurrency] = useState<"USD" | "EUR">("USD");
-  const [destination, setDestination] = useState("");
+
+  // ✅ Incoterm + Place
+  const [incoterm, setIncoterm] = useState<Incoterm>("CIP");
+  const [place, setPlace] = useState(""); // Place of destination/delivery/origin per incoterm
+
+  // (compat) seguimos guardando destination al backend con el mismo valor de place
+  const destination = place;
+
   const [paymentTerms, setPaymentTerms] = useState("");
   const [terms, setTerms] = useState("");
 
@@ -81,12 +120,12 @@ export default function AdminQuoteDetailPage() {
   const [cFruit, setCFruit] = useState(0);
   const [cOthf, setCOthf] = useState(0);
   const [cFreight, setCFreight] = useState(0);
-  const [cHandling, setCHandling] = useState(0); // por kg
+  const [cHandling, setCHandling] = useState(0);
   const [cOrigin, setCOrigin] = useState(0);
   const [cAduana, setCAduana] = useState(0);
   const [cInsp, setCInsp] = useState(0);
-  const [cItbms, setCItbms] = useState(0); // %
-  const [cOther, setCOther] = useState(0); // nuevo
+  const [cItbms, setCItbms] = useState(0);
+  const [cOther, setCOther] = useState(0);
 
   const [showCosts, setShowCosts] = useState(false);
 
@@ -112,6 +151,13 @@ export default function AdminQuoteDetailPage() {
       setAuthOk(true);
     })();
   }, []);
+
+  // ✅ si estás en AIR, no dejes CIF/FOB (sea-only)
+  useEffect(() => {
+    if (mode === "AIR" && (incoterm === "CIF" || incoterm === "FOB")) {
+      setIncoterm("CIP");
+    }
+  }, [mode, incoterm]);
 
   async function load(quoteId: string) {
     setLoading(true);
@@ -139,7 +185,14 @@ export default function AdminQuoteDetailPage() {
     setMargin(n(json.margin_markup));
     setMode((json.mode || "AIR") as any);
     setCurrency((json.currency || "USD") as any);
-    setDestination(String(json.destination || ""));
+
+    // ✅ hydrate incoterm/place desde totals.meta si existe, si no usa destination
+    const meta = (json.totals as any)?.meta || {};
+    const metaInc = safeIncoterm(meta?.incoterm);
+    const metaPlace = String(meta?.place || json.destination || "");
+    setIncoterm(metaInc);
+    setPlace(metaPlace);
+
     setPaymentTerms(String(json.payment_terms || ""));
     setTerms(String(json.terms || ""));
 
@@ -191,12 +244,17 @@ export default function AdminQuoteDetailPage() {
     const saleTotal = saleRows.reduce((acc, r) => acc + r.sale, 0);
 
     const profitTotal = saleTotal - costTotal;
-    const realMargin = saleTotal > 0 ? (profitTotal / saleTotal) * 100 : 0;
+
+    // ✅ 2 métricas para evitar confusión:
+    // - marginOnSale = profit/sale (margen bruto)
+    // - markupOnCost = profit/cost (markup real)
+    const marginOnSale = saleTotal > 0 ? (profitTotal / saleTotal) * 100 : 0;
+    const markupOnCost = costTotal > 0 ? (profitTotal / costTotal) * 100 : 0;
 
     const perBox = b > 0 ? saleTotal / b : 0;
     const perKg = w > 0 ? saleTotal / w : 0;
 
-    return { rows: saleRows, costTotal, saleTotal, profitTotal, realMargin, perBox, perKg };
+    return { rows: saleRows, costTotal, saleTotal, profitTotal, marginOnSale, markupOnCost, perBox, perKg };
   }, [boxes, weightKg, margin, cFruit, cOthf, cFreight, cHandling, cOrigin, cAduana, cInsp, cItbms, cOther]);
 
   function money(v: number) {
@@ -236,11 +294,13 @@ export default function AdminQuoteDetailPage() {
       cost_total: n(computed.costTotal),
       sale_total: n(computed.saleTotal),
       profit_total: n(computed.profitTotal),
-      margin_real: n(computed.realMargin),
+      // ✅ guardamos ambas métricas
+      margin_on_sale: n(computed.marginOnSale),
+      markup_on_cost: n(computed.markupOnCost),
       items,
       meta: {
-        incoterm: "CIP",
-        place: destination || "—",
+        incoterm,
+        place: place || "—",
         per_box: computed.perBox,
         per_kg: computed.perKg,
         weight_kg: n(weightKg),
@@ -255,7 +315,8 @@ export default function AdminQuoteDetailPage() {
       margin_markup: n(margin),
       mode,
       currency,
-      destination,
+      // compat backend:
+      destination: destination,
       payment_terms: paymentTerms,
       terms,
       costs,
@@ -326,7 +387,6 @@ export default function AdminQuoteDetailPage() {
 
   return (
     <AdminLayout title="Cotización" subtitle="Cotizador admin (UI premium).">
-      {/* Top header */}
       <div className="topBar">
         <Link href="/admin/quotes" className="btnGhost">
           <ArrowLeft size={16} />
@@ -368,35 +428,45 @@ export default function AdminQuoteDetailPage() {
             <div className="cardHead">
               <div>
                 <div className="h">Configuración de oferta</div>
-                <div className="muted">Modo + destino + moneda + parámetros.</div>
+                <div className="muted">Modo + incoterm + place + moneda + parámetros.</div>
               </div>
             </div>
 
             <div className="divider" />
 
-            {/* Mode segmented */}
             <div className="segRow">
-              <button
-                className={`seg ${mode === "AIR" ? "on" : ""}`}
-                type="button"
-                onClick={() => setMode("AIR")}
-              >
+              <button className={`seg ${mode === "AIR" ? "on" : ""}`} type="button" onClick={() => setMode("AIR")}>
                 ✈️ AÉREO
               </button>
-              <button
-                className={`seg ${mode === "SEA" ? "on" : ""}`}
-                type="button"
-                onClick={() => setMode("SEA")}
-              >
+              <button className={`seg ${mode === "SEA" ? "on" : ""}`} type="button" onClick={() => setMode("SEA")}>
                 🚢 MARÍTIMO
               </button>
             </div>
 
             <div className="grid2">
+              {/* ✅ Incoterm */}
               <div>
-                <label className="lbl">Destino</label>
-                <input className="in" value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="Ej: Madrid (MAD)" />
-                <div className="help">CIP requiere Place of Destination (Aeropuerto/Puerto destino).</div>
+                <label className="lbl">Incoterm</label>
+                <select className="in" value={incoterm} onChange={(e) => setIncoterm(safeIncoterm(e.target.value))}>
+                  <option value="CIP">CIP</option>
+                  <option value="CPT">CPT</option>
+                  <option value="DAP">DAP</option>
+                  <option value="DDP">DDP</option>
+                  <option value="FCA">FCA</option>
+                  <option value="FOB" disabled={mode === "AIR"}>
+                    FOB {mode === "AIR" ? "(solo marítimo)" : ""}
+                  </option>
+                  <option value="CIF" disabled={mode === "AIR"}>
+                    CIF {mode === "AIR" ? "(solo marítimo)" : ""}
+                  </option>
+                </select>
+              </div>
+
+              {/* ✅ Place */}
+              <div>
+                <label className="lbl">Place (Incoterm + Place)</label>
+                <input className="in" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="Ej: Madrid (MAD) / AMS / Puerto..." />
+                <div className="help">{incotermHelp(incoterm, uiLang)}</div>
               </div>
 
               <div>
@@ -551,8 +621,11 @@ export default function AdminQuoteDetailPage() {
 
             <div className="kpis">
               <div className="kpi">
-                <div className="kpiLbl">Margen real</div>
-                <div className="kpiVal">{computed.realMargin.toFixed(1)}%</div>
+                <div className="kpiLbl">Margen real (Profit / Venta)</div>
+                <div className="kpiVal">{computed.marginOnSale.toFixed(1)}%</div>
+                <div className="muted" style={{ marginTop: 4 }}>
+                  Markup real (Profit / Costo): <b>{computed.markupOnCost.toFixed(1)}%</b>
+                </div>
               </div>
               <div className="kpi">
                 <div className="kpiLbl">Unidades</div>
@@ -601,31 +674,21 @@ export default function AdminQuoteDetailPage() {
             </div>
 
             <div className="pdfTotal">
-              <div className="pdfTotalLbl">TOTAL CIP</div>
+              <div className="pdfTotalLbl">TOTAL</div>
               <div className="pdfTotalVal">{money(computed.saleTotal)}</div>
               <div className="pdfMeta">
-                Tipo: {pdfVariant === "1" ? "Simple" : "Detallada"} · Idioma: {pdfLang.toUpperCase()} · Incoterm: CIP · Place: {destination || "—"}
+                Tipo: {pdfVariant === "1" ? "Simple" : "Detallada"} · Idioma: {pdfLang.toUpperCase()} · Incoterm: {incoterm} · Place: {place || "—"}
               </div>
             </div>
 
             <div className="divider" />
 
             <div className="pdfRow">
-              <button
-                className="btnGhostSmall"
-                type="button"
-                disabled={busy || loading}
-                onClick={() => downloadPdf({ variant: "2", lang: "es", report: true })}
-              >
+              <button className="btnGhostSmall" type="button" disabled={busy || loading} onClick={() => downloadPdf({ variant: "2", lang: "es", report: true })}>
                 <FileText size={16} /> PDF Interno (ES)
               </button>
 
-              <button
-                className="btnGhostSmall"
-                type="button"
-                disabled={busy || loading}
-                onClick={() => downloadPdf({ variant: "2", lang: "en", report: true })}
-              >
+              <button className="btnGhostSmall" type="button" disabled={busy || loading} onClick={() => downloadPdf({ variant: "2", lang: "en", report: true })}>
                 <FileText size={16} /> PDF Interno (EN)
               </button>
             </div>
@@ -634,268 +697,83 @@ export default function AdminQuoteDetailPage() {
       </div>
 
       <style jsx>{`
-        /* Estructura */
-        .layout {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 12px;
-        }
-        @media (min-width: 1100px) {
-          .layout {
-            grid-template-columns: 1.05fr 0.95fr;
-            gap: 12px;
-          }
-        }
-        .col {
-          display: grid;
-          gap: 12px;
-          align-content: start;
-        }
+        .layout { display: grid; grid-template-columns: 1fr; gap: 12px; }
+        @media (min-width: 1100px) { .layout { grid-template-columns: 1.05fr 0.95fr; gap: 12px; } }
+        .col { display: grid; gap: 12px; align-content: start; }
 
-        /* Top */
-        .topBar {
-          display: grid;
-          grid-template-columns: auto 1fr auto;
-          gap: 10px;
-          align-items: center;
-          margin-bottom: 12px;
-        }
+        .topBar { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; margin-bottom: 12px; }
         .topMeta { min-width: 0; }
-        .topTitle {
-          font-weight: 950;
-          font-size: 15px;
-          letter-spacing: -0.2px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
+        .topTitle { font-weight: 950; font-size: 15px; letter-spacing: -0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .code { color: var(--ff-green-dark); }
         .sub { color: var(--ff-muted); font-weight: 800; font-size: 13px; }
         .topSub { margin-top: 2px; font-size: 12px; color: var(--ff-muted); }
         .topActions { display: inline-flex; gap: 8px; align-items: center; }
 
-        /* Cards */
-        .card {
-          border: 1px solid var(--ff-border);
-          background: var(--ff-surface);
-          border-radius: var(--ff-radius);
-          padding: 12px;
-        }
-        .softGreen {
-          border-color: rgba(31, 122, 58, 0.18);
-          background: rgba(31, 122, 58, 0.06);
-        }
-        .cardHead {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-        }
-        .cardSubHead {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-          margin-bottom: 8px;
-        }
+        .card { border: 1px solid var(--ff-border); background: var(--ff-surface); border-radius: var(--ff-radius); padding: 12px; }
+        .softGreen { border-color: rgba(31, 122, 58, 0.18); background: rgba(31, 122, 58, 0.06); }
+        .cardHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .cardSubHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
         .h { font-weight: 950; font-size: 14px; letter-spacing: -0.2px; }
         .h2 { font-weight: 950; font-size: 13px; letter-spacing: -0.2px; }
         .muted { font-size: 12px; color: var(--ff-muted); }
         .divider { height: 1px; background: rgba(15,23,42,.08); margin: 12px 0; }
 
-        /* Inputs */
-        .grid2 {
-          display: grid;
-          gap: 10px;
-          grid-template-columns: 1fr;
-        }
-        @media (min-width: 900px) {
-          .grid2 { grid-template-columns: 1fr 1fr; }
-        }
+        .grid2 { display: grid; gap: 10px; grid-template-columns: 1fr; }
+        @media (min-width: 900px) { .grid2 { grid-template-columns: 1fr 1fr; } }
         .lbl { display:block; font-size: 12px; font-weight: 900; color: var(--ff-muted); margin-bottom: 6px; }
-        .in {
-          width: 100%;
-          height: 38px;
-          border: 1px solid var(--ff-border);
-          border-radius: 10px;
-          padding: 0 10px;
-          font-size: 13px;
-          outline: none;
-          background: #fff;
-        }
-        .in.warn {
-          border-color: rgba(209,119,17,.35);
-          box-shadow: 0 0 0 4px rgba(209,119,17,.08);
-        }
+        .in { width: 100%; height: 38px; border: 1px solid var(--ff-border); border-radius: 10px; padding: 0 10px; font-size: 13px; outline: none; background: #fff; }
+        .in.warn { border-color: rgba(209,119,17,.35); box-shadow: 0 0 0 4px rgba(209,119,17,.08); }
         .help { margin-top: 6px; font-size: 12px; color: var(--ff-muted); }
 
-        .ta {
-          width: 100%;
-          border: 1px solid var(--ff-border);
-          border-radius: 10px;
-          padding: 10px;
-          font-size: 13px;
-          outline: none;
-          background: #fff;
-        }
+        .ta { width: 100%; border: 1px solid var(--ff-border); border-radius: 10px; padding: 10px; font-size: 13px; outline: none; background: #fff; }
 
-        /* Buttons */
         .btnPrimary {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
+          display: inline-flex; align-items: center; justify-content: center; gap: 8px;
           border: 1px solid rgba(31, 122, 58, 0.35);
-          background: var(--ff-green);
-          color: #fff;
-          border-radius: 10px;
-          height: 36px;
-          padding: 0 12px;
-          font-weight: 950;
-          font-size: 12px;
-          cursor: pointer;
-          white-space: nowrap;
+          background: var(--ff-green); color: #fff;
+          border-radius: 10px; height: 36px; padding: 0 12px;
+          font-weight: 950; font-size: 12px; cursor: pointer; white-space: nowrap;
         }
         .btnPrimary:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .btnGhost, .btnGhostSmall {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          border: 1px solid var(--ff-border);
-          background: #fff;
-          color: var(--ff-text);
-          border-radius: 10px;
-          font-weight: 900;
-          cursor: pointer;
-          text-decoration: none;
-          white-space: nowrap;
+          display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+          border: 1px solid var(--ff-border); background: #fff; color: var(--ff-text);
+          border-radius: 10px; font-weight: 900; cursor: pointer; text-decoration: none; white-space: nowrap;
         }
         .btnGhost { height: 36px; padding: 0 12px; font-size: 12px; }
         .btnGhostSmall { height: 34px; padding: 0 10px; font-size: 12px; }
         .btnGhost:hover, .btnGhostSmall:hover { background: rgba(15,23,42,.03); }
 
-        .segBtn {
-          height: 36px;
-          padding: 0 10px;
-          border-radius: 10px;
-          border: 1px solid var(--ff-border);
-          background: #fff;
-          font-weight: 950;
-          font-size: 12px;
-          cursor: pointer;
-        }
+        .segBtn { height: 36px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--ff-border); background: #fff; font-weight: 950; font-size: 12px; cursor: pointer; }
 
-        /* Segmented */
         .segRow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .seg {
-          height: 38px;
-          border-radius: 12px;
-          border: 1px solid var(--ff-border);
-          background: #fff;
-          font-weight: 950;
-          font-size: 12px;
-          cursor: pointer;
-        }
-        .seg.on {
-          border-color: rgba(31,122,58,.28);
-          background: rgba(31,122,58,.10);
-          color: var(--ff-green-dark);
-        }
+        .seg { height: 38px; border-radius: 12px; border: 1px solid var(--ff-border); background: #fff; font-weight: 950; font-size: 12px; cursor: pointer; }
+        .seg.on { border-color: rgba(31,122,58,.28); background: rgba(31,122,58,.10); color: var(--ff-green-dark); }
 
         .segGroup { display: inline-flex; gap: 8px; align-items: center; }
-        .segMini {
-          height: 34px;
-          padding: 0 12px;
-          border-radius: 12px;
-          border: 1px solid var(--ff-border);
-          background: #fff;
-          font-weight: 950;
-          font-size: 12px;
-          cursor: pointer;
-          white-space: nowrap;
-        }
-        .segMini.on {
-          border-color: rgba(31,122,58,.28);
-          background: rgba(31,122,58,.10);
-          color: var(--ff-green-dark);
-        }
+        .segMini { height: 34px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--ff-border); background: #fff; font-weight: 950; font-size: 12px; cursor: pointer; white-space: nowrap; }
+        .segMini.on { border-color: rgba(31,122,58,.28); background: rgba(31,122,58,.10); color: var(--ff-green-dark); }
 
-        /* Table */
         .tbl { width: 100%; border-collapse: collapse; }
-        .tbl th {
-          font-size: 12px;
-          color: var(--ff-muted);
-          padding: 10px 8px;
-          border-bottom: 1px solid rgba(15,23,42,.08);
-        }
-        .tbl td {
-          padding: 10px 8px;
-          border-bottom: 1px solid rgba(15,23,42,.08);
-          font-size: 13px;
-        }
-        .tot td {
-          background: rgba(15,23,42,.03);
-          font-weight: 950;
-        }
+        .tbl th { font-size: 12px; color: var(--ff-muted); padding: 10px 8px; border-bottom: 1px solid rgba(15,23,42,.08); }
+        .tbl td { padding: 10px 8px; border-bottom: 1px solid rgba(15,23,42,.08); font-size: 13px; }
+        .tot td { background: rgba(15,23,42,.03); font-weight: 950; }
 
-        /* KPIs */
-        .kpis {
-          margin-top: 12px;
-          display: grid;
-          gap: 10px;
-          grid-template-columns: 1fr;
-        }
-        @media (min-width: 900px) {
-          .kpis { grid-template-columns: 0.6fr 1.4fr; }
-        }
-        .kpi {
-          border: 1px solid rgba(15,23,42,.08);
-          background: rgba(255,255,255,.75);
-          border-radius: 12px;
-          padding: 10px;
-        }
+        .kpis { margin-top: 12px; display: grid; gap: 10px; grid-template-columns: 1fr; }
+        @media (min-width: 900px) { .kpis { grid-template-columns: 0.8fr 1.2fr; } }
+        .kpi { border: 1px solid rgba(15,23,42,.08); background: rgba(255,255,255,.75); border-radius: 12px; padding: 10px; }
         .kpiLbl { font-size: 12px; color: var(--ff-muted); font-weight: 900; }
         .kpiVal { margin-top: 2px; font-size: 13px; font-weight: 950; }
 
-        /* PDF */
-        .pdfRow {
-          display: flex;
-          gap: 10px;
-          align-items: center;
-          flex-wrap: wrap;
-        }
-        .pdfTotal {
-          margin-top: 12px;
-          border-radius: 12px;
-          padding: 10px;
-          border: 1px solid rgba(15,23,42,.10);
-          background: rgba(255,255,255,.65);
-        }
+        .pdfRow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .pdfTotal { margin-top: 12px; border-radius: 12px; padding: 10px; border: 1px solid rgba(15,23,42,.10); background: rgba(255,255,255,.65); }
         .pdfTotalLbl { font-size: 12px; color: var(--ff-muted); font-weight: 900; }
         .pdfTotalVal { margin-top: 4px; font-size: 22px; font-weight: 950; color: var(--ff-green-dark); }
         .pdfMeta { margin-top: 6px; font-size: 12px; color: var(--ff-muted); font-weight: 800; }
 
-        /* Messages */
-        .msgWarn {
-          border: 1px solid rgba(209,119,17,.35);
-          background: rgba(209,119,17,.08);
-          padding: 10px;
-          border-radius: 12px;
-          font-size: 12px;
-          font-weight: 900;
-          margin-bottom: 12px;
-        }
-        .msgOk {
-          border: 1px solid rgba(31,122,58,.30);
-          background: rgba(31,122,58,.08);
-          border-radius: 12px;
-          padding: 10px;
-          font-weight: 950;
-          font-size: 12px;
-          margin-bottom: 12px;
-        }
+        .msgWarn { border: 1px solid rgba(209,119,17,.35); background: rgba(209,119,17,.08); padding: 10px; border-radius: 12px; font-size: 12px; font-weight: 900; margin-bottom: 12px; }
+        .msgOk { border: 1px solid rgba(31,122,58,.30); background: rgba(31,122,58,.08); border-radius: 12px; padding: 10px; font-weight: 950; font-size: 12px; margin-bottom: 12px; }
       `}</style>
     </AdminLayout>
   );
