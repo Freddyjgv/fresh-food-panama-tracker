@@ -10,6 +10,7 @@ import {
   TrendingUp,
   Clock,
   PlusCircle,
+  FileText,
 } from "lucide-react";
 
 import { supabase } from "../../lib/supabaseClient";
@@ -56,7 +57,7 @@ type ClientsApiResponse = {
   totalPages?: number;
 };
 
-const QUOTE_PATH = "/admin/quotes"; // <-- cambia si tu cotizador está en otra ruta
+const QUOTE_PATH = "/admin/quotes";
 
 function fmtDate(iso: string) {
   try {
@@ -79,41 +80,42 @@ function productInline(s: ShipmentListItem) {
 
 function statusTone(status: string): "neutral" | "success" | "warn" | "info" {
   const s = String(status || "").toUpperCase();
-  if (["PACKED", "DOCS_READY", "DELIVERED", "CLOSED"].includes(s)) return "success";
+  // Ajusta si tu flujo usa otros nombres:
+  if (["AT_DESTINATION", "DELIVERED", "CLOSED", "DOCS_READY", "PACKED"].includes(s)) return "success";
   if (["AT_ORIGIN", "ARRIVED_PTY", "DEPARTED"].includes(s)) return "warn";
   if (["IN_TRANSIT"].includes(s)) return "info";
-  if (["AT_DESTINATION"].includes(s)) return "neutral"; // “final” pero no necesariamente closed
   return "neutral";
 }
 
-function pillStyle(status: string): React.CSSProperties {
+function StatusPill({ status }: { status: string }) {
   const tone = statusTone(status);
-  if (tone === "success") {
-    return {
-      background: "rgba(31,122,58,.10)",
-      borderColor: "rgba(31,122,58,.22)",
-      color: "var(--ff-green-dark)",
-    };
-  }
-  if (tone === "warn") {
-    return {
-      background: "rgba(209,119,17,.12)",
-      borderColor: "rgba(209,119,17,.24)",
-      color: "#7a3f00",
-    };
-  }
-  if (tone === "info") {
-    return {
-      background: "rgba(59,130,246,.10)",
-      borderColor: "rgba(59,130,246,.22)",
-      color: "rgba(30,64,175,1)",
-    };
-  }
-  return {
-    background: "rgba(15,23,42,.04)",
-    borderColor: "rgba(15,23,42,.12)",
-    color: "var(--ff-text)",
-  };
+  const style: React.CSSProperties =
+    tone === "success"
+      ? { background: "rgba(31,122,58,.10)", borderColor: "rgba(31,122,58,.22)", color: "var(--ff-green-dark)" }
+      : tone === "warn"
+      ? { background: "rgba(209,119,17,.12)", borderColor: "rgba(209,119,17,.24)", color: "#7a3f00" }
+      : tone === "info"
+      ? { background: "rgba(59,130,246,.10)", borderColor: "rgba(59,130,246,.22)", color: "rgba(30,64,175,1)" }
+      : { background: "rgba(15,23,42,.04)", borderColor: "rgba(15,23,42,.12)", color: "var(--ff-text)" };
+
+  return (
+    <span
+      style={{
+        ...style,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: 999,
+        border: "1px solid",
+        padding: "4px 10px",
+        fontSize: 12,
+        fontWeight: 900,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {labelStatus(status)}
+    </span>
+  );
 }
 
 export default function AdminDashboard() {
@@ -154,7 +156,7 @@ export default function AdminDashboard() {
     const token = await getTokenOrRedirect();
     if (!token) return;
 
-    // 1) Últimos embarques (page=1 desc) + total
+    // 1) Últimos embarques + total
     const qs = new URLSearchParams();
     qs.set("page", "1");
     qs.set("dir", "desc");
@@ -172,18 +174,17 @@ export default function AdminDashboard() {
     }
 
     const sJson = (await sRes.json()) as ShipmentsApiResponse;
-    setShipments(sJson.items?.slice(0, 6) || []);
+    setShipments(sJson.items?.slice(0, 8) || []); // un poco más, pero en tabla compacta no molesta
     setShipmentsTotal(sJson.total ?? (sJson.items?.length || 0));
 
-    // 2) Total clientes (ideal: que listClients devuelva total)
+    // 2) Total clientes
     const cRes = await fetch(`/.netlify/functions/listClients`, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
     if (cRes.ok) {
       const cJson = (await cRes.json()) as ClientsApiResponse;
-      const inferredTotal =
-        typeof cJson.total === "number" ? cJson.total : cJson.items?.length || 0;
+      const inferredTotal = typeof cJson.total === "number" ? cJson.total : (cJson.items?.length || 0);
       setClientsTotal(inferredTotal);
     }
 
@@ -196,42 +197,42 @@ export default function AdminDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady]);
 
-  // KPI: Activos = NO En Destino (ni finales)
+  // Activos: TODO lo que NO esté "En destino"
   const activeShipments = useMemo(() => {
-    const INACTIVE = new Set(["AT_DESTINATION", "DELIVERED", "CLOSED"]);
-    return shipments.filter((s) => !INACTIVE.has(String(s.status || "").toUpperCase()))
-      .length;
+    const isDone = (s: string) => {
+      const u = String(s || "").toUpperCase();
+      // “En destino” + estados finales fuera de activos:
+      return ["AT_DESTINATION", "DELIVERED", "CLOSED"].includes(u);
+    };
+    return shipments.filter((x) => !isDone(x.status)).length;
   }, [shipments]);
 
-  const quick = [
+  const quickCards = [
     {
       title: "Cotizador",
-      desc: "Genera cotizaciones rápidas (CIP/FOB/CIF) y guarda historial.",
+      desc: "Cotizaciones rápidas (CIP/FOB/CIF) + historial.",
       href: QUOTE_PATH,
       icon: <Calculator size={16} />,
       tone: "green" as const,
-      cta: "Abrir",
     },
     {
       title: "Embarques",
-      desc: "Crear embarques, actualizar hitos, cargar documentos y fotos.",
+      desc: "Hitos, documentos, fotos y seguimiento.",
       href: "/admin/shipments",
       icon: <Package2 size={16} />,
       tone: "neutral" as const,
-      cta: "Gestionar",
     },
     {
       title: "Clientes",
-      desc: "Fichas tipo CRM: contactos, país, estado y relación con embarques.",
+      desc: "Fichas tipo CRM, contactos y país.",
       href: "/admin/users",
       icon: <Users2 size={16} />,
       tone: "neutral" as const,
-      cta: "Ver fichas",
     },
   ];
 
   return (
-    <AdminLayout title="Dashboard" subtitle="Vista general (estilo Odoo) para operar rápido.">
+    <AdminLayout title="Dashboard" subtitle="Vista general para operar rápido.">
       {/* KPIs */}
       <div className="kpiGrid">
         <div className="kpiCard">
@@ -239,7 +240,7 @@ export default function AdminDashboard() {
             <div className="kpiIcon">
               <TrendingUp size={16} />
             </div>
-            <div className="kpiLabel">Embarques (total)</div>
+            <div className="kpiLabel">Embarques</div>
           </div>
           <div className="kpiValue">{loading ? "—" : shipmentsTotal}</div>
           <div className="kpiSub">Total en el sistema</div>
@@ -250,10 +251,10 @@ export default function AdminDashboard() {
             <div className="kpiIcon">
               <Clock size={16} />
             </div>
-            <div className="kpiLabel">Embarques activos</div>
+            <div className="kpiLabel">Activos</div>
           </div>
           <div className="kpiValue">{loading ? "—" : activeShipments}</div>
-          <div className="kpiSub">Muestra (últimos 6) · excluye “En destino”</div>
+          <div className="kpiSub">Excluye “En destino”</div>
         </div>
 
         <div className="kpiCard">
@@ -264,7 +265,7 @@ export default function AdminDashboard() {
             <div className="kpiLabel">Clientes</div>
           </div>
           <div className="kpiValue">{loading ? "—" : clientsTotal}</div>
-          <div className="kpiSub">Contactos / empresas</div>
+          <div className="kpiSub">Empresas / contactos</div>
         </div>
       </div>
 
@@ -274,29 +275,19 @@ export default function AdminDashboard() {
         {/* Accesos + Atajos */}
         <div className="card">
           <div className="cardTitle">Accesos</div>
-          <div className="cardSub">Entradas directas a los módulos principales.</div>
+          <div className="cardSub">Entradas directas a los módulos.</div>
 
           <div className="ff-divider" style={{ margin: "12px 0" }} />
 
           <div className="quickGrid">
-            {quick.map((q) => (
-              <Link
-                key={q.title}
-                href={q.href}
-                className={`quickCard ${q.tone === "green" ? "isGreen" : ""}`}
-              >
-                <div className="quickHead">
-                  <div className={`quickIcon ${q.tone === "green" ? "isGreen" : ""}`}>
-                    {q.icon}
-                  </div>
-                  <div className="quickText">
-                    <div className="quickTitle">{q.title}</div>
-                    <div className="quickDesc">{q.desc}</div>
-                  </div>
+            {quickCards.map((q) => (
+              <Link key={q.title} href={q.href} className={`quickCard ${q.tone === "green" ? "isGreen" : ""}`}>
+                <div className={`quickIcon ${q.tone === "green" ? "isGreen" : ""}`}>{q.icon}</div>
+                <div className="quickText">
+                  <div className="quickTitle">{q.title}</div>
+                  <div className="quickDesc">{q.desc}</div>
                 </div>
-
-                <div className="quickCta">
-                  <span>{q.cta}</span>
+                <div className="quickArrow">
                   <ArrowRight size={16} />
                 </div>
               </Link>
@@ -305,31 +296,40 @@ export default function AdminDashboard() {
 
           <div className="ff-divider" style={{ margin: "12px 0" }} />
 
-          <div className="ops">
-            <div className="opsTitle">Atajos operativos</div>
-            <div className="opsGrid">
-              <Link className="opsBtn" href="/admin/shipments">
-                <PlusCircle size={16} />
-                Crear embarque
-              </Link>
-              <Link className="opsBtn primary" href="/admin/quotes/new">
-                <PlusCircle size={16} />
-                Nueva cotización
-              </Link>
-            </div>
+          <div className="cardTitle" style={{ fontSize: 13 }}>Atajos operativos</div>
+          <div className="cardSub">Acciones típicas de 1 click.</div>
+
+          <div style={{ height: 10 }} />
+
+          <div className="actionsGrid">
+            <Link href="/admin/shipments" className="actionBtn">
+              <PlusCircle size={16} />
+              <span>Crear embarque</span>
+            </Link>
+
+            <Link href="/admin/quotes/new" className="actionBtn isGreen">
+              <FileText size={16} />
+              <span>Nueva cotización</span>
+            </Link>
           </div>
         </div>
 
-        {/* Últimos embarques (tabla compacta) */}
+        {/* Últimos embarques compactos */}
         <div className="card">
           <div className="spread">
             <div>
               <div className="cardTitle">Últimos embarques</div>
-              <div className="cardSub">Actividad reciente para entrar en 1 click.</div>
+              <div className="cardSub">Compacto, escaneable, 1 click para entrar.</div>
             </div>
-            <Link className="btnSmall" href="/admin/shipments">
-              Ver todos
-            </Link>
+
+            <div className="spreadRight">
+              <button className="btnGhost" type="button" onClick={() => load()} disabled={loading}>
+                {loading ? "Actualizando…" : "Actualizar"}
+              </button>
+              <Link className="btnSmall" href="/admin/shipments">
+                Ver todos
+              </Link>
+            </div>
           </div>
 
           <div className="ff-divider" style={{ margin: "12px 0" }} />
@@ -347,32 +347,23 @@ export default function AdminDashboard() {
                 <div>Código</div>
                 <div>Cliente</div>
                 <div>Destino</div>
+                <div>Producto</div>
+                <div>Fecha</div>
                 <div style={{ textAlign: "right" }}>Status</div>
               </div>
 
-              <div className="tbody">
-                {shipments.map((s) => (
-                  <Link key={s.id} href={`/admin/shipments/${s.id}`} className="trow">
-                    <div className="tcode">
-                      <div className="code">{s.code}</div>
-                      <div className="meta">{fmtDate(s.created_at)}</div>
-                    </div>
-
-                    <div className="tclient" title={s.client_name || ""}>
-                      <div className="client">{s.client_name || "—"}</div>
-                      <div className="meta">{productInline(s)}</div>
-                    </div>
-
-                    <div className="tdest">{s.destination}</div>
-
-                    <div className="tstatus" style={{ textAlign: "right" }}>
-                      <span className="pill" style={pillStyle(s.status)}>
-                        {labelStatus(s.status)}
-                      </span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+              {shipments.map((s) => (
+                <Link key={s.id} href={`/admin/shipments/${s.id}`} className="trow" title="Abrir embarque">
+                  <div className="codeCell">{s.code}</div>
+                  <div className="cell ellipsis">{s.client_name || "—"}</div>
+                  <div className="cell">{s.destination}</div>
+                  <div className="cell ellipsis">{productInline(s)}</div>
+                  <div className="cell">{fmtDate(s.created_at)}</div>
+                  <div className="cell" style={{ textAlign: "right" }}>
+                    <StatusPill status={s.status} />
+                  </div>
+                </Link>
+              ))}
             </div>
           ) : (
             <div className="muted">Aún no hay embarques.</div>
@@ -439,7 +430,7 @@ export default function AdminDashboard() {
         }
         @media (min-width: 1100px) {
           .grid2 {
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1.2fr;
           }
         }
 
@@ -468,6 +459,11 @@ export default function AdminDashboard() {
           gap: 10px;
           flex-wrap: wrap;
         }
+        .spreadRight {
+          display: inline-flex;
+          gap: 8px;
+          align-items: center;
+        }
 
         .btnSmall {
           display: inline-flex;
@@ -489,10 +485,32 @@ export default function AdminDashboard() {
           background: rgba(15, 23, 42, 0.03);
         }
 
-        /* Quick actions (más compactos) */
+        .btnGhost {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          height: 34px;
+          padding: 0 10px;
+          border-radius: var(--ff-radius);
+          border: 1px dashed rgba(15, 23, 42, 0.18);
+          background: rgba(15, 23, 42, 0.02);
+          font-size: 12px;
+          font-weight: 900;
+          cursor: pointer;
+          color: var(--ff-text);
+          white-space: nowrap;
+        }
+        .btnGhost:hover {
+          background: rgba(15, 23, 42, 0.04);
+        }
+        .btnGhost:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
         .quickGrid {
           display: grid;
-          gap: 8px;
+          gap: 10px;
           grid-template-columns: 1fr;
         }
 
@@ -504,7 +522,9 @@ export default function AdminDashboard() {
           border-radius: var(--ff-radius);
           padding: 10px;
           display: grid;
-          gap: 8px;
+          grid-template-columns: 36px 1fr 18px;
+          align-items: center;
+          gap: 10px;
         }
         .quickCard:hover {
           background: rgba(15, 23, 42, 0.02);
@@ -512,13 +532,6 @@ export default function AdminDashboard() {
         .quickCard.isGreen {
           border-color: rgba(31, 122, 58, 0.22);
           background: rgba(31, 122, 58, 0.04);
-        }
-
-        .quickHead {
-          display: flex;
-          gap: 10px;
-          align-items: flex-start;
-          min-width: 0;
         }
         .quickIcon {
           width: 32px;
@@ -528,14 +541,12 @@ export default function AdminDashboard() {
           border-radius: 8px;
           border: 1px solid rgba(15, 23, 42, 0.12);
           background: rgba(15, 23, 42, 0.03);
-          flex: 0 0 auto;
         }
         .quickIcon.isGreen {
           border-color: rgba(31, 122, 58, 0.22);
           background: rgba(31, 122, 58, 0.08);
           color: var(--ff-green-dark);
         }
-
         .quickText {
           min-width: 0;
         }
@@ -551,73 +562,57 @@ export default function AdminDashboard() {
           color: var(--ff-muted);
           line-height: 16px;
         }
-
-        .quickCta {
-          display: inline-flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-          font-weight: 900;
-          font-size: 12px;
-          color: var(--ff-green-dark);
-        }
-
-        /* Atajos operativos */
-        .opsTitle {
-          font-weight: 950;
-          font-size: 13px;
-          letter-spacing: -0.1px;
-          margin-bottom: 8px;
-        }
-        .opsGrid {
+        .quickArrow {
+          color: rgba(15, 23, 42, 0.45);
           display: grid;
-          gap: 8px;
+          place-items: center;
+        }
+
+        .actionsGrid {
+          display: grid;
+          gap: 10px;
           grid-template-columns: 1fr;
         }
-        @media (min-width: 520px) {
-          .opsGrid {
+        @media (min-width: 900px) {
+          .actionsGrid {
             grid-template-columns: 1fr 1fr;
           }
         }
-        .opsBtn {
+
+        .actionBtn {
+          text-decoration: none;
+          color: var(--ff-text);
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          border-radius: var(--ff-radius);
+          padding: 12px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
-          height: 36px;
-          padding: 0 12px;
-          border-radius: var(--ff-radius);
-          border: 1px solid var(--ff-border);
-          background: #fff;
+          gap: 10px;
+          font-weight: 950;
           font-size: 12px;
-          font-weight: 900;
-          cursor: pointer;
-          color: var(--ff-text);
-          text-decoration: none;
-          white-space: nowrap;
+          min-height: 44px;
         }
-        .opsBtn:hover {
-          background: rgba(15, 23, 42, 0.03);
+        .actionBtn:hover {
+          background: rgba(15, 23, 42, 0.02);
         }
-        .opsBtn.primary {
-          border: 1px solid rgba(31, 122, 58, 0.35);
-          background: var(--ff-green);
-          color: #fff;
-        }
-        .opsBtn.primary:hover {
-          filter: brightness(0.98);
+        .actionBtn.isGreen {
+          border-color: rgba(31, 122, 58, 0.24);
+          background: rgba(31, 122, 58, 0.08);
+          color: var(--ff-green-dark);
         }
 
-        /* Tabla compacta últimos embarques */
         .tableWrap {
           border: 1px solid var(--ff-border);
           border-radius: var(--ff-radius);
           overflow: hidden;
           background: #fff;
         }
+
         .thead {
           display: grid;
-          grid-template-columns: 0.9fr 1.4fr 0.7fr 0.8fr;
+          grid-template-columns: 1.1fr 1.2fr 0.5fr 1.5fr 0.7fr 0.8fr;
           gap: 10px;
           padding: 10px;
           font-size: 12px;
@@ -625,65 +620,42 @@ export default function AdminDashboard() {
           color: var(--ff-muted);
           background: rgba(15, 23, 42, 0.02);
           border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-        }
-
-        .tbody {
-          display: grid;
         }
 
         .trow {
           display: grid;
-          grid-template-columns: 0.9fr 1.4fr 0.7fr 0.8fr;
+          grid-template-columns: 1.1fr 1.2fr 0.5fr 1.5fr 0.7fr 0.8fr;
           gap: 10px;
           padding: 10px;
           text-decoration: none;
           color: var(--ff-text);
-          border-bottom: 1px solid rgba(15, 23, 42, 0.06);
           align-items: center;
-        }
-        .trow:hover {
-          background: rgba(15, 23, 42, 0.02);
+          border-bottom: 1px solid rgba(15, 23, 42, 0.06);
         }
         .trow:last-child {
           border-bottom: 0;
         }
+        .trow:hover {
+          background: rgba(15, 23, 42, 0.02);
+        }
 
-        .code {
+        .cell {
+          font-size: 12px;
+          min-width: 0;
+        }
+        .codeCell {
+          font-size: 12px;
           font-weight: 950;
-          font-size: 13px;
           letter-spacing: -0.1px;
-          line-height: 18px;
-        }
-        .client {
-          font-weight: 900;
-          font-size: 12px;
-          line-height: 16px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-        }
-        .meta {
-          margin-top: 2px;
-          font-size: 12px;
-          color: var(--ff-muted);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .tdest {
-          font-weight: 900;
-          font-size: 12px;
         }
 
-        .pill {
-          border-radius: 999px;
-          padding: 6px 10px;
-          font-size: 12px;
-          font-weight: 900;
-          border: 1px solid;
+        .ellipsis {
           white-space: nowrap;
-          display: inline-flex;
-          justify-content: flex-end;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .muted {
@@ -699,17 +671,21 @@ export default function AdminDashboard() {
           font-size: 12px;
         }
 
-        /* Responsive: si está muy angosto, ocultamos la cabecera y apilamos */
-        @media (max-width: 720px) {
+        /* Responsive: en pantallas pequeñas reducimos columnas */
+        @media (max-width: 980px) {
           .thead {
             display: none;
           }
           .trow {
             grid-template-columns: 1fr;
             gap: 6px;
-            align-items: flex-start;
           }
-          .tstatus {
+          .trow > div:nth-child(2),
+          .trow > div:nth-child(4),
+          .trow > div:nth-child(5) {
+            color: var(--ff-muted);
+          }
+          .trow > div:last-child {
             text-align: left !important;
           }
         }
