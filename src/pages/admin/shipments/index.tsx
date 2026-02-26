@@ -1,5 +1,7 @@
+// src/pages/admin/shipments/index.tsx
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import {
   ArrowUpDown,
   Filter,
@@ -11,6 +13,7 @@ import {
   UserPlus,
   Users,
   Plus,
+  ExternalLink,
 } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { labelStatus } from "../../../lib/shipmentFlow";
@@ -114,6 +117,8 @@ function normEmail(v: any) {
 }
 
 export default function AdminShipments() {
+  const router = useRouter();
+
   // Gate admin
   const [authOk, setAuthOk] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
@@ -591,7 +596,13 @@ export default function AdminShipments() {
                     </option>
                   ))}
                 </select>
-                <button className="iconBtn" type="button" title="Agregar variedad" onClick={() => setOpenAddVariety(true)} disabled={!productName}>
+                <button
+                  className="iconBtn"
+                  type="button"
+                  title="Agregar variedad"
+                  onClick={() => setOpenAddVariety(true)}
+                  disabled={!productName}
+                >
                   <Plus size={16} />
                 </button>
               </div>
@@ -715,7 +726,10 @@ export default function AdminShipments() {
         <div className="ff-spread2">
           <div>
             <div style={{ fontWeight: 900, fontSize: 14, letterSpacing: "-.2px" }}>
-              Listado <span style={{ marginLeft: 8, color: "var(--ff-muted)", fontWeight: 800 }}>({items.length})</span>
+              Listado{" "}
+              <span style={{ marginLeft: 8, color: "var(--ff-muted)", fontWeight: 800 }}>
+                ({items.length})
+              </span>
             </div>
             <div style={{ marginTop: 2, color: "var(--ff-muted)", fontSize: 12 }}>
               Vista compacta, consistente con todo el panel.
@@ -744,36 +758,62 @@ export default function AdminShipments() {
 
         {!loading && !error && items.length > 0 ? (
           <div style={{ display: "grid", gap: 8 }}>
-            {items.map((s) => (
-              <Link
-                key={s.id}
-                href={`/admin/shipments/${s.id}`}
-                className="ff-row2"
-                style={{
-                  padding: "10px 10px",
-                  border: "1px solid var(--ff-border)",
-                  background: "var(--ff-surface)",
-                  borderRadius: "var(--ff-radius)",
-                  textDecoration: "none",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 900, fontSize: 13, lineHeight: "18px" }}>
-                    {s.code}
-                    {s.client_name ? (
-                      <span style={{ marginLeft: 8, color: "var(--ff-muted)", fontWeight: 800 }}>· {s.client_name}</span>
-                    ) : null}
+            {items.map((s) => {
+              const href = `/admin/shipments/${s.id}`;
+              return (
+                <div key={s.id} className="rowItem">
+                  {/* ZONA CLICK (info) */}
+                  <div
+                    className="rowMain"
+                    role="link"
+                    tabIndex={0}
+                    onClick={() => router.push(href)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") router.push(href);
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div className="rowTitle">
+                        <span className="code">{s.code}</span>
+                        {s.client_name ? (
+                          <span className="rowMeta">· {s.client_name}</span>
+                        ) : (
+                          <span className="rowMeta">· (sin cliente)</span>
+                        )}
+                      </div>
+
+                      <div className="rowSub">
+                        Destino: <b>{s.destination}</b> · Creado: {fmtDate(s.created_at)}
+                        {s.product_mode || s.product_name || s.product_variety ? (
+                          <>
+                            {" "}
+                            ·{" "}
+                            <span style={{ fontWeight: 800 }}>
+                              {s.product_mode ? s.product_mode : "—"}
+                              {s.product_name ? ` · ${s.product_name}` : ""}
+                              {s.product_variety ? ` · ${s.product_variety}` : ""}
+                            </span>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ marginTop: 2, color: "var(--ff-muted)", fontSize: 12 }}>
-                    Destino: <b>{s.destination}</b> · Creado: {fmtDate(s.created_at)}
+
+                  {/* STATUS */}
+                  <div className="rowStatus">
+                    <StatusPill status={s.status} />
+                  </div>
+
+                  {/* ACCIÓN (al lado, no abajo) */}
+                  <div className="rowActions">
+                    <Link className="actionBtn" href={href} title="Abrir embarque">
+                      <ExternalLink size={16} />
+                      Abrir
+                    </Link>
                   </div>
                 </div>
-
-                <StatusPill status={s.status} />
-              </Link>
-            ))}
+              );
+            })}
           </div>
         ) : null}
       </div>
@@ -1158,6 +1198,8 @@ export default function AdminShipments() {
           font-weight: 900;
           font-size: 12px;
           cursor: pointer;
+          white-space: nowrap;
+          text-decoration: none;
         }
         .ff-primary:disabled {
           opacity: 0.6;
@@ -1173,6 +1215,101 @@ export default function AdminShipments() {
           font-size: 12px;
         }
 
+        /* ===== LIST ROW COMPACT ===== */
+        .rowItem {
+          display: grid;
+          grid-template-columns: 1fr auto auto;
+          gap: 10px;
+          align-items: center;
+          padding: 10px 10px;
+          border: 1px solid var(--ff-border);
+          background: var(--ff-surface);
+          border-radius: var(--ff-radius);
+        }
+
+        .rowMain {
+          min-width: 0;
+          cursor: pointer;
+          border-radius: calc(var(--ff-radius) - 2px);
+          padding: 2px 4px;
+        }
+        .rowMain:hover {
+          background: rgba(15, 23, 42, 0.02);
+        }
+        .rowMain:focus {
+          outline: none;
+          box-shadow: 0 0 0 4px rgba(31, 122, 58, 0.12);
+        }
+
+        .rowTitle {
+          font-weight: 900;
+          font-size: 13px;
+          line-height: 18px;
+          display: flex;
+          gap: 8px;
+          min-width: 0;
+          align-items: baseline;
+          flex-wrap: wrap;
+        }
+        .code {
+          white-space: nowrap;
+        }
+        .rowMeta {
+          color: var(--ff-muted);
+          font-weight: 800;
+          white-space: nowrap;
+        }
+        .rowSub {
+          margin-top: 2px;
+          color: var(--ff-muted);
+          font-size: 12px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .rowStatus {
+          display: flex;
+          justify-content: flex-end;
+        }
+        .rowActions {
+          display: flex;
+          justify-content: flex-end;
+        }
+
+        .actionBtn {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          height: 34px;
+          padding: 0 10px;
+          border-radius: var(--ff-radius);
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          font-size: 12px;
+          font-weight: 900;
+          cursor: pointer;
+          color: var(--ff-text);
+          text-decoration: none;
+          white-space: nowrap;
+        }
+        .actionBtn:hover {
+          background: rgba(15, 23, 42, 0.03);
+        }
+
+        /* Mobile: apilar status + acción si hace falta */
+        @media (max-width: 680px) {
+          .rowItem {
+            grid-template-columns: 1fr;
+            gap: 8px;
+          }
+          .rowStatus,
+          .rowActions {
+            justify-content: flex-start;
+          }
+        }
+
+        /* ===== MODALS ===== */
         .overlay {
           position: fixed;
           inset: 0;

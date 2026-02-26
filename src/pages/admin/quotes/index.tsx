@@ -5,6 +5,7 @@ import { ArrowUpDown, PlusCircle, Search } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { requireAdminOrRedirect } from "../../../lib/requireAdmin";
 import { AdminLayout } from "../../../components/AdminLayout";
+import { CompactRow } from "../../../components/CompactRow";
 
 type QuoteRow = {
   id: string;
@@ -43,8 +44,7 @@ function fmtDate(iso: string) {
 
 function StatusPill({ v }: { v: string }) {
   const s = String(v || "").toLowerCase();
-  const tone =
-    s === "won" ? "success" : s === "sent" ? "info" : s === "lost" ? "warn" : "neutral";
+  const tone = s === "won" ? "success" : s === "sent" ? "info" : s === "lost" ? "warn" : "neutral";
 
   const style: React.CSSProperties =
     tone === "success"
@@ -197,11 +197,7 @@ export default function AdminQuotesIndex() {
             />
           </div>
 
-          <button
-            className="ff-btnSmall"
-            type="button"
-            onClick={() => setDir((d) => (d === "desc" ? "asc" : "desc"))}
-          >
+          <button className="ff-btnSmall" type="button" onClick={() => setDir((d) => (d === "desc" ? "asc" : "desc"))}>
             <ArrowUpDown size={16} />
             Fecha {dir === "desc" ? "↓" : "↑"}
           </button>
@@ -227,36 +223,30 @@ export default function AdminQuotesIndex() {
 
         {!loading && !error && items.length > 0 ? (
           <div style={{ display: "grid", gap: 8 }}>
-            {items.map((r) => (
-              <Link
-                key={r.id}
-                href={`/admin/quotes/${r.id}`}
-                className="ff-row2"
-                style={{
-                  padding: "10px 10px",
-                  border: "1px solid var(--ff-border)",
-                  background: "var(--ff-surface)",
-                  borderRadius: "var(--ff-radius)",
-                  textDecoration: "none",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 900, fontSize: 13, lineHeight: "18px" }}>
-                    {r.client_name || "Cliente (sin asignar)"}
-                    <span style={{ marginLeft: 8, color: "var(--ff-muted)", fontWeight: 800 }}>
-                      · {r.mode} · {r.destination} · {r.currency}
-                    </span>
-                  </div>
-                  <div style={{ marginTop: 2, color: "var(--ff-muted)", fontSize: 12 }}>
-                    Cajas: <b>{r.boxes}</b> · Creada: {fmtDate(r.created_at)}
-                  </div>
-                </div>
-
-                <StatusPill v={r.status} />
-              </Link>
-            ))}
+            {items.map((r) => {
+              const href = `/admin/quotes/${r.id}`;
+              return (
+                <CompactRow
+                  key={r.id}
+                  href={href}
+                  title={
+                    <>
+                      <span style={{ whiteSpace: "nowrap" }}>{r.client_name || "Cliente (sin asignar)"}</span>
+                      <span style={{ color: "var(--ff-muted)", fontWeight: 800, whiteSpace: "nowrap" }}>
+                        · {r.mode} · {r.destination} · {r.currency}
+                      </span>
+                    </>
+                  }
+                  subtitle={
+                    <>
+                      Cajas: <b>{r.boxes}</b> · Creada: {fmtDate(r.created_at)}
+                    </>
+                  }
+                  status={<StatusPill v={r.status} />}
+                  actionLabel="Abrir"
+                />
+              );
+            })}
           </div>
         ) : null}
       </div>
