@@ -20,15 +20,13 @@ type QuoteDetail = {
   margin_markup: number;
   payment_terms?: string | null;
   terms?: string | null;
-  client_snapshot?: {
-    name?: string;
-    contact_email?: string;
-  } | null;
+  client_snapshot?: { name?: string; contact_email?: string } | null;
   totals?: Record<string, any>;
   costs?: Record<string, any>;
 };
 
 type UiLang = "es" | "en";
+type PdfVariant = "1" | "2";
 
 const SALES_LINES = [
   { key: "fruit_value", es: "1. Valor de la fruta (FOB/FCA)", en: "1. Fruit Value (FOB/FCA)" },
@@ -43,12 +41,10 @@ function fmtDateTime(iso?: string | null) {
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString("es-PA");
 }
-
 function n(v: any) {
   const x = Number(v);
   return Number.isFinite(x) ? x : 0;
 }
-
 function lineLabel(key: string, lang: UiLang) {
   const row = SALES_LINES.find((x) => x.key === key);
   return row ? (lang === "en" ? row.en : row.es) : key;
@@ -66,8 +62,10 @@ export default function AdminQuoteDetailPage() {
 
   const [data, setData] = useState<QuoteDetail | null>(null);
 
-  // UI (no cliente)
+  // UI
   const [uiLang, setUiLang] = useState<UiLang>("es");
+  const [pdfVariant, setPdfVariant] = useState<PdfVariant>("1"); // 1 simple, 2 detallada
+  const [pdfLang, setPdfLang] = useState<UiLang>("es");
 
   // Editables principales
   const [boxes, setBoxes] = useState(0);
@@ -88,7 +86,7 @@ export default function AdminQuoteDetailPage() {
   const [cAduana, setCAduana] = useState(0);
   const [cInsp, setCInsp] = useState(0);
   const [cItbms, setCItbms] = useState(0); // %
-  const [cOther, setCOther] = useState(0); // ✅ nuevo
+  const [cOther, setCOther] = useState(0); // nuevo
 
   const [showCosts, setShowCosts] = useState(false);
 
@@ -136,7 +134,6 @@ export default function AdminQuoteDetailPage() {
     const json = (await res.json()) as QuoteDetail;
     setData(json);
 
-    // hydrate editor
     setBoxes(n(json.boxes));
     setWeightKg(n(json.weight_kg));
     setMargin(n(json.margin_markup));
@@ -155,7 +152,7 @@ export default function AdminQuoteDetailPage() {
     setCAduana(n(costs.c_aduana));
     setCInsp(n(costs.c_insp));
     setCItbms(n(costs.c_itbms));
-    setCOther(n(costs.c_other)); // ✅ nuevo
+    setCOther(n(costs.c_other));
 
     setLoading(false);
   }
@@ -167,25 +164,19 @@ export default function AdminQuoteDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authOk, id]);
 
-  // ===== CÁLCULO (base + venta) =====
   const computed = useMemo(() => {
     const b = Math.max(0, n(boxes));
     const w = Math.max(0, n(weightKg));
     const m = n(margin) / 100;
 
-    // p1: fruta
     const p1 = b * n(cFruit);
-
-    // p2: logística internacional
     const p2 = n(cFreight) + n(cOthf);
 
-    // p3: origen + aduana + handling + itbms + otros
     const handlingTotal = w * n(cHandling);
     const itbmsBase = n(cOrigin) + handlingTotal;
     const itbmsVal = itbmsBase * (n(cItbms) / 100);
     const p3 = n(cAduana) + n(cOrigin) + handlingTotal + itbmsVal + n(cOther);
 
-    // p4: inspección
     const p4 = n(cInsp);
 
     const rows = [
@@ -233,7 +224,6 @@ export default function AdminQuoteDetailPage() {
       c_other: n(cOther),
     };
 
-    // items para PDF detallado
     const items = computed.rows.map((r) => ({
       name: lineLabel(r.key, uiLang),
       qty: Math.max(0, n(boxes)),
@@ -290,10 +280,9 @@ export default function AdminQuoteDetailPage() {
     load(data.id);
   }
 
-  async function downloadPdf(opts: { variant: "1" | "2"; lang: UiLang; report?: boolean }) {
+  async function downloadPdf(opts: { variant: PdfVariant; lang: UiLang; report?: boolean }) {
     if (!data) return;
 
-    // Asegura que exportas lo último guardado
     await save();
 
     const token = await getTokenOrRedirect();
@@ -322,6 +311,11 @@ export default function AdminQuoteDetailPage() {
     setTimeout(() => URL.revokeObjectURL(a.href), 1500);
   }
 
+  const quoteCode = useMemo(() => {
+    if (!data?.id) return "—";
+    return `#${data.id.slice(0, 8)}`;
+  }, [data?.id]);
+
   if (!authOk) {
     return (
       <AdminLayout title="Cotización" subtitle="Verificando permisos…">
@@ -331,294 +325,576 @@ export default function AdminQuoteDetailPage() {
   }
 
   return (
-    <AdminLayout title="Cotización" subtitle="Editor (solo admin) + PDFs ES/EN.">
-      <div className="ff-spread2" style={{ marginBottom: 12 }}>
-        <Link href="/admin/quotes" className="ff-btnSmall">
+    <AdminLayout title="Cotización" subtitle="Cotizador admin (UI premium).">
+      {/* Top header */}
+      <div className="topBar">
+        <Link href="/admin/quotes" className="btnGhost">
           <ArrowLeft size={16} />
           Volver
         </Link>
 
-        <div className="ff-row2" style={{ gap: 8 }}>
-          <button className="ff-btnSmall" type="button" onClick={() => setUiLang(uiLang === "es" ? "en" : "es")}>
-            Idioma: {uiLang.toUpperCase()}
+        <div className="topMeta">
+          <div className="topTitle">
+            Cotización <span className="code">{quoteCode}</span>
+            {data?.client_snapshot?.name ? <span className="sub">· {data.client_snapshot.name}</span> : null}
+            {data?.client_snapshot?.contact_email ? <span className="sub"> ({data.client_snapshot.contact_email})</span> : null}
+          </div>
+          {data ? (
+            <div className="topSub">
+              Creada: {fmtDateTime(data.created_at)} · Actualizada: {fmtDateTime(data.updated_at)}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="topActions">
+          <button className="segBtn" type="button" onClick={() => setUiLang(uiLang === "es" ? "en" : "es")}>
+            {uiLang === "es" ? "ES" : "EN"}
           </button>
 
-          <button className="ff-primary" type="button" disabled={busy || loading} onClick={save}>
-            <Save size={16} /> Guardar
+          <button className="btnPrimary" type="button" disabled={busy || loading} onClick={save}>
+            <Save size={16} />
+            Guardar
           </button>
         </div>
       </div>
 
-      {toast ? (
-        <div className="msgOk" style={{ marginBottom: 12 }}>
-          {toast}
-        </div>
-      ) : null}
+      {toast ? <div className="msgOk">{toast}</div> : null}
+      {error ? <div className="msgWarn">{error}</div> : null}
 
-      <div className="ff-card2" style={{ padding: 12 }}>
-        {loading ? (
-          <div className="muted">Cargando…</div>
-        ) : error ? (
-          <div className="msgWarn">{error}</div>
-        ) : data ? (
-          <>
-            <div style={{ fontWeight: 950, fontSize: 15 }}>{data.client_snapshot?.name || "Cliente sin nombre"}</div>
-            <div className="muted" style={{ marginTop: 4 }}>
-              {data.client_snapshot?.contact_email || "—"}
+      <div className="layout">
+        {/* LEFT */}
+        <div className="col">
+          <div className="card">
+            <div className="cardHead">
+              <div>
+                <div className="h">Configuración de oferta</div>
+                <div className="muted">Modo + destino + moneda + parámetros.</div>
+              </div>
             </div>
 
-            <div className="ff-divider" style={{ margin: "12px 0" }} />
+            <div className="divider" />
+
+            {/* Mode segmented */}
+            <div className="segRow">
+              <button
+                className={`seg ${mode === "AIR" ? "on" : ""}`}
+                type="button"
+                onClick={() => setMode("AIR")}
+              >
+                ✈️ AÉREO
+              </button>
+              <button
+                className={`seg ${mode === "SEA" ? "on" : ""}`}
+                type="button"
+                onClick={() => setMode("SEA")}
+              >
+                🚢 MARÍTIMO
+              </button>
+            </div>
 
             <div className="grid2">
-              <div className="ff-card2 soft">
-                <div className="sectionTitle">Configuración</div>
-
-                <div className="row2">
-                  <div>
-                    <label className="lbl">Modo</label>
-                    <select className="in2" value={mode} onChange={(e) => setMode(e.target.value as any)}>
-                      <option value="AIR">AÉREO</option>
-                      <option value="SEA">MARÍTIMO</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="lbl">Moneda</label>
-                    <select className="in2" value={currency} onChange={(e) => setCurrency(e.target.value as any)}>
-                      <option value="USD">USD</option>
-                      <option value="EUR">EUR</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="row2">
-                  <div>
-                    <label className="lbl">Destino</label>
-                    <input className="in2" value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="Ej: Madrid (MAD)" />
-                  </div>
-                  <div>
-                    <label className="lbl">Cajas</label>
-                    <input className="in2" type="number" value={boxes} onChange={(e) => setBoxes(Number(e.target.value || 0))} />
-                  </div>
-                </div>
-
-                <div className="row2">
-                  <div>
-                    <label className="lbl">Peso Kg (Bruto) *</label>
-                    <input className="in2" type="number" value={weightKg} onChange={(e) => setWeightKg(Number(e.target.value || 0))} />
-                  </div>
-                  <div>
-                    <label className="lbl">Markup %</label>
-                    <input className="in2" type="number" value={margin} onChange={(e) => setMargin(Number(e.target.value || 0))} />
-                  </div>
-                </div>
-
-                <div className="row2">
-                  <div>
-                    <label className="lbl">Condiciones de pago</label>
-                    <input className="in2" value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Ej: 80% Advance / 20% BL" />
-                  </div>
-                  <div>
-                    <label className="lbl">Estado</label>
-                    <input className="in2" value={data.status} disabled />
-                  </div>
-                </div>
+              <div>
+                <label className="lbl">Destino</label>
+                <input className="in" value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="Ej: Madrid (MAD)" />
+                <div className="help">CIP requiere Place of Destination (Aeropuerto/Puerto destino).</div>
               </div>
 
-              <div className="ff-card2">
-                <div className="sectionTitle">Estructura de venta</div>
+              <div>
+                <label className="lbl">Moneda</label>
+                <select className="in" value={currency} onChange={(e) => setCurrency(e.target.value as any)}>
+                  <option value="USD">USD $</option>
+                  <option value="EUR">EUR €</option>
+                </select>
+              </div>
 
-                <table className="pl">
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: "left" }}>Concepto</th>
-                      <th style={{ textAlign: "right" }}>Costo</th>
-                      <th style={{ textAlign: "right" }}>Venta</th>
-                      <th style={{ textAlign: "right" }}>Ganancia</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {computed.rows.map((r) => (
-                      <tr key={r.key}>
-                        <td style={{ textAlign: "left", fontWeight: 800 }}>{lineLabel(r.key, uiLang)}</td>
-                        <td style={{ textAlign: "right" }}>{money(r.cost)}</td>
-                        <td style={{ textAlign: "right", fontWeight: 900 }}>{money(r.sale)}</td>
-                        <td style={{ textAlign: "right", color: "var(--ff-green-dark)", fontWeight: 900 }}>+{money(r.sale - r.cost)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="totRow">
-                      <td style={{ textAlign: "left" }}>TOTAL CIP</td>
-                      <td style={{ textAlign: "right" }}>{money(computed.costTotal)}</td>
-                      <td style={{ textAlign: "right" }}>{money(computed.saleTotal)}</td>
-                      <td style={{ textAlign: "right" }}>+{money(computed.profitTotal)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
+              <div>
+                <label className="lbl">Cajas (Total)</label>
+                <input className="in" type="number" value={boxes} onChange={(e) => setBoxes(Number(e.target.value || 0))} />
+              </div>
 
-                <div className="muted" style={{ marginTop: 10 }}>
-                  Margen real: <b>{computed.realMargin.toFixed(1)}%</b> · {money(computed.perBox)} / caja · {money(computed.perKg)} / kg
-                </div>
+              <div>
+                <label className="lbl">Peso KG (Manual)</label>
+                <input className="in warn" type="number" value={weightKg} onChange={(e) => setWeightKg(Number(e.target.value || 0))} />
+              </div>
 
-                <div className="ff-divider" style={{ margin: "12px 0" }} />
+              <div>
+                <label className="lbl">Markup %</label>
+                <input className="in" type="number" value={margin} onChange={(e) => setMargin(Number(e.target.value || 0))} />
+              </div>
 
-                <div className="row2">
-                  <button className="ff-btnSmall" type="button" disabled={busy} onClick={() => downloadPdf({ variant: "1", lang: "es" })}>
-                    <FileText size={16} /> PDF Simple (ES)
-                  </button>
-                  <button className="ff-btnSmall" type="button" disabled={busy} onClick={() => downloadPdf({ variant: "1", lang: "en" })}>
-                    <FileText size={16} /> PDF Simple (EN)
-                  </button>
-                </div>
-
-                <div className="row2" style={{ marginTop: 8 }}>
-                  <button className="ff-btnSmall" type="button" disabled={busy} onClick={() => downloadPdf({ variant: "2", lang: "es" })}>
-                    <FileText size={16} /> PDF Detallado (ES)
-                  </button>
-                  <button className="ff-btnSmall" type="button" disabled={busy} onClick={() => downloadPdf({ variant: "2", lang: "en" })}>
-                    <FileText size={16} /> PDF Detallado (EN)
-                  </button>
-                </div>
-
-                <div className="row2" style={{ marginTop: 8 }}>
-                  <button className="ff-primary" type="button" disabled={busy} onClick={() => downloadPdf({ variant: "2", lang: "es", report: true })}>
-                    <FileText size={16} /> PDF Interno (ES)
-                  </button>
-                  <button className="ff-primary" type="button" disabled={busy} onClick={() => downloadPdf({ variant: "2", lang: "en", report: true })}>
-                    <FileText size={16} /> PDF Interno (EN)
-                  </button>
-                </div>
+              <div>
+                <label className="lbl">Condiciones de pago</label>
+                <input className="in" value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Ej: 80% Advance / 20% BL" />
               </div>
             </div>
 
-            <div className="ff-divider" style={{ margin: "12px 0" }} />
+            <div className="divider" />
 
-            <div className="ff-card2">
-              <div className="sectionTitle">Términos y condiciones</div>
-              <textarea className="ta" rows={6} value={terms} onChange={(e) => setTerms(e.target.value)} />
+            <div className="cardSubHead">
+              <div>
+                <div className="h2">Términos & Condiciones</div>
+                <div className="muted">Texto de la oferta (editable).</div>
+              </div>
             </div>
 
-            <div className="ff-divider" style={{ margin: "12px 0" }} />
+            <textarea className="ta" rows={7} value={terms} onChange={(e) => setTerms(e.target.value)} />
+          </div>
 
-            <div className="ff-card2">
-              <div className="ff-spread2" style={{ alignItems: "center" }}>
-                <div className="sectionTitle">Costos detallados (solo admin)</div>
-                <button className="ff-btnSmall" type="button" onClick={() => setShowCosts(!showCosts)}>
-                  {showCosts ? "Ocultar" : "Mostrar"}
+          <div className="card">
+            <div className="cardHead">
+              <div>
+                <div className="h">Costos (solo admin)</div>
+                <div className="muted">Activa para editar, sin ensuciar la vista.</div>
+              </div>
+              <button className="btnGhostSmall" type="button" onClick={() => setShowCosts(!showCosts)}>
+                {showCosts ? "Ocultar" : "Mostrar"}
+              </button>
+            </div>
+
+            {showCosts ? (
+              <>
+                <div className="divider" />
+
+                <div className="grid2">
+                  <div>
+                    <label className="lbl">Piña ($/caja)</label>
+                    <input className="in" type="number" step="0.01" value={cFruit} onChange={(e) => setCFruit(Number(e.target.value || 0))} />
+                  </div>
+                  <div>
+                    <label className="lbl">OTHF ($)</label>
+                    <input className="in" type="number" step="0.01" value={cOthf} onChange={(e) => setCOthf(Number(e.target.value || 0))} />
+                  </div>
+
+                  <div>
+                    <label className="lbl">Flete ($)</label>
+                    <input className="in" type="number" step="0.01" value={cFreight} onChange={(e) => setCFreight(Number(e.target.value || 0))} />
+                  </div>
+                  <div>
+                    <label className="lbl">Handling / Kg</label>
+                    <input className="in" type="number" step="0.01" value={cHandling} onChange={(e) => setCHandling(Number(e.target.value || 0))} />
+                  </div>
+
+                  <div>
+                    <label className="lbl">Gastos origen ($)</label>
+                    <input className="in" type="number" step="0.01" value={cOrigin} onChange={(e) => setCOrigin(Number(e.target.value || 0))} />
+                  </div>
+                  <div>
+                    <label className="lbl">Aduana ($)</label>
+                    <input className="in" type="number" step="0.01" value={cAduana} onChange={(e) => setCAduana(Number(e.target.value || 0))} />
+                  </div>
+
+                  <div>
+                    <label className="lbl">Inspección ($)</label>
+                    <input className="in" type="number" step="0.01" value={cInsp} onChange={(e) => setCInsp(Number(e.target.value || 0))} />
+                  </div>
+                  <div>
+                    <label className="lbl">ITBMS (%)</label>
+                    <input className="in" type="number" step="0.01" value={cItbms} onChange={(e) => setCItbms(Number(e.target.value || 0))} />
+                  </div>
+
+                  <div>
+                    <label className="lbl">Otros gastos ($)</label>
+                    <input className="in" type="number" step="0.01" value={cOther} onChange={(e) => setCOther(Number(e.target.value || 0))} />
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+        </div>
+
+        {/* RIGHT */}
+        <div className="col">
+          <div className="card">
+            <div className="cardHead">
+              <div>
+                <div className="h">Estructura de venta</div>
+                <div className="muted">Costos vs venta + margen real.</div>
+              </div>
+              <button className="btnPrimary" type="button" disabled={busy || loading} onClick={save}>
+                <Save size={16} />
+                Guardar
+              </button>
+            </div>
+
+            <div className="divider" />
+
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left" }}>Concepto</th>
+                  <th style={{ textAlign: "right" }}>Costo</th>
+                  <th style={{ textAlign: "right" }}>Venta</th>
+                  <th style={{ textAlign: "right" }}>Ganancia</th>
+                </tr>
+              </thead>
+              <tbody>
+                {computed.rows.map((r) => (
+                  <tr key={r.key}>
+                    <td style={{ textAlign: "left", fontWeight: 900 }}>{lineLabel(r.key, uiLang)}</td>
+                    <td style={{ textAlign: "right" }}>{money(r.cost)}</td>
+                    <td style={{ textAlign: "right", fontWeight: 950 }}>{money(r.sale)}</td>
+                    <td style={{ textAlign: "right", fontWeight: 950, color: "var(--ff-green-dark)" }}>
+                      +{money(r.sale - r.cost)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="tot">
+                  <td style={{ textAlign: "left" }}>TOTAL</td>
+                  <td style={{ textAlign: "right" }}>{money(computed.costTotal)}</td>
+                  <td style={{ textAlign: "right" }}>{money(computed.saleTotal)}</td>
+                  <td style={{ textAlign: "right" }}>+{money(computed.profitTotal)}</td>
+                </tr>
+              </tfoot>
+            </table>
+
+            <div className="kpis">
+              <div className="kpi">
+                <div className="kpiLbl">Margen real</div>
+                <div className="kpiVal">{computed.realMargin.toFixed(1)}%</div>
+              </div>
+              <div className="kpi">
+                <div className="kpiLbl">Unidades</div>
+                <div className="kpiVal">
+                  {money(computed.perBox)} / caja &nbsp;&nbsp;·&nbsp;&nbsp; {money(computed.perKg)} / kg &nbsp;&nbsp;·&nbsp;&nbsp; {n(weightKg).toLocaleString("en-US")} kg
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card softGreen">
+            <div className="cardHead">
+              <div>
+                <div className="h">Salida PDF</div>
+                <div className="muted">Selecciona tipo + idioma y descarga el PDF listo.</div>
+              </div>
+            </div>
+
+            <div className="divider" />
+
+            <div className="pdfRow">
+              <div className="segGroup">
+                <button className={`segMini ${pdfVariant === "1" ? "on" : ""}`} type="button" onClick={() => setPdfVariant("1")}>
+                  Simple
+                </button>
+                <button className={`segMini ${pdfVariant === "2" ? "on" : ""}`} type="button" onClick={() => setPdfVariant("2")}>
+                  Detallada
                 </button>
               </div>
 
-              {showCosts ? (
-                <div style={{ marginTop: 10 }}>
-                  <div className="row2">
-                    <div>
-                      <label className="lbl">Piña ($/caja)</label>
-                      <input className="in2" type="number" step="0.01" value={cFruit} onChange={(e) => setCFruit(Number(e.target.value || 0))} />
-                    </div>
-                    <div>
-                      <label className="lbl">OTHF ($)</label>
-                      <input className="in2" type="number" step="0.01" value={cOthf} onChange={(e) => setCOthf(Number(e.target.value || 0))} />
-                    </div>
-                  </div>
+              <div className="segGroup">
+                <button className={`segMini ${pdfLang === "es" ? "on" : ""}`} type="button" onClick={() => setPdfLang("es")}>
+                  🇪🇸 ES
+                </button>
+                <button className={`segMini ${pdfLang === "en" ? "on" : ""}`} type="button" onClick={() => setPdfLang("en")}>
+                  🇺🇸 EN
+                </button>
+              </div>
 
-                  <div className="row2">
-                    <div>
-                      <label className="lbl">Flete ($)</label>
-                      <input className="in2" type="number" step="0.01" value={cFreight} onChange={(e) => setCFreight(Number(e.target.value || 0))} />
-                    </div>
-                    <div>
-                      <label className="lbl">Handling / Kg</label>
-                      <input className="in2" type="number" step="0.01" value={cHandling} onChange={(e) => setCHandling(Number(e.target.value || 0))} />
-                    </div>
-                  </div>
+              <div style={{ flex: "1 1 auto" }} />
 
-                  <div className="row2">
-                    <div>
-                      <label className="lbl">Gastos origen ($)</label>
-                      <input className="in2" type="number" step="0.01" value={cOrigin} onChange={(e) => setCOrigin(Number(e.target.value || 0))} />
-                    </div>
-                    <div>
-                      <label className="lbl">Aduana ($)</label>
-                      <input className="in2" type="number" step="0.01" value={cAduana} onChange={(e) => setCAduana(Number(e.target.value || 0))} />
-                    </div>
-                  </div>
-
-                  <div className="row2">
-                    <div>
-                      <label className="lbl">Inspección ($)</label>
-                      <input className="in2" type="number" step="0.01" value={cInsp} onChange={(e) => setCInsp(Number(e.target.value || 0))} />
-                    </div>
-                    <div>
-                      <label className="lbl">ITBMS (%)</label>
-                      <input className="in2" type="number" step="0.01" value={cItbms} onChange={(e) => setCItbms(Number(e.target.value || 0))} />
-                    </div>
-                  </div>
-
-                  <div className="row2">
-                    <div>
-                      <label className="lbl">Otros gastos ($)</label>
-                      <input className="in2" type="number" step="0.01" value={cOther} onChange={(e) => setCOther(Number(e.target.value || 0))} />
-                    </div>
-                    <div />
-                  </div>
-                </div>
-              ) : null}
+              <button className="btnPrimary" type="button" disabled={busy || loading} onClick={() => downloadPdf({ variant: pdfVariant, lang: pdfLang })}>
+                <FileText size={16} />
+                Generar PDF
+              </button>
             </div>
 
-            <div className="ff-divider" style={{ margin: "12px 0" }} />
-
-            <div className="muted">
-              Creada: {fmtDateTime(data.created_at)} · Última actualización: {fmtDateTime(data.updated_at)}
+            <div className="pdfTotal">
+              <div className="pdfTotalLbl">TOTAL CIP</div>
+              <div className="pdfTotalVal">{money(computed.saleTotal)}</div>
+              <div className="pdfMeta">
+                Tipo: {pdfVariant === "1" ? "Simple" : "Detallada"} · Idioma: {pdfLang.toUpperCase()} · Incoterm: CIP · Place: {destination || "—"}
+              </div>
             </div>
-          </>
-        ) : null}
+
+            <div className="divider" />
+
+            <div className="pdfRow">
+              <button
+                className="btnGhostSmall"
+                type="button"
+                disabled={busy || loading}
+                onClick={() => downloadPdf({ variant: "2", lang: "es", report: true })}
+              >
+                <FileText size={16} /> PDF Interno (ES)
+              </button>
+
+              <button
+                className="btnGhostSmall"
+                type="button"
+                disabled={busy || loading}
+                onClick={() => downloadPdf({ variant: "2", lang: "en", report: true })}
+              >
+                <FileText size={16} /> PDF Interno (EN)
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <style jsx>{`
-        .grid2 { display: grid; gap: 12px; grid-template-columns: 1fr; }
-        @media (min-width: 1100px) { .grid2 { grid-template-columns: 1fr 1fr; } }
-
-        .row2 { display: grid; gap: 10px; grid-template-columns: 1fr; }
-        @media (min-width: 980px) { .row2 { grid-template-columns: 1fr 1fr; } }
-
-        .sectionTitle { font-weight: 950; font-size: 13px; }
-        .lbl { display:block; font-size: 12px; font-weight: 900; color: var(--ff-muted); margin-bottom: 6px; }
-        .in2 {
-          width: 100%; height: 38px; border: 1px solid var(--ff-border);
-          border-radius: var(--ff-radius); padding: 0 10px; font-size: 13px; outline: none; background: #fff;
+        /* Estructura */
+        .layout {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 12px;
         }
+        @media (min-width: 1100px) {
+          .layout {
+            grid-template-columns: 1.05fr 0.95fr;
+            gap: 12px;
+          }
+        }
+        .col {
+          display: grid;
+          gap: 12px;
+          align-content: start;
+        }
+
+        /* Top */
+        .topBar {
+          display: grid;
+          grid-template-columns: auto 1fr auto;
+          gap: 10px;
+          align-items: center;
+          margin-bottom: 12px;
+        }
+        .topMeta { min-width: 0; }
+        .topTitle {
+          font-weight: 950;
+          font-size: 15px;
+          letter-spacing: -0.2px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .code { color: var(--ff-green-dark); }
+        .sub { color: var(--ff-muted); font-weight: 800; font-size: 13px; }
+        .topSub { margin-top: 2px; font-size: 12px; color: var(--ff-muted); }
+        .topActions { display: inline-flex; gap: 8px; align-items: center; }
+
+        /* Cards */
+        .card {
+          border: 1px solid var(--ff-border);
+          background: var(--ff-surface);
+          border-radius: var(--ff-radius);
+          padding: 12px;
+        }
+        .softGreen {
+          border-color: rgba(31, 122, 58, 0.18);
+          background: rgba(31, 122, 58, 0.06);
+        }
+        .cardHead {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+        .cardSubHead {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-bottom: 8px;
+        }
+        .h { font-weight: 950; font-size: 14px; letter-spacing: -0.2px; }
+        .h2 { font-weight: 950; font-size: 13px; letter-spacing: -0.2px; }
+        .muted { font-size: 12px; color: var(--ff-muted); }
+        .divider { height: 1px; background: rgba(15,23,42,.08); margin: 12px 0; }
+
+        /* Inputs */
+        .grid2 {
+          display: grid;
+          gap: 10px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 900px) {
+          .grid2 { grid-template-columns: 1fr 1fr; }
+        }
+        .lbl { display:block; font-size: 12px; font-weight: 900; color: var(--ff-muted); margin-bottom: 6px; }
+        .in {
+          width: 100%;
+          height: 38px;
+          border: 1px solid var(--ff-border);
+          border-radius: 10px;
+          padding: 0 10px;
+          font-size: 13px;
+          outline: none;
+          background: #fff;
+        }
+        .in.warn {
+          border-color: rgba(209,119,17,.35);
+          box-shadow: 0 0 0 4px rgba(209,119,17,.08);
+        }
+        .help { margin-top: 6px; font-size: 12px; color: var(--ff-muted); }
+
         .ta {
           width: 100%;
           border: 1px solid var(--ff-border);
-          border-radius: var(--ff-radius);
+          border-radius: 10px;
           padding: 10px;
           font-size: 13px;
           outline: none;
           background: #fff;
         }
-        .muted { font-size: 12px; color: var(--ff-muted); }
-        .soft { background: rgba(15,23,42,.02); }
 
-        .pl { width: 100%; border-collapse: collapse; }
-        .pl th { font-size: 12px; color: var(--ff-muted); padding: 10px 8px; border-bottom: 1px solid rgba(15,23,42,.06); }
-        .pl td { padding: 10px 8px; border-bottom: 1px solid rgba(15,23,42,.06); font-size: 13px; }
-        .totRow td { background: rgba(15,23,42,.02); font-weight: 950; }
+        /* Buttons */
+        .btnPrimary {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          border: 1px solid rgba(31, 122, 58, 0.35);
+          background: var(--ff-green);
+          color: #fff;
+          border-radius: 10px;
+          height: 36px;
+          padding: 0 12px;
+          font-weight: 950;
+          font-size: 12px;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .btnPrimary:disabled { opacity: 0.6; cursor: not-allowed; }
 
+        .btnGhost, .btnGhostSmall {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          color: var(--ff-text);
+          border-radius: 10px;
+          font-weight: 900;
+          cursor: pointer;
+          text-decoration: none;
+          white-space: nowrap;
+        }
+        .btnGhost { height: 36px; padding: 0 12px; font-size: 12px; }
+        .btnGhostSmall { height: 34px; padding: 0 10px; font-size: 12px; }
+        .btnGhost:hover, .btnGhostSmall:hover { background: rgba(15,23,42,.03); }
+
+        .segBtn {
+          height: 36px;
+          padding: 0 10px;
+          border-radius: 10px;
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          font-weight: 950;
+          font-size: 12px;
+          cursor: pointer;
+        }
+
+        /* Segmented */
+        .segRow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .seg {
+          height: 38px;
+          border-radius: 12px;
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          font-weight: 950;
+          font-size: 12px;
+          cursor: pointer;
+        }
+        .seg.on {
+          border-color: rgba(31,122,58,.28);
+          background: rgba(31,122,58,.10);
+          color: var(--ff-green-dark);
+        }
+
+        .segGroup { display: inline-flex; gap: 8px; align-items: center; }
+        .segMini {
+          height: 34px;
+          padding: 0 12px;
+          border-radius: 12px;
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          font-weight: 950;
+          font-size: 12px;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .segMini.on {
+          border-color: rgba(31,122,58,.28);
+          background: rgba(31,122,58,.10);
+          color: var(--ff-green-dark);
+        }
+
+        /* Table */
+        .tbl { width: 100%; border-collapse: collapse; }
+        .tbl th {
+          font-size: 12px;
+          color: var(--ff-muted);
+          padding: 10px 8px;
+          border-bottom: 1px solid rgba(15,23,42,.08);
+        }
+        .tbl td {
+          padding: 10px 8px;
+          border-bottom: 1px solid rgba(15,23,42,.08);
+          font-size: 13px;
+        }
+        .tot td {
+          background: rgba(15,23,42,.03);
+          font-weight: 950;
+        }
+
+        /* KPIs */
+        .kpis {
+          margin-top: 12px;
+          display: grid;
+          gap: 10px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 900px) {
+          .kpis { grid-template-columns: 0.6fr 1.4fr; }
+        }
+        .kpi {
+          border: 1px solid rgba(15,23,42,.08);
+          background: rgba(255,255,255,.75);
+          border-radius: 12px;
+          padding: 10px;
+        }
+        .kpiLbl { font-size: 12px; color: var(--ff-muted); font-weight: 900; }
+        .kpiVal { margin-top: 2px; font-size: 13px; font-weight: 950; }
+
+        /* PDF */
+        .pdfRow {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .pdfTotal {
+          margin-top: 12px;
+          border-radius: 12px;
+          padding: 10px;
+          border: 1px solid rgba(15,23,42,.10);
+          background: rgba(255,255,255,.65);
+        }
+        .pdfTotalLbl { font-size: 12px; color: var(--ff-muted); font-weight: 900; }
+        .pdfTotalVal { margin-top: 4px; font-size: 22px; font-weight: 950; color: var(--ff-green-dark); }
+        .pdfMeta { margin-top: 6px; font-size: 12px; color: var(--ff-muted); font-weight: 800; }
+
+        /* Messages */
         .msgWarn {
           border: 1px solid rgba(209,119,17,.35);
           background: rgba(209,119,17,.08);
           padding: 10px;
-          border-radius: var(--ff-radius);
+          border-radius: 12px;
           font-size: 12px;
-          font-weight: 800;
+          font-weight: 900;
+          margin-bottom: 12px;
         }
         .msgOk {
-          border: 1px solid rgba(31,122,58,.3);
+          border: 1px solid rgba(31,122,58,.30);
           background: rgba(31,122,58,.08);
-          border-radius: var(--ff-radius);
+          border-radius: 12px;
           padding: 10px;
-          font-weight: 900;
+          font-weight: 950;
           font-size: 12px;
+          margin-bottom: 12px;
         }
       `}</style>
     </AdminLayout>
