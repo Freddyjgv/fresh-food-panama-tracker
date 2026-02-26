@@ -177,11 +177,9 @@ export default function AdminQuoteDetailPage() {
     const p1 = b * n(cFruit);
 
     // p2: logística internacional
-    // (por ahora: usa cFreight directo + othf)
-    // Luego si quieres auto por destino/peso, lo metemos aquí.
     const p2 = n(cFreight) + n(cOthf);
 
-    // p3: origen + aduana + handling + itbms
+    // p3: origen + aduana + handling + itbms + otros
     const handlingTotal = w * n(cHandling);
     const itbmsBase = n(cOrigin) + handlingTotal;
     const itbmsVal = itbmsBase * (n(cItbms) / 100);
@@ -232,10 +230,10 @@ export default function AdminQuoteDetailPage() {
       c_aduana: n(cAduana),
       c_insp: n(cInsp),
       c_itbms: n(cItbms),
-      c_other: n(cOther), // ✅ nuevo
+      c_other: n(cOther),
     };
 
-    // “items” para el PDF detallado (variant=2)
+    // items para PDF detallado
     const items = computed.rows.map((r) => ({
       name: lineLabel(r.key, uiLang),
       qty: Math.max(0, n(boxes)),
@@ -295,7 +293,7 @@ export default function AdminQuoteDetailPage() {
   async function downloadPdf(opts: { variant: "1" | "2"; lang: UiLang; report?: boolean }) {
     if (!data) return;
 
-    // aseguramos que lo que exportas está guardado
+    // Asegura que exportas lo último guardado
     await save();
 
     const token = await getTokenOrRedirect();
@@ -351,7 +349,11 @@ export default function AdminQuoteDetailPage() {
         </div>
       </div>
 
-      {toast ? <div className="msgOk" style={{ marginBottom: 12 }}>{toast}</div> : null}
+      {toast ? (
+        <div className="msgOk" style={{ marginBottom: 12 }}>
+          {toast}
+        </div>
+      ) : null}
 
       <div className="ff-card2" style={{ padding: 12 }}>
         {loading ? (
@@ -360,16 +362,13 @@ export default function AdminQuoteDetailPage() {
           <div className="msgWarn">{error}</div>
         ) : data ? (
           <>
-            <div style={{ fontWeight: 950, fontSize: 15 }}>
-              {data.client_snapshot?.name || "Cliente sin nombre"}
-            </div>
+            <div style={{ fontWeight: 950, fontSize: 15 }}>{data.client_snapshot?.name || "Cliente sin nombre"}</div>
             <div className="muted" style={{ marginTop: 4 }}>
               {data.client_snapshot?.contact_email || "—"}
             </div>
 
             <div className="ff-divider" style={{ margin: "12px 0" }} />
 
-            {/* Configuración */}
             <div className="grid2">
               <div className="ff-card2 soft">
                 <div className="sectionTitle">Configuración</div>
@@ -425,7 +424,6 @@ export default function AdminQuoteDetailPage() {
                 </div>
               </div>
 
-              {/* Estructura */}
               <div className="ff-card2">
                 <div className="sectionTitle">Estructura de venta</div>
 
@@ -444,9 +442,7 @@ export default function AdminQuoteDetailPage() {
                         <td style={{ textAlign: "left", fontWeight: 800 }}>{lineLabel(r.key, uiLang)}</td>
                         <td style={{ textAlign: "right" }}>{money(r.cost)}</td>
                         <td style={{ textAlign: "right", fontWeight: 900 }}>{money(r.sale)}</td>
-                        <td style={{ textAlign: "right", color: "var(--ff-green-dark)", fontWeight: 900 }}>
-                          +{money(r.sale - r.cost)}
-                        </td>
+                        <td style={{ textAlign: "right", color: "var(--ff-green-dark)", fontWeight: 900 }}>+{money(r.sale - r.cost)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -497,7 +493,6 @@ export default function AdminQuoteDetailPage() {
 
             <div className="ff-divider" style={{ margin: "12px 0" }} />
 
-            {/* Terms */}
             <div className="ff-card2">
               <div className="sectionTitle">Términos y condiciones</div>
               <textarea className="ta" rows={6} value={terms} onChange={(e) => setTerms(e.target.value)} />
@@ -505,7 +500,6 @@ export default function AdminQuoteDetailPage() {
 
             <div className="ff-divider" style={{ margin: "12px 0" }} />
 
-            {/* Costos (Admin only) */}
             <div className="ff-card2">
               <div className="ff-spread2" style={{ alignItems: "center" }}>
                 <div className="sectionTitle">Costos detallados (solo admin)</div>
