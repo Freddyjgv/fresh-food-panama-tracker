@@ -1111,6 +1111,3 @@ export default function AdminShipmentDetail() {
   
 }
 
-export default function Page() {
-  return null;
-}
