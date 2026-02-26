@@ -9,6 +9,7 @@ import {
   ArrowRight,
   TrendingUp,
   Clock,
+  PlusCircle,
 } from "lucide-react";
 
 import { supabase } from "../../lib/supabaseClient";
@@ -59,7 +60,11 @@ const QUOTE_PATH = "/admin/quotes"; // <-- cambia si tu cotizador está en otra 
 
 function fmtDate(iso: string) {
   try {
-    return new Date(iso).toLocaleDateString("es-PA", { year: "numeric", month: "short", day: "2-digit" });
+    return new Date(iso).toLocaleDateString("es-PA", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    });
   } catch {
     return iso;
   }
@@ -70,6 +75,45 @@ function productInline(s: ShipmentListItem) {
   const variety = (s.product_variety || "").trim() || "MD2 Golden";
   const mode = (s.product_mode || "").trim() || "Aérea";
   return `${name} · ${variety} · ${mode}`;
+}
+
+function statusTone(status: string): "neutral" | "success" | "warn" | "info" {
+  const s = String(status || "").toUpperCase();
+  if (["PACKED", "DOCS_READY", "DELIVERED", "CLOSED"].includes(s)) return "success";
+  if (["AT_ORIGIN", "ARRIVED_PTY", "DEPARTED"].includes(s)) return "warn";
+  if (["IN_TRANSIT"].includes(s)) return "info";
+  if (["AT_DESTINATION"].includes(s)) return "neutral"; // “final” pero no necesariamente closed
+  return "neutral";
+}
+
+function pillStyle(status: string): React.CSSProperties {
+  const tone = statusTone(status);
+  if (tone === "success") {
+    return {
+      background: "rgba(31,122,58,.10)",
+      borderColor: "rgba(31,122,58,.22)",
+      color: "var(--ff-green-dark)",
+    };
+  }
+  if (tone === "warn") {
+    return {
+      background: "rgba(209,119,17,.12)",
+      borderColor: "rgba(209,119,17,.24)",
+      color: "#7a3f00",
+    };
+  }
+  if (tone === "info") {
+    return {
+      background: "rgba(59,130,246,.10)",
+      borderColor: "rgba(59,130,246,.22)",
+      color: "rgba(30,64,175,1)",
+    };
+  }
+  return {
+    background: "rgba(15,23,42,.04)",
+    borderColor: "rgba(15,23,42,.12)",
+    color: "var(--ff-text)",
+  };
 }
 
 export default function AdminDashboard() {
@@ -138,8 +182,8 @@ export default function AdminDashboard() {
 
     if (cRes.ok) {
       const cJson = (await cRes.json()) as ClientsApiResponse;
-      // si tu listClients no trae "total", usamos largo
-      const inferredTotal = typeof cJson.total === "number" ? cJson.total : (cJson.items?.length || 0);
+      const inferredTotal =
+        typeof cJson.total === "number" ? cJson.total : cJson.items?.length || 0;
       setClientsTotal(inferredTotal);
     }
 
@@ -152,11 +196,11 @@ export default function AdminDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady]);
 
-  // KPI: "activos" (ejemplo simple)
+  // KPI: Activos = NO En Destino (ni finales)
   const activeShipments = useMemo(() => {
-    const active = new Set(["CREATED", "PACKED", "DOCS_READY", "AT_ORIGIN", "IN_TRANSIT"]);
-    // OJO: aquí usamos la muestra (últimos 6) para no inventar. Si quieres exactitud, te creo endpoint de conteo por status.
-    return shipments.filter((s) => active.has(String(s.status || "").toUpperCase())).length;
+    const INACTIVE = new Set(["AT_DESTINATION", "DELIVERED", "CLOSED"]);
+    return shipments.filter((s) => !INACTIVE.has(String(s.status || "").toUpperCase()))
+      .length;
   }, [shipments]);
 
   const quick = [
@@ -209,7 +253,7 @@ export default function AdminDashboard() {
             <div className="kpiLabel">Embarques activos</div>
           </div>
           <div className="kpiValue">{loading ? "—" : activeShipments}</div>
-          <div className="kpiSub">Basado en últimos embarques</div>
+          <div className="kpiSub">Muestra (últimos 6) · excluye “En destino”</div>
         </div>
 
         <div className="kpiCard">
@@ -226,8 +270,8 @@ export default function AdminDashboard() {
 
       <div style={{ height: 12 }} />
 
-      {/* Quick actions */}
       <div className="grid2">
+        {/* Accesos + Atajos */}
         <div className="card">
           <div className="cardTitle">Accesos</div>
           <div className="cardSub">Entradas directas a los módulos principales.</div>
@@ -236,9 +280,15 @@ export default function AdminDashboard() {
 
           <div className="quickGrid">
             {quick.map((q) => (
-              <Link key={q.title} href={q.href} className={`quickCard ${q.tone === "green" ? "isGreen" : ""}`}>
+              <Link
+                key={q.title}
+                href={q.href}
+                className={`quickCard ${q.tone === "green" ? "isGreen" : ""}`}
+              >
                 <div className="quickHead">
-                  <div className={`quickIcon ${q.tone === "green" ? "isGreen" : ""}`}>{q.icon}</div>
+                  <div className={`quickIcon ${q.tone === "green" ? "isGreen" : ""}`}>
+                    {q.icon}
+                  </div>
                   <div className="quickText">
                     <div className="quickTitle">{q.title}</div>
                     <div className="quickDesc">{q.desc}</div>
@@ -252,9 +302,25 @@ export default function AdminDashboard() {
               </Link>
             ))}
           </div>
+
+          <div className="ff-divider" style={{ margin: "12px 0" }} />
+
+          <div className="ops">
+            <div className="opsTitle">Atajos operativos</div>
+            <div className="opsGrid">
+              <Link className="opsBtn" href="/admin/shipments">
+                <PlusCircle size={16} />
+                Crear embarque
+              </Link>
+              <Link className="opsBtn primary" href="/admin/quotes/new">
+                <PlusCircle size={16} />
+                Nueva cotización
+              </Link>
+            </div>
+          </div>
         </div>
 
-        {/* Últimos embarques */}
+        {/* Últimos embarques (tabla compacta) */}
         <div className="card">
           <div className="spread">
             <div>
@@ -276,25 +342,37 @@ export default function AdminDashboard() {
               <div>{err}</div>
             </div>
           ) : shipments.length ? (
-            <div className="list">
-              {shipments.map((s) => (
-                <Link key={s.id} href={`/admin/shipments/${s.id}`} className="rowLink">
-                  <div style={{ minWidth: 0 }}>
-                    <div className="rowTop">
-                      <span className="rowCode">{s.code}</span>
-                      <span className="rowDot">·</span>
-                      <span className="rowMuted">{fmtDate(s.created_at)}</span>
+            <div className="tableWrap">
+              <div className="thead">
+                <div>Código</div>
+                <div>Cliente</div>
+                <div>Destino</div>
+                <div style={{ textAlign: "right" }}>Status</div>
+              </div>
+
+              <div className="tbody">
+                {shipments.map((s) => (
+                  <Link key={s.id} href={`/admin/shipments/${s.id}`} className="trow">
+                    <div className="tcode">
+                      <div className="code">{s.code}</div>
+                      <div className="meta">{fmtDate(s.created_at)}</div>
                     </div>
-                    <div className="rowBottom">
-                      <span className="rowMuted">
-                        {s.client_name ? `${s.client_name} · ` : ""}
-                        {s.destination} · {productInline(s)}
+
+                    <div className="tclient" title={s.client_name || ""}>
+                      <div className="client">{s.client_name || "—"}</div>
+                      <div className="meta">{productInline(s)}</div>
+                    </div>
+
+                    <div className="tdest">{s.destination}</div>
+
+                    <div className="tstatus" style={{ textAlign: "right" }}>
+                      <span className="pill" style={pillStyle(s.status)}>
+                        {labelStatus(s.status)}
                       </span>
                     </div>
-                  </div>
-                  <span className="pill">{labelStatus(s.status)}</span>
-                </Link>
-              ))}
+                  </Link>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="muted">Aún no hay embarques.</div>
@@ -411,15 +489,11 @@ export default function AdminDashboard() {
           background: rgba(15, 23, 42, 0.03);
         }
 
+        /* Quick actions (más compactos) */
         .quickGrid {
           display: grid;
-          gap: 10px;
+          gap: 8px;
           grid-template-columns: 1fr;
-        }
-        @media (min-width: 900px) {
-          .quickGrid {
-            grid-template-columns: 1fr;
-          }
         }
 
         .quickCard {
@@ -428,9 +502,9 @@ export default function AdminDashboard() {
           border: 1px solid var(--ff-border);
           background: #fff;
           border-radius: var(--ff-radius);
-          padding: 12px;
+          padding: 10px;
           display: grid;
-          gap: 10px;
+          gap: 8px;
         }
         .quickCard:hover {
           background: rgba(15, 23, 42, 0.02);
@@ -488,53 +562,117 @@ export default function AdminDashboard() {
           color: var(--ff-green-dark);
         }
 
-        .list {
-          display: grid;
-          gap: 8px;
-        }
-
-        .rowLink {
-          text-decoration: none;
-          color: var(--ff-text);
-          border: 1px solid var(--ff-border);
-          background: #fff;
-          border-radius: var(--ff-radius);
-          padding: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-        }
-        .rowLink:hover {
-          background: rgba(15, 23, 42, 0.02);
-        }
-
-        .rowTop {
-          display: inline-flex;
-          align-items: baseline;
-          gap: 8px;
-          min-width: 0;
-        }
-        .rowCode {
+        /* Atajos operativos */
+        .opsTitle {
           font-weight: 950;
           font-size: 13px;
           letter-spacing: -0.1px;
+          margin-bottom: 8px;
         }
-        .rowDot {
-          color: rgba(15, 23, 42, 0.35);
+        .opsGrid {
+          display: grid;
+          gap: 8px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 520px) {
+          .opsGrid {
+            grid-template-columns: 1fr 1fr;
+          }
+        }
+        .opsBtn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          height: 36px;
+          padding: 0 12px;
+          border-radius: var(--ff-radius);
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          font-size: 12px;
           font-weight: 900;
+          cursor: pointer;
+          color: var(--ff-text);
+          text-decoration: none;
+          white-space: nowrap;
         }
-        .rowBottom {
+        .opsBtn:hover {
+          background: rgba(15, 23, 42, 0.03);
+        }
+        .opsBtn.primary {
+          border: 1px solid rgba(31, 122, 58, 0.35);
+          background: var(--ff-green);
+          color: #fff;
+        }
+        .opsBtn.primary:hover {
+          filter: brightness(0.98);
+        }
+
+        /* Tabla compacta últimos embarques */
+        .tableWrap {
+          border: 1px solid var(--ff-border);
+          border-radius: var(--ff-radius);
+          overflow: hidden;
+          background: #fff;
+        }
+        .thead {
+          display: grid;
+          grid-template-columns: 0.9fr 1.4fr 0.7fr 0.8fr;
+          gap: 10px;
+          padding: 10px;
+          font-size: 12px;
+          font-weight: 950;
+          color: var(--ff-muted);
+          background: rgba(15, 23, 42, 0.02);
+          border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+        }
+
+        .tbody {
+          display: grid;
+        }
+
+        .trow {
+          display: grid;
+          grid-template-columns: 0.9fr 1.4fr 0.7fr 0.8fr;
+          gap: 10px;
+          padding: 10px;
+          text-decoration: none;
+          color: var(--ff-text);
+          border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+          align-items: center;
+        }
+        .trow:hover {
+          background: rgba(15, 23, 42, 0.02);
+        }
+        .trow:last-child {
+          border-bottom: 0;
+        }
+
+        .code {
+          font-weight: 950;
+          font-size: 13px;
+          letter-spacing: -0.1px;
+          line-height: 18px;
+        }
+        .client {
+          font-weight: 900;
+          font-size: 12px;
+          line-height: 16px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .meta {
           margin-top: 2px;
-        }
-        .rowMuted {
           font-size: 12px;
           color: var(--ff-muted);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-          display: block;
-          max-width: 720px;
+        }
+        .tdest {
+          font-weight: 900;
+          font-size: 12px;
         }
 
         .pill {
@@ -542,10 +680,10 @@ export default function AdminDashboard() {
           padding: 6px 10px;
           font-size: 12px;
           font-weight: 900;
-          background: rgba(15, 23, 42, 0.04);
-          border: 1px solid rgba(15, 23, 42, 0.12);
+          border: 1px solid;
           white-space: nowrap;
-          flex: 0 0 auto;
+          display: inline-flex;
+          justify-content: flex-end;
         }
 
         .muted {
@@ -559,6 +697,21 @@ export default function AdminDashboard() {
           padding: 10px;
           border-radius: var(--ff-radius);
           font-size: 12px;
+        }
+
+        /* Responsive: si está muy angosto, ocultamos la cabecera y apilamos */
+        @media (max-width: 720px) {
+          .thead {
+            display: none;
+          }
+          .trow {
+            grid-template-columns: 1fr;
+            gap: 6px;
+            align-items: flex-start;
+          }
+          .tstatus {
+            text-align: left !important;
+          }
         }
       `}</style>
     </AdminLayout>
