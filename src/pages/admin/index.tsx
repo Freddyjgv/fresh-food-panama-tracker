@@ -2,19 +2,18 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Calculator,
-  Package2,
-  Users2,
-  ArrowRight,
-  TrendingUp,
-  Clock,
   PlusCircle,
-  Truck,
-  Plane,
-  Ship,
-  FileText,
+  RefreshCcw,
+  PackagePlus,
+  FilePlus2,
+  Package2,
+  Calculator,
+  Users2,
+  History,
   MapPin,
-  CheckCircle2,
+  Truck,
+  PackageCheck,
+  FileText,
 } from "lucide-react";
 
 import { supabase } from "../../lib/supabaseClient";
@@ -63,15 +62,7 @@ type ClientsApiResponse = {
 
 const QUOTE_PATH = "/admin/quotes";
 
-function fmtDateShort(iso: string) {
-  try {
-    return new Date(iso).toLocaleDateString("es-PA", { day: "2-digit", month: "short" });
-  } catch {
-    return iso;
-  }
-}
-
-function fmtDateTiny(iso: string) {
+function fmtDate(iso: string) {
   try {
     return new Date(iso).toLocaleDateString("es-PA", { year: "numeric", month: "short", day: "2-digit" });
   } catch {
@@ -86,37 +77,37 @@ function productInline(s: ShipmentListItem) {
   return `${name} · ${variety} · ${mode}`;
 }
 
-function badgeTone(status: string): "neutral" | "success" | "warn" | "info" {
-  const s = (status || "").toUpperCase();
-  if (["PACKED", "DOCS_READY", "AT_DESTINATION", "DELIVERED", "CLOSED"].includes(s)) return "success";
+function isActiveStatus(raw: string) {
+  const s = String(raw || "").toUpperCase();
+  // Todo lo “En Destino” o finalizado NO es activo
+  if (["AT_DESTINATION", "DELIVERED", "CLOSED"].includes(s)) return false;
+  // Opcional: si tienes otros estados finales, agrégalos aquí
+  return true;
+}
+
+function milestoneTone(raw: string): "neutral" | "success" | "warn" | "info" {
+  const s = String(raw || "").toUpperCase();
+  if (["PACKED", "DOCS_READY"].includes(s)) return "success";
   if (["AT_ORIGIN", "ARRIVED_PTY", "DEPARTED"].includes(s)) return "warn";
   if (["IN_TRANSIT"].includes(s)) return "info";
+  if (["AT_DESTINATION", "DELIVERED", "CLOSED"].includes(s)) return "neutral";
   return "neutral";
 }
 
-/**
- * 👇 Iconos compactos por hito/estado.
- * Si ya tienes “imágenes” en el detalle del embarque (iconos por hito),
- * puedes sustituir este mapping por el mismo helper/componente del detalle.
- */
-function statusIcon(status: string) {
-  const s = (status || "").toUpperCase();
+function MiniMilestone({ status }: { status: string }) {
+  const tone = milestoneTone(status);
+  const label = labelStatus(status);
 
-  if (s === "CREATED") return <PlusCircle size={16} />;
-  if (s === "PACKED") return <Package2 size={16} />;
-  if (s === "DOCS_READY") return <FileText size={16} />;
-  if (s === "AT_ORIGIN") return <Truck size={16} />;
-  if (s === "ARRIVED_PTY") return <MapPin size={16} />;
-  if (s === "DEPARTED") return <Plane size={16} />;
-  if (s === "IN_TRANSIT") return <Ship size={16} />;
-  if (s === "AT_DESTINATION") return <MapPin size={16} />;
-  if (s === "DELIVERED" || s === "CLOSED") return <CheckCircle2 size={16} />;
-
-  return <Package2 size={16} />;
-}
-
-function StatusMini({ status }: { status: string }) {
-  const tone = badgeTone(status);
+  const Icon =
+    String(status || "").toUpperCase() === "AT_DESTINATION"
+      ? MapPin
+      : String(status || "").toUpperCase() === "IN_TRANSIT"
+      ? Truck
+      : String(status || "").toUpperCase() === "DOCS_READY"
+      ? FileText
+      : String(status || "").toUpperCase() === "PACKED"
+      ? PackageCheck
+      : Package2;
 
   const style: React.CSSProperties =
     tone === "success"
@@ -128,11 +119,9 @@ function StatusMini({ status }: { status: string }) {
       : { background: "rgba(15,23,42,.04)", borderColor: "rgba(15,23,42,.12)", color: "var(--ff-text)" };
 
   return (
-    <span className="statusChip" style={style} title={labelStatus(status)}>
-      <span className="statusIco" aria-hidden="true">
-        {statusIcon(status)}
-      </span>
-      <span className="statusTxt">{labelStatus(status)}</span>
+    <span className="miniMilestone" style={style} title={label}>
+      <Icon size={14} />
+      <span className="miniMilestoneTxt">{label}</span>
     </span>
   );
 }
@@ -144,7 +133,6 @@ export default function AdminDashboard() {
   const [shipments, setShipments] = useState<ShipmentListItem[]>([]);
   const [shipmentsTotal, setShipmentsTotal] = useState<number>(0);
   const [clientsTotal, setClientsTotal] = useState<number>(0);
-
   const [err, setErr] = useState<string | null>(null);
 
   async function getTokenOrRedirect() {
@@ -172,7 +160,7 @@ export default function AdminDashboard() {
     const token = await getTokenOrRedirect();
     if (!token) return;
 
-    // 1) Últimos embarques (page=1 desc) + total
+    // Últimos embarques
     const qs = new URLSearchParams();
     qs.set("page", "1");
     qs.set("dir", "desc");
@@ -190,10 +178,10 @@ export default function AdminDashboard() {
     }
 
     const sJson = (await sRes.json()) as ShipmentsApiResponse;
-    setShipments(sJson.items?.slice(0, 8) || []);
+    setShipments(sJson.items?.slice(0, 10) || []);
     setShipmentsTotal(sJson.total ?? (sJson.items?.length || 0));
 
-    // 2) Total clientes
+    // Total clientes
     const cRes = await fetch(`/.netlify/functions/listClients`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -213,246 +201,202 @@ export default function AdminDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady]);
 
-  // ✅ “Activos” = NO En Destino (ni delivered/closed)
-  const activeShipments = useMemo(() => {
-    const inactive = new Set(["AT_DESTINATION", "DELIVERED", "CLOSED"]);
-    return shipments.filter((s) => !inactive.has(String(s.status || "").toUpperCase())).length;
-  }, [shipments]);
+  const activeShipments = useMemo(() => shipments.filter((s) => isActiveStatus(s.status)).length, [shipments]);
 
   return (
-    <AdminLayout title="Dashboard" subtitle="Control operativo rápido (compacto + accionable).">
-      {/* KPIs (compactos) */}
-      <div className="kpiRow">
-        <div className="kpi">
-          <div className="kpiTop">
-            <span className="kpiIco">
-              <TrendingUp size={16} />
-            </span>
-            <span className="kpiLbl">Embarques</span>
-          </div>
-          <div className="kpiVal">{loading ? "—" : shipmentsTotal}</div>
-          <div className="kpiSub">Total en sistema</div>
+    <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Denso, rápido, estilo ERP.">
+      {/* Top strip KPIs (compactos) */}
+      <div className="kpiStrip">
+        <div className="kpiChip">
+          <span className="kpiLbl">Embarques</span>
+          <span className="kpiVal">{loading ? "—" : shipmentsTotal}</span>
+        </div>
+        <div className="kpiChip">
+          <span className="kpiLbl">Activos</span>
+          <span className="kpiVal">{loading ? "—" : activeShipments}</span>
+        </div>
+        <div className="kpiChip">
+          <span className="kpiLbl">Clientes</span>
+          <span className="kpiVal">{loading ? "—" : clientsTotal}</span>
         </div>
 
-        <div className="kpi">
-          <div className="kpiTop">
-            <span className="kpiIco">
-              <Clock size={16} />
-            </span>
-            <span className="kpiLbl">Activos</span>
-          </div>
-          <div className="kpiVal">{loading ? "—" : activeShipments}</div>
-          <div className="kpiSub">Excluye “En destino”</div>
-        </div>
-
-        <div className="kpi">
-          <div className="kpiTop">
-            <span className="kpiIco">
-              <Users2 size={16} />
-            </span>
-            <span className="kpiLbl">Clientes</span>
-          </div>
-          <div className="kpiVal">{loading ? "—" : clientsTotal}</div>
-          <div className="kpiSub">Empresas/contactos</div>
-        </div>
+        <button className="btnGhost" type="button" onClick={load} disabled={loading} title="Refrescar">
+          <RefreshCcw size={16} />
+          {loading ? "Cargando…" : "Refrescar"}
+        </button>
       </div>
 
-      <div style={{ height: 10 }} />
+      <div style={{ height: 12 }} />
 
-      {/* 70/30 */}
-      <div className="gridMain">
-        {/* LEFT: Últimos embarques (compact table) */}
+      <div className="mainGrid">
+        {/* LEFT: Shipments table */}
         <div className="card">
           <div className="cardHead">
             <div>
               <div className="cardTitle">Últimos embarques</div>
-              <div className="cardSub">Click para abrir. Diseño denso (tipo Odoo/ERP).</div>
+              <div className="cardSub">Click para abrir. Tabla densa (ERP).</div>
             </div>
-            <div className="headActions">
-              <button className="ghostBtn" type="button" onClick={() => load()} title="Refrescar">
-                Refrescar
-              </button>
-              <Link className="ghostBtn" href="/admin/shipments">
-                Ver todos <ArrowRight size={16} />
-              </Link>
-            </div>
+
+            <Link className="btnSmall" href="/admin/shipments">
+              Ver todos →
+            </Link>
           </div>
 
-          <div className="divider" />
+          <div className="ff-divider" style={{ margin: "12px 0" }} />
 
-          {loading ? (
-            <div className="muted">Cargando…</div>
-          ) : err ? (
+          {err ? (
             <div className="msgWarn">
               <b>Error</b>
               <div>{err}</div>
             </div>
-          ) : shipments.length ? (
-            <div className="tableWrap">
-              <div className="table">
-                <div className="thead">
-                  <div>Código</div>
-                  <div>Cliente</div>
-                  <div>Destino</div>
-                  <div className="thRight">Estado</div>
-                </div>
+          ) : (
+            <div className="table">
+              <div className="thead">
+                <div>Código</div>
+                <div>Cliente</div>
+                <div>Destino</div>
+                <div className="thRight">Estado</div>
+              </div>
 
-                {shipments.map((s) => (
-                  <Link key={s.id} href={`/admin/shipments/${s.id}`} className="tr">
-                    <div className="td codeCell">
-                      <div className="code">{s.code}</div>
-                      <div className="tiny">{fmtDateTiny(s.created_at)}</div>
+              {loading ? (
+                <div className="tEmpty">Cargando…</div>
+              ) : shipments.length === 0 ? (
+                <div className="tEmpty">Aún no hay embarques.</div>
+              ) : (
+                shipments.map((s) => (
+                  <Link key={s.id} href={`/admin/shipments/${s.id}`} className="trow">
+                    <div className="cell">
+                      <div className="main">{s.code}</div>
+                      <div className="sub">{fmtDate(s.created_at)}</div>
                     </div>
 
-                    <div className="td">
-                      <div className="client">{s.client_name || "—"}</div>
-                      <div className="tiny ellip">{productInline(s)}</div>
+                    <div className="cell">
+                      <div className="main">{s.client_name || "—"}</div>
+                      <div className="sub">{productInline(s)}</div>
                     </div>
 
-                    <div className="td dest">
-                      <span className="destPill">{s.destination}</span>
-                      <span className="tiny">{fmtDateShort(s.created_at)}</span>
+                    <div className="cell">
+                      <div className="main">{(s.destination || "").toUpperCase()}</div>
+                      <div className="sub">Destino</div>
                     </div>
 
-                    <div className="td tdRight">
-                      <StatusMini status={s.status} />
+                    <div className="cellRight">
+                      <MiniMilestone status={s.status} />
                     </div>
                   </Link>
-                ))}
-              </div>
+                ))
+              )}
             </div>
-          ) : (
-            <div className="muted">Aún no hay embarques.</div>
           )}
         </div>
 
-        {/* RIGHT: Acciones rápidas + módulos compactos */}
+        {/* RIGHT: Quick Actions */}
         <div className="card">
           <div className="cardTitle">Acciones rápidas</div>
           <div className="cardSub">Botones visibles para operar sin pensar.</div>
 
-          <div className="divider" />
+          <div className="ff-divider" style={{ margin: "12px 0" }} />
 
-          <div className="btnStack">
-            <Link className="primaryBtn" href="/admin/shipments">
-              <PlusCircle size={16} />
+          <div className="ctaGrid">
+            <Link className="btnPrimary" href="/admin/shipments">
+              <PackagePlus size={18} />
               Crear embarque
+              <span className="btnHint">Operación</span>
             </Link>
 
-            <Link className="primaryBtn" href="/admin/quotes/new">
-              <PlusCircle size={16} />
+            <Link className="btnSecondary" href="/admin/quotes/new">
+              <FilePlus2 size={18} />
               Nueva cotización
+              <span className="btnHint">Ventas</span>
             </Link>
-
-            <div className="btnGrid">
-              <Link className="ghostBig" href="/admin/shipments">
-                <Package2 size={16} />
-                Embarques
-              </Link>
-              <Link className="ghostBig" href={QUOTE_PATH}>
-                <Calculator size={16} />
-                Cotizador
-              </Link>
-              <Link className="ghostBig" href="/admin/users">
-                <Users2 size={16} />
-                Clientes
-              </Link>
-              <Link className="ghostBig" href="/admin/quotes">
-                <FileText size={16} />
-                Historial
-              </Link>
-            </div>
           </div>
 
-          <div className="divider" style={{ marginTop: 12 }} />
+          <div style={{ height: 10 }} />
 
-          <div className="miniHint">
-            Tip: este panel está diseñado para que **todo sea 1 click**. Si quieres, luego agregamos “Pendientes” (docs/fotos)
-            por embarque.
+          <div className="miniGrid">
+            <Link className="miniAction" href="/admin/shipments">
+              <Package2 size={16} />
+              Embarques
+            </Link>
+            <Link className="miniAction" href={QUOTE_PATH}>
+              <Calculator size={16} />
+              Cotizador
+            </Link>
+            <Link className="miniAction" href="/admin/users">
+              <Users2 size={16} />
+              Clientes
+            </Link>
+            <Link className="miniAction" href={QUOTE_PATH}>
+              <History size={16} />
+              Historial
+            </Link>
+          </div>
+
+          <div className="tip">
+            Tip: dejamos esto listo para agregar “Pendientes” por embarque (docs/fotos) como mini badges.
           </div>
         </div>
       </div>
 
       <style jsx>{`
-        .divider {
-          height: 1px;
-          background: rgba(15, 23, 42, 0.08);
-          margin: 10px 0;
-        }
-
-        /* KPIs compactos */
-        .kpiRow {
-          display: grid;
-          gap: 10px;
-          grid-template-columns: 1fr;
-        }
-        @media (min-width: 980px) {
-          .kpiRow {
-            grid-template-columns: repeat(3, 1fr);
-          }
-        }
-        .kpi {
-          background: var(--ff-surface);
-          border: 1px solid var(--ff-border);
-          border-radius: var(--ff-radius);
-          box-shadow: var(--ff-shadow);
-          padding: 10px 12px;
-          position: relative;
-          overflow: hidden;
-        }
-        .kpi:before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background: radial-gradient(800px 200px at 20% 0%, rgba(31, 122, 58, 0.10), transparent 60%);
-          pointer-events: none;
-        }
-        .kpiTop {
+        .kpiStrip {
           display: flex;
-          align-items: center;
           gap: 10px;
-          position: relative;
+          align-items: center;
+          flex-wrap: wrap;
         }
-        .kpiIco {
-          width: 30px;
-          height: 30px;
-          display: grid;
-          place-items: center;
-          border-radius: 10px;
-          border: 1px solid rgba(31, 122, 58, 0.22);
-          background: rgba(31, 122, 58, 0.08);
-          color: var(--ff-green-dark);
+        .kpiChip {
+          display: inline-flex;
+          align-items: baseline;
+          gap: 8px;
+          padding: 8px 10px;
+          border: 1px solid var(--ff-border);
+          background: var(--ff-surface);
+          border-radius: 12px;
+          box-shadow: var(--ff-shadow);
         }
         .kpiLbl {
-          font-weight: 950;
           font-size: 12px;
+          font-weight: 900;
           color: var(--ff-muted);
-          letter-spacing: -0.1px;
         }
         .kpiVal {
-          margin-top: 8px;
+          font-size: 16px;
           font-weight: 950;
-          font-size: 26px;
-          letter-spacing: -0.6px;
-          line-height: 28px;
-          position: relative;
-        }
-        .kpiSub {
-          margin-top: 4px;
-          font-size: 12px;
-          color: var(--ff-muted);
-          position: relative;
+          letter-spacing: -0.2px;
         }
 
-        /* Main grid 70/30 */
-        .gridMain {
+        .btnGhost {
+          margin-left: auto;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          height: 36px;
+          padding: 0 12px;
+          border-radius: var(--ff-radius);
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          font-size: 12px;
+          font-weight: 900;
+          cursor: pointer;
+          color: var(--ff-text);
+        }
+        .btnGhost:hover {
+          background: rgba(15, 23, 42, 0.03);
+        }
+        .btnGhost:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .mainGrid {
           display: grid;
           gap: 12px;
           grid-template-columns: 1fr;
         }
         @media (min-width: 1100px) {
-          .gridMain {
-            grid-template-columns: 1.6fr 0.9fr;
+          .mainGrid {
+            grid-template-columns: 1.7fr 1fr;
             align-items: start;
           }
         }
@@ -464,6 +408,7 @@ export default function AdminDashboard() {
           box-shadow: var(--ff-shadow);
           padding: 12px;
         }
+
         .cardHead {
           display: flex;
           align-items: flex-start;
@@ -471,6 +416,7 @@ export default function AdminDashboard() {
           gap: 10px;
           flex-wrap: wrap;
         }
+
         .cardTitle {
           font-weight: 950;
           font-size: 14px;
@@ -481,234 +427,214 @@ export default function AdminDashboard() {
           font-size: 12px;
           color: var(--ff-muted);
         }
-        .headActions {
-          display: inline-flex;
-          gap: 8px;
-          align-items: center;
-        }
 
-        /* Buttons */
-        .primaryBtn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          border: 1px solid rgba(31, 122, 58, 0.35);
-          background: var(--ff-green);
-          color: #fff;
-          border-radius: var(--ff-radius);
-          height: 38px;
-          padding: 0 12px;
-          font-weight: 950;
-          font-size: 12px;
-          cursor: pointer;
-          white-space: nowrap;
-          text-decoration: none;
-        }
-        .primaryBtn:hover {
-          filter: brightness(0.98);
-        }
-        .ghostBtn {
+        .btnSmall {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          border: 1px solid var(--ff-border);
-          background: #fff;
-          border-radius: var(--ff-radius);
           height: 34px;
           padding: 0 10px;
-          font-weight: 900;
-          font-size: 12px;
-          cursor: pointer;
-          text-decoration: none;
-          color: var(--ff-text);
-          white-space: nowrap;
-        }
-        .ghostBtn:hover {
-          background: rgba(15, 23, 42, 0.03);
-        }
-
-        .btnStack {
-          display: grid;
-          gap: 10px;
-        }
-        .btnGrid {
-          display: grid;
-          gap: 10px;
-          grid-template-columns: 1fr 1fr;
-        }
-        .ghostBig {
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
+          border-radius: var(--ff-radius);
           border: 1px solid var(--ff-border);
           background: #fff;
-          border-radius: var(--ff-radius);
-          height: 40px;
-          padding: 0 12px;
-          font-weight: 950;
           font-size: 12px;
+          font-weight: 900;
           cursor: pointer;
-          text-decoration: none;
           color: var(--ff-text);
+          text-decoration: none;
           white-space: nowrap;
         }
-        .ghostBig:hover {
+        .btnSmall:hover {
           background: rgba(15, 23, 42, 0.03);
         }
 
-        .miniHint {
-          font-size: 12px;
-          color: var(--ff-muted);
-          line-height: 16px;
-        }
-
-        /* Compact table */
-        .tableWrap {
+        /* Modern dense table */
+        .table {
           border: 1px solid rgba(15, 23, 42, 0.08);
-          border-radius: var(--ff-radius);
+          border-radius: 12px;
           overflow: hidden;
           background: #fff;
         }
-        .table {
-          display: grid;
-        }
         .thead {
           display: grid;
-          grid-template-columns: 1.1fr 1.5fr 0.7fr 0.9fr;
+          grid-template-columns: 1.1fr 1.6fr 0.7fr 0.9fr;
           gap: 0;
-          padding: 10px 10px;
-          font-size: 12px;
-          font-weight: 950;
-          color: var(--ff-muted);
+          padding: 10px 12px;
           background: rgba(15, 23, 42, 0.02);
-          border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+          border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+          font-size: 12px;
+          font-weight: 900;
+          color: rgba(15, 23, 42, 0.6);
         }
         .thRight {
           text-align: right;
         }
 
-        .tr {
+        .trow {
           display: grid;
-          grid-template-columns: 1.1fr 1.5fr 0.7fr 0.9fr;
-          gap: 0;
-          padding: 10px 10px;
+          grid-template-columns: 1.1fr 1.6fr 0.7fr 0.9fr;
+          align-items: center;
+          padding: 10px 12px;
           text-decoration: none;
           color: var(--ff-text);
           border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-          align-items: center;
         }
-        .tr:hover {
-          background: rgba(31, 122, 58, 0.04);
-        }
-        .tr:last-child {
+        .trow:last-child {
           border-bottom: 0;
         }
-
-        .td {
-          min-width: 0;
-        }
-        .tdRight {
-          display: flex;
-          justify-content: flex-end;
-          align-items: center;
-        }
-
-        .codeCell .code {
-          font-weight: 950;
-          font-size: 13px;
-          letter-spacing: -0.1px;
-          line-height: 16px;
-        }
-        .tiny {
-          margin-top: 2px;
-          font-size: 12px;
-          color: var(--ff-muted);
-          line-height: 14px;
-        }
-        .client {
-          font-weight: 950;
-          font-size: 13px;
-          line-height: 16px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .ellip {
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .dest {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          align-items: flex-start;
-        }
-        .destPill {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 950;
-          font-size: 12px;
-          padding: 4px 8px;
-          border-radius: 999px;
-          border: 1px solid rgba(15, 23, 42, 0.10);
+        .trow:hover {
           background: rgba(15, 23, 42, 0.02);
         }
 
-        /* Status chip mini con icono (hito) */
-        .statusChip {
+        .cell {
+          min-width: 0;
+        }
+        .main {
+          font-size: 13px;
+          font-weight: 850;
+          letter-spacing: -0.1px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .sub {
+          margin-top: 2px;
+          font-size: 12px;
+          color: var(--ff-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .cellRight {
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
+        }
+
+        .miniMilestone {
           display: inline-flex;
           align-items: center;
           gap: 8px;
           border-radius: 999px;
           border: 1px solid;
           padding: 6px 10px;
+          font-weight: 900;
           font-size: 12px;
-          font-weight: 950;
           white-space: nowrap;
         }
-        .statusIco {
-          width: 18px;
-          height: 18px;
-          display: grid;
-          place-items: center;
-        }
-        .statusTxt {
-          line-height: 14px;
+        .miniMilestoneTxt {
+          max-width: 180px;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
-        /* Mobile: colapsar tabla */
-        @media (max-width: 860px) {
-          .thead {
-            display: none;
-          }
-          .tr {
-            grid-template-columns: 1fr;
-            gap: 8px;
-            align-items: start;
-          }
-          .tdRight {
-            justify-content: flex-start;
-          }
-          .dest {
-            flex-direction: row;
-            align-items: center;
-            gap: 8px;
-          }
-        }
-
-        .muted {
+        .tEmpty {
+          padding: 12px;
           font-size: 12px;
           color: var(--ff-muted);
         }
+
+        /* Quick actions */
+        .ctaGrid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+
+        .btnPrimary,
+        .btnSecondary {
+          position: relative;
+          display: grid;
+          grid-template-columns: 22px 1fr;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 12px;
+          border-radius: 14px;
+          text-decoration: none;
+          font-weight: 950;
+          letter-spacing: -0.2px;
+          border: 1px solid rgba(15, 23, 42, 0.10);
+        }
+        .btnPrimary {
+          background: var(--ff-green);
+          color: #fff;
+          border-color: rgba(31, 122, 58, 0.35);
+        }
+        .btnPrimary:hover {
+          filter: brightness(0.98);
+        }
+
+        .btnSecondary {
+          background: #fff;
+          color: var(--ff-text);
+        }
+        .btnSecondary:hover {
+          background: rgba(15, 23, 42, 0.02);
+        }
+
+        .btnHint {
+          position: absolute;
+          right: 10px;
+          top: 10px;
+          font-size: 11px;
+          font-weight: 900;
+          opacity: 0.85;
+        }
+        .btnPrimary .btnHint {
+          color: rgba(255, 255, 255, 0.9);
+        }
+        .btnSecondary .btnHint {
+          color: rgba(15, 23, 42, 0.6);
+        }
+
+        .miniGrid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+        .miniAction {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 10px;
+          border-radius: 12px;
+          border: 1px solid rgba(15, 23, 42, 0.10);
+          background: #fff;
+          text-decoration: none;
+          color: var(--ff-text);
+          font-weight: 900;
+          font-size: 12px;
+        }
+        .miniAction:hover {
+          background: rgba(15, 23, 42, 0.02);
+        }
+
+        .tip {
+          margin-top: 10px;
+          font-size: 12px;
+          color: var(--ff-muted);
+          border-top: 1px dashed rgba(15, 23, 42, 0.10);
+          padding-top: 10px;
+        }
+
         .msgWarn {
           border: 1px solid rgba(209, 119, 17, 0.35);
           background: rgba(209, 119, 17, 0.08);
           padding: 10px;
           border-radius: var(--ff-radius);
           font-size: 12px;
+        }
+
+        @media (max-width: 520px) {
+          .thead, .trow {
+            grid-template-columns: 1.1fr 1.2fr 0.6fr 1fr;
+          }
+          .miniMilestoneTxt {
+            max-width: 120px;
+          }
         }
       `}</style>
     </AdminLayout>
