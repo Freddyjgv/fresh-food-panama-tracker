@@ -17,6 +17,7 @@ import {
 
 import { AdminLayout } from "../../components/AdminLayout";
 import { labelStatus } from "../../lib/shipmentFlow";
+import { supabase } from "../../lib/supabaseClient";
 
 type ShipmentListItem = {
   id: string;
@@ -111,12 +112,28 @@ function MiniMilestone({ status }: { status: string }) {
 
   const style: React.CSSProperties =
     tone === "success"
-      ? { background: "rgba(31,122,58,.10)", borderColor: "rgba(31,122,58,.22)", color: "var(--ff-green-dark)" }
+      ? {
+          background: "rgba(31,122,58,.10)",
+          borderColor: "rgba(31,122,58,.22)",
+          color: "var(--ff-green-dark)",
+        }
       : tone === "warn"
-      ? { background: "rgba(209,119,17,.12)", borderColor: "rgba(209,119,17,.24)", color: "#7a3f00" }
+      ? {
+          background: "rgba(209,119,17,.12)",
+          borderColor: "rgba(209,119,17,.24)",
+          color: "#7a3f00",
+        }
       : tone === "info"
-      ? { background: "rgba(59,130,246,.10)", borderColor: "rgba(59,130,246,.22)", color: "rgba(30,64,175,1)" }
-      : { background: "rgba(15,23,42,.04)", borderColor: "rgba(15,23,42,.12)", color: "var(--ff-text)" };
+      ? {
+          background: "rgba(59,130,246,.10)",
+          borderColor: "rgba(59,130,246,.22)",
+          color: "rgba(30,64,175,1)",
+        }
+      : {
+          background: "rgba(15,23,42,.04)",
+          borderColor: "rgba(15,23,42,.12)",
+          color: "var(--ff-text)",
+        };
 
   return (
     <span className="miniMilestone" style={style} title={label}>
@@ -126,11 +143,29 @@ function MiniMilestone({ status }: { status: string }) {
   );
 }
 
-async function fetchJsonWithTimeout<T>(url: string, timeoutMs = 9000): Promise<T> {
+/** Token ONLY when needed (no bloquea render; se usa dentro del fetch). */
+async function getTokenFast(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token || null;
+  return token;
+}
+
+async function fetchJsonWithTimeout<T>(
+  url: string,
+  token: string,
+  timeoutMs = 9000
+): Promise<T> {
   const controller = new AbortController();
   const id = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { signal: controller.signal, redirect: "follow" });
+    const res = await fetch(url, {
+      signal: controller.signal,
+      redirect: "follow",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
     if (!res.ok) {
       const t = await res.text().catch(() => "");
       throw new Error(t || `HTTP ${res.status}`);
@@ -156,7 +191,10 @@ export default function AdminDashboard() {
 
   const inFlightRef = useRef(false);
 
-  const activeShipments = useMemo(() => shipments.filter((s) => isActiveStatus(s.status)).length, [shipments]);
+  const activeShipments = useMemo(
+    () => shipments.filter((s) => isActiveStatus(s.status)).length,
+    [shipments]
+  );
   const anyLoading = shipmentsLoading || clientsLoading;
 
   async function load() {
@@ -170,6 +208,14 @@ export default function AdminDashboard() {
     setClientsLoading(true);
 
     try {
+      const token = await getTokenFast();
+      if (!token) {
+        // AdminLayout debería manejar sesión, pero evitamos “Unauthorized” infinito aquí.
+        setErrShipments("Sesión expirada. Recarga o vuelve a iniciar sesión.");
+        setErrClients("Sesión expirada. Recarga o vuelve a iniciar sesión.");
+        return;
+      }
+
       const qs = new URLSearchParams();
       qs.set("page", "1");
       qs.set("dir", "desc");
@@ -179,25 +225,33 @@ export default function AdminDashboard() {
       const clientsUrl = `/.netlify/functions/listClients`;
 
       const [sRes, cRes] = await Promise.allSettled([
-        fetchJsonWithTimeout<ShipmentsApiResponse>(shipmentsUrl, 9000),
-        fetchJsonWithTimeout<ClientsApiResponse>(clientsUrl, 9000),
+        fetchJsonWithTimeout<ShipmentsApiResponse>(shipmentsUrl, token, 9000),
+        fetchJsonWithTimeout<ClientsApiResponse>(clientsUrl, token, 9000),
       ]);
 
       if (sRes.status === "fulfilled") {
         setShipments(sRes.value.items?.slice(0, 10) || []);
-        setShipmentsTotal(sRes.value.total ?? (sRes.value.items?.length || 0));
+        setShipmentsTotal(
+          sRes.value.total ?? (sRes.value.items?.length || 0)
+        );
         setErrShipments(null);
       } else {
-        setErrShipments(sRes.reason?.message || "No se pudieron cargar embarques");
+        setErrShipments(
+          sRes.reason?.message || "No se pudieron cargar embarques"
+        );
       }
 
       if (cRes.status === "fulfilled") {
         const inferredTotal =
-          typeof cRes.value.total === "number" ? cRes.value.total : cRes.value.items?.length || 0;
+          typeof cRes.value.total === "number"
+            ? cRes.value.total
+            : cRes.value.items?.length || 0;
         setClientsTotal(inferredTotal);
         setErrClients(null);
       } else {
-        setErrClients(cRes.reason?.message || "No se pudieron cargar clientes");
+        setErrClients(
+          cRes.reason?.message || "No se pudieron cargar clientes"
+        );
       }
     } finally {
       setShipmentsLoading(false);
@@ -211,6 +265,11 @@ export default function AdminDashboard() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Micro-badges dinámicos (sin inventar; usan lo que ya cargamos)
+  const badgeShipments =
+    shipmentsLoading ? "…" : `${activeShipments} activos`;
+  const badgeClients = clientsLoading ? "…" : `${clientsTotal} clientes`;
 
   return (
     <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Denso, rápido, estilo ERP.">
@@ -316,7 +375,7 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        {/* RIGHT: Quick actions (pro, invitantes) */}
+        {/* RIGHT: Quick actions (2-up en desktop, premium hover + badges) */}
         <div className="card">
           <div className="cardTitle">Acciones rápidas</div>
           <div className="cardSub">Botones grandes, claros y con hover “premium”.</div>
@@ -325,6 +384,7 @@ export default function AdminDashboard() {
 
           <div className="ctaGrid">
             <Link className="ctaCard primary" href="/admin/shipments">
+              <span className="ctaBadge">{badgeShipments}</span>
               <div className="ctaIcon">
                 <PackagePlus size={22} />
               </div>
@@ -334,11 +394,12 @@ export default function AdminDashboard() {
             </Link>
 
             <Link className="ctaCard secondary" href="/admin/quotes/new">
+              <span className="ctaBadge">AIR / SEA</span>
               <div className="ctaIcon">
                 <FilePlus2 size={22} />
               </div>
               <div className="ctaTitle">Nueva cotización</div>
-              <div className="ctaDesc">Cotiza rápido (AIR/SEA) y guarda historial.</div>
+              <div className="ctaDesc">Cotiza rápido y guarda historial.</div>
               <div className="ctaFoot">Ventas</div>
             </Link>
           </div>
@@ -349,6 +410,7 @@ export default function AdminDashboard() {
             <Link className="miniCard" href="/admin/shipments">
               <Package2 size={16} />
               <span>Embarques</span>
+              <span className="miniBadge">{badgeShipments}</span>
             </Link>
             <Link className="miniCard" href={QUOTE_PATH}>
               <Calculator size={16} />
@@ -357,6 +419,7 @@ export default function AdminDashboard() {
             <Link className="miniCard" href="/admin/users">
               <Users2 size={16} />
               <span>Clientes</span>
+              <span className="miniBadge">{badgeClients}</span>
             </Link>
             <Link className="miniCard" href={QUOTE_PATH}>
               <History size={16} />
@@ -419,6 +482,7 @@ export default function AdminDashboard() {
           font-weight: 900;
           cursor: pointer;
           color: var(--ff-text);
+          transition: background 160ms ease, border-color 160ms ease;
         }
         .btnGhost:hover {
           background: rgba(31, 122, 58, 0.05);
@@ -482,6 +546,7 @@ export default function AdminDashboard() {
           color: var(--ff-text);
           text-decoration: none;
           white-space: nowrap;
+          transition: background 160ms ease, border-color 160ms ease;
         }
         .btnSmall:hover {
           background: rgba(31, 122, 58, 0.05);
@@ -505,12 +570,12 @@ export default function AdminDashboard() {
           text-decoration: none;
           color: var(--ff-text);
           border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-          transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+          transition: background 160ms ease;
         }
         .shipRow:last-child {
           border-bottom: 0;
         }
-        /* Hover “verde muy tenue” estilo Shipments index */
+        /* Hover “verde muy tenue” */
         .shipRow:hover {
           background: rgba(31, 122, 58, 0.055);
         }
@@ -521,14 +586,14 @@ export default function AdminDashboard() {
 
         .main {
           font-size: 13px;
-          font-weight: 700; /* menos “2000 bold everywhere” */
+          font-weight: 700;
           letter-spacing: -0.1px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
         .main.code {
-          font-weight: 950; /* el más importante */
+          font-weight: 950;
         }
         .main.client {
           font-weight: 800;
@@ -549,7 +614,6 @@ export default function AdminDashboard() {
           align-items: flex-start;
         }
 
-        /* Hito alineado (col 4) */
         .cell.milestone {
           display: flex;
           justify-content: flex-end;
@@ -632,16 +696,73 @@ export default function AdminDashboard() {
           grid-template-columns: 1fr;
           gap: 10px;
         }
+        /* 2 botones lado a lado en desktop */
+        @media (min-width: 980px) {
+          .ctaGrid {
+            grid-template-columns: 1fr 1fr;
+          }
+        }
 
         .ctaCard {
+          position: relative;
+          overflow: hidden;
           text-decoration: none;
           border-radius: 16px;
           border: 1px solid rgba(15, 23, 42, 0.1);
           padding: 14px;
           display: grid;
           gap: 10px;
-          transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease, border-color 160ms ease;
+          transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
           box-shadow: 0 8px 22px rgba(2, 6, 23, 0.05);
+          background: #fff;
+        }
+
+        /* Acento pro con ::after */
+        .ctaCard::after {
+          content: "";
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          height: 3px;
+          background: linear-gradient(
+            90deg,
+            rgba(31, 122, 58, 0) 0%,
+            rgba(31, 122, 58, 0.55) 50%,
+            rgba(31, 122, 58, 0) 100%
+          );
+          transform: scaleX(0);
+          transform-origin: center;
+          transition: transform 180ms ease;
+        }
+
+        .ctaCard:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 14px 34px rgba(2, 6, 23, 0.10);
+          border-color: rgba(31, 122, 58, 0.22);
+          background: rgba(31, 122, 58, 0.04);
+        }
+        .ctaCard:hover::after {
+          transform: scaleX(1);
+        }
+
+        .ctaBadge {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          font-size: 11px;
+          font-weight: 950;
+          padding: 4px 8px;
+          border-radius: 999px;
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          background: rgba(255, 255, 255, 0.85);
+          color: rgba(15, 23, 42, 0.72);
+          backdrop-filter: blur(6px);
+        }
+
+        .ctaCard.primary {
+          background: linear-gradient(180deg, rgba(31, 122, 58, 0.12) 0%, rgba(31, 122, 58, 0.04) 100%);
+          border-color: rgba(31, 122, 58, 0.22);
         }
 
         .ctaCard .ctaIcon {
@@ -652,6 +773,11 @@ export default function AdminDashboard() {
           place-items: center; /* icono centrado */
           border: 1px solid rgba(15, 23, 42, 0.12);
           background: rgba(15, 23, 42, 0.03);
+        }
+        .ctaCard.primary .ctaIcon {
+          border-color: rgba(31, 122, 58, 0.22);
+          background: rgba(31, 122, 58, 0.10);
+          color: var(--ff-green-dark);
         }
 
         .ctaTitle {
@@ -674,33 +800,14 @@ export default function AdminDashboard() {
           margin-top: 2px;
         }
 
-        .ctaCard.primary {
-          background: linear-gradient(180deg, rgba(31, 122, 58, 0.12) 0%, rgba(31, 122, 58, 0.04) 100%);
-          border-color: rgba(31, 122, 58, 0.22);
-        }
-        .ctaCard.primary .ctaIcon {
-          border-color: rgba(31, 122, 58, 0.22);
-          background: rgba(31, 122, 58, 0.10);
-          color: var(--ff-green-dark);
-        }
-
-        .ctaCard.secondary {
-          background: #fff;
-        }
-
-        .ctaCard:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 14px 34px rgba(2, 6, 23, 0.10);
-          border-color: rgba(31, 122, 58, 0.22);
-          background: rgba(31, 122, 58, 0.04);
-        }
-
         .miniGrid {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 10px;
         }
+
         .miniCard {
+          position: relative;
           display: inline-flex;
           align-items: center;
           gap: 10px;
@@ -712,11 +819,23 @@ export default function AdminDashboard() {
           color: var(--ff-text);
           font-weight: 900;
           font-size: 12px;
-          transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+          transition: background 160ms ease, border-color 160ms ease;
         }
         .miniCard:hover {
           background: rgba(31, 122, 58, 0.05);
           border-color: rgba(31, 122, 58, 0.18);
+        }
+
+        .miniBadge {
+          margin-left: auto;
+          font-size: 11px;
+          font-weight: 950;
+          padding: 3px 8px;
+          border-radius: 999px;
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          background: rgba(15, 23, 42, 0.04);
+          color: rgba(15, 23, 42, 0.75);
+          white-space: nowrap;
         }
 
         .hint {
@@ -756,7 +875,6 @@ export default function AdminDashboard() {
         }
 
         @media (max-width: 520px) {
-          /* en móvil mantenemos 4 columnas pero más compactas */
           .shipRow {
             grid-template-columns: 1.15fr 1.25fr 0.55fr 1fr;
             padding: 10px 10px;
