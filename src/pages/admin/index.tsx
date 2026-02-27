@@ -10,7 +10,7 @@ import {
   Users2,
   History,
   MapPin,
-  Truck,
+  PlaneIcon,
   PackageCheck,
   FileText,
 } from "lucide-react";
@@ -89,7 +89,7 @@ function MiniMilestone({ status }: { status: string }) {
     up === "AT_DESTINATION"
       ? MapPin
       : up === "IN_TRANSIT"
-      ? Truck
+      ? PlaneIcon
       : up === "DOCS_READY"
       ? FileText
       : up === "PACKED"
