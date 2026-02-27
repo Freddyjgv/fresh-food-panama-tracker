@@ -1,5 +1,5 @@
 // src/pages/admin/index.tsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   RefreshCcw,
@@ -15,9 +15,9 @@ import {
   FileText,
 } from "lucide-react";
 
+import { supabase } from "../../lib/supabaseClient";
 import { AdminLayout } from "../../components/AdminLayout";
 import { labelStatus } from "../../lib/shipmentFlow";
-import { supabase } from "../../lib/supabaseClient";
 
 type ShipmentListItem = {
   id: string;
@@ -40,33 +40,16 @@ type ShipmentsApiResponse = {
   sort: { field: string; dir: "asc" | "desc" };
 };
 
-type ClientListItem = {
-  id: string;
-  name: string;
-  contact_email: string;
-  contact_name?: string | null;
-  phone?: string | null;
-  status?: string | null;
-  country?: string | null;
-};
-
 type ClientsApiResponse = {
-  items: ClientListItem[];
-  page?: number;
-  pageSize?: number;
+  items: { id: string; name: string }[];
   total?: number;
-  totalPages?: number;
 };
 
 const QUOTE_PATH = "/admin/quotes";
 
 function fmtDate(iso: string) {
   try {
-    return new Date(iso).toLocaleDateString("es-PA", {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-    });
+    return new Date(iso).toLocaleDateString("es-PA", { year: "numeric", month: "short", day: "2-digit" });
   } catch {
     return iso;
   }
@@ -112,28 +95,12 @@ function MiniMilestone({ status }: { status: string }) {
 
   const style: React.CSSProperties =
     tone === "success"
-      ? {
-          background: "rgba(31,122,58,.10)",
-          borderColor: "rgba(31,122,58,.22)",
-          color: "var(--ff-green-dark)",
-        }
+      ? { background: "rgba(31,122,58,.10)", borderColor: "rgba(31,122,58,.22)", color: "var(--ff-green-dark)" }
       : tone === "warn"
-      ? {
-          background: "rgba(209,119,17,.12)",
-          borderColor: "rgba(209,119,17,.24)",
-          color: "#7a3f00",
-        }
+      ? { background: "rgba(209,119,17,.12)", borderColor: "rgba(209,119,17,.24)", color: "#7a3f00" }
       : tone === "info"
-      ? {
-          background: "rgba(59,130,246,.10)",
-          borderColor: "rgba(59,130,246,.22)",
-          color: "rgba(30,64,175,1)",
-        }
-      : {
-          background: "rgba(15,23,42,.04)",
-          borderColor: "rgba(15,23,42,.12)",
-          color: "var(--ff-text)",
-        };
+      ? { background: "rgba(59,130,246,.10)", borderColor: "rgba(59,130,246,.22)", color: "rgba(30,64,175,1)" }
+      : { background: "rgba(15,23,42,.04)", borderColor: "rgba(15,23,42,.12)", color: "var(--ff-text)" };
 
   return (
     <span className="miniMilestone" style={style} title={label}>
@@ -160,9 +127,7 @@ async function fetchJsonWithTimeout<T>(
     const res = await fetch(url, {
       signal: controller.signal,
       redirect: "follow",
-      headers: {
-        Authorization: `Bearer ${token}`, // ✅ FIX 401
-      },
+      headers: { Authorization: `Bearer ${token}` },
     });
 
     if (!res.ok) {
@@ -171,6 +136,9 @@ async function fetchJsonWithTimeout<T>(
     }
 
     return (await res.json()) as T;
+  } catch (e: any) {
+    if (e?.name === "AbortError") throw new Error("Timeout (abort)");
+    throw e;
   } finally {
     window.clearTimeout(id);
   }
@@ -195,13 +163,14 @@ export default function AdminDashboard() {
     () => shipments.filter((s) => isActiveStatus(s.status)).length,
     [shipments]
   );
+
   const anyLoading = shipmentsLoading || clientsLoading;
 
   async function load() {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
 
-    // No “pantalla en blanco”: solo activa skeletons
+    // No “pantalla en blanco”: solo skeletons
     setErrShipments(null);
     setErrClients(null);
     setShipmentsLoading(true);
@@ -210,8 +179,8 @@ export default function AdminDashboard() {
     try {
       const token = await getTokenOrNull();
       if (!token) {
-        setErrShipments("Sesión no disponible. Por favor vuelve a iniciar sesión.");
-        setErrClients("Sesión no disponible.");
+        setErrShipments("Sesión inválida (sin token). Vuelve a iniciar sesión.");
+        setErrClients("Sesión inválida (sin token).");
         return;
       }
 
@@ -230,21 +199,15 @@ export default function AdminDashboard() {
 
       if (sRes.status === "fulfilled") {
         setShipments(sRes.value.items?.slice(0, 10) || []);
-        setShipmentsTotal(
-          sRes.value.total ?? (sRes.value.items?.length || 0)
-        );
-        setErrShipments(null);
+        setShipmentsTotal(sRes.value.total ?? (sRes.value.items?.length || 0));
       } else {
         setErrShipments(sRes.reason?.message || "No se pudieron cargar embarques");
       }
 
       if (cRes.status === "fulfilled") {
         const inferredTotal =
-          typeof cRes.value.total === "number"
-            ? cRes.value.total
-            : cRes.value.items?.length || 0;
+          typeof cRes.value.total === "number" ? cRes.value.total : (cRes.value.items?.length || 0);
         setClientsTotal(inferredTotal);
-        setErrClients(null);
       } else {
         setErrClients(cRes.reason?.message || "No se pudieron cargar clientes");
       }
@@ -263,7 +226,7 @@ export default function AdminDashboard() {
 
   return (
     <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Denso, rápido, estilo ERP.">
-      {/* KPI strip (compacto, jerarquía clara) */}
+      {/* KPI strip */}
       <div className="kpiStrip">
         <div className="kpiChip">
           <span className="kpiLbl">Embarques</span>
@@ -287,12 +250,12 @@ export default function AdminDashboard() {
       <div style={{ height: 12 }} />
 
       <div className="mainGrid">
-        {/* LEFT: Últimos embarques (sin headers, 4 columnas) */}
+        {/* LEFT: Últimos embarques (4 columnas, sin headers) */}
         <div className="card">
           <div className="cardHead">
             <div>
               <div className="cardTitle">Últimos embarques</div>
-              <div className="cardSub">Código · Cliente · Destino · Hito (sin ruido).</div>
+              <div className="cardSub">Código · Cliente · Destino · Hito</div>
             </div>
 
             <Link className="btnSmall" href="/admin/shipments">
@@ -336,25 +299,21 @@ export default function AdminDashboard() {
               ) : (
                 shipments.map((s) => (
                   <Link key={s.id} href={`/admin/shipments/${s.id}`} className="shipRow">
-                    {/* Col 1: Código */}
                     <div className="cell">
                       <div className="main code">{s.code}</div>
                       <div className="sub">{fmtDate(s.created_at)}</div>
                     </div>
 
-                    {/* Col 2: Cliente */}
                     <div className="cell">
                       <div className="main client">{s.client_name || "—"}</div>
                       <div className="sub">{productInline(s)}</div>
                     </div>
 
-                    {/* Col 3: Destino */}
                     <div className="cell dest">
                       <div className="main">{(s.destination || "").toUpperCase()}</div>
                       <div className="sub">&nbsp;</div>
                     </div>
 
-                    {/* Col 4: Hito */}
                     <div className="cell milestone">
                       <MiniMilestone status={s.status} />
                     </div>
@@ -365,20 +324,20 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        {/* RIGHT: Quick actions (PRO, 2-up desktop) */}
+        {/* RIGHT: Quick actions PRO (2-up) */}
         <div className="card">
           <div className="cardTitle">Acciones rápidas</div>
-          <div className="cardSub">Botones grandes, claros y con hover “premium”.</div>
+          <div className="cardSub">Botones pro: visibles y con hover premium.</div>
 
           <div className="ff-divider" style={{ margin: "12px 0" }} />
 
           <div className="ctaGrid">
-            <Link className="ctaCard primary" href="/admin/shipments/new">
+            <Link className="ctaCard primary" href="/admin/shipments">
               <div className="ctaIcon">
                 <PackagePlus size={22} />
               </div>
               <div className="ctaTitle">Crear embarque</div>
-              <div className="ctaDesc">Inicia operación, hitos, docs y fotos.</div>
+              <div className="ctaDesc">Operación, hitos, docs y fotos.</div>
               <div className="ctaFoot">Operación</div>
             </Link>
 
@@ -418,412 +377,82 @@ export default function AdminDashboard() {
               No se pudo cargar el total de clientes: <b>{errClients}</b>
             </div>
           ) : (
-            <div className="hint">
-              Tip: aquí podemos sumar mini-badges de “pendientes” (docs/fotos) por embarque.
-            </div>
+            <div className="hint">Tip: luego sumamos mini-badges de pendientes (docs/fotos).</div>
           )}
         </div>
       </div>
 
       <style jsx>{`
-        /* ===== Top KPIs ===== */
-        .kpiStrip {
-          display: flex;
-          gap: 10px;
-          align-items: center;
-          flex-wrap: wrap;
-        }
-        .kpiChip {
-          display: inline-flex;
-          align-items: baseline;
-          gap: 8px;
-          padding: 8px 10px;
-          border: 1px solid var(--ff-border);
-          background: var(--ff-surface);
-          border-radius: 12px;
-          box-shadow: var(--ff-shadow);
-        }
-        .kpiLbl {
-          font-size: 12px;
-          font-weight: 900;
-          color: var(--ff-muted);
-        }
-        .kpiVal {
-          font-size: 16px;
-          font-weight: 950;
-          letter-spacing: -0.2px;
-        }
+        .kpiStrip { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+        .kpiChip { display:inline-flex; align-items:baseline; gap:8px; padding:8px 10px; border:1px solid var(--ff-border); background:var(--ff-surface); border-radius:12px; box-shadow:var(--ff-shadow); }
+        .kpiLbl { font-size:12px; font-weight:900; color:var(--ff-muted); }
+        .kpiVal { font-size:16px; font-weight:950; letter-spacing:-0.2px; }
 
-        .btnGhost {
-          margin-left: auto;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          height: 36px;
-          padding: 0 12px;
-          border-radius: var(--ff-radius);
-          border: 1px solid var(--ff-border);
-          background: #fff;
-          font-size: 12px;
-          font-weight: 900;
-          cursor: pointer;
-          color: var(--ff-text);
-        }
-        .btnGhost:hover {
-          background: rgba(31, 122, 58, 0.05);
-          border-color: rgba(31, 122, 58, 0.18);
-        }
-        .btnGhost:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
+        .btnGhost { margin-left:auto; display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 12px; border-radius:var(--ff-radius); border:1px solid var(--ff-border); background:#fff; font-size:12px; font-weight:900; cursor:pointer; color:var(--ff-text); }
+        .btnGhost:hover { background:rgba(31,122,58,0.05); border-color:rgba(31,122,58,0.18); }
+        .btnGhost:disabled { opacity:.6; cursor:not-allowed; }
 
-        /* ===== Layout ===== */
-        .mainGrid {
-          display: grid;
-          gap: 12px;
-          grid-template-columns: 1fr;
-        }
-        @media (min-width: 1100px) {
-          .mainGrid {
-            grid-template-columns: 1.7fr 1fr;
-            align-items: start;
-          }
-        }
+        .mainGrid { display:grid; gap:12px; grid-template-columns:1fr; }
+        @media (min-width:1100px){ .mainGrid{ grid-template-columns:1.7fr 1fr; align-items:start; } }
 
-        .card {
-          background: var(--ff-surface);
-          border: 1px solid var(--ff-border);
-          border-radius: var(--ff-radius);
-          box-shadow: var(--ff-shadow);
-          padding: 12px;
-        }
-        .cardHead {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-        .cardTitle {
-          font-weight: 950;
-          font-size: 14px;
-          letter-spacing: -0.2px;
-        }
-        .cardSub {
-          margin-top: 4px;
-          font-size: 12px;
-          color: var(--ff-muted);
-        }
+        .card { background:var(--ff-surface); border:1px solid var(--ff-border); border-radius:var(--ff-radius); box-shadow:var(--ff-shadow); padding:12px; }
+        .cardHead { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+        .cardTitle { font-weight:950; font-size:14px; letter-spacing:-0.2px; }
+        .cardSub { margin-top:4px; font-size:12px; color:var(--ff-muted); }
 
-        .btnSmall {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          height: 34px;
-          padding: 0 10px;
-          border-radius: var(--ff-radius);
-          border: 1px solid var(--ff-border);
-          background: #fff;
-          font-size: 12px;
-          font-weight: 900;
-          cursor: pointer;
-          color: var(--ff-text);
-          text-decoration: none;
-          white-space: nowrap;
-        }
-        .btnSmall:hover {
-          background: rgba(31, 122, 58, 0.05);
-          border-color: rgba(31, 122, 58, 0.18);
-        }
+        .btnSmall { display:inline-flex; align-items:center; gap:8px; height:34px; padding:0 10px; border-radius:var(--ff-radius); border:1px solid var(--ff-border); background:#fff; font-size:12px; font-weight:900; cursor:pointer; color:var(--ff-text); text-decoration:none; white-space:nowrap; }
+        .btnSmall:hover { background:rgba(31,122,58,0.05); border-color:rgba(31,122,58,0.18); }
 
-        /* ===== Shipments grid (no headers) ===== */
-        .shipGrid {
-          border: 1px solid rgba(15, 23, 42, 0.08);
-          border-radius: 12px;
-          overflow: hidden;
-          background: #fff;
-        }
+        .shipGrid { border:1px solid rgba(15,23,42,0.08); border-radius:12px; overflow:hidden; background:#fff; }
+        .shipRow { display:grid; grid-template-columns:1.2fr 1.6fr 0.55fr 0.95fr; align-items:center; padding:10px 12px; text-decoration:none; color:var(--ff-text); border-bottom:1px solid rgba(15,23,42,0.06); transition:background 160ms ease; }
+        .shipRow:last-child{ border-bottom:0; }
+        .shipRow:hover{ background:rgba(31,122,58,0.055); }
 
-        .shipRow {
-          display: grid;
-          grid-template-columns: 1.2fr 1.6fr 0.55fr 0.95fr; /* Código | Cliente | Destino | Hito */
-          align-items: center;
-          gap: 0;
-          padding: 10px 12px;
-          text-decoration: none;
-          color: var(--ff-text);
-          border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-          transition: background 160ms ease;
-        }
-        .shipRow:last-child {
-          border-bottom: 0;
-        }
-        .shipRow:hover {
-          background: rgba(31, 122, 58, 0.055); /* ✅ verde muy tenue */
-        }
+        .cell{ min-width:0; }
+        .main{ font-size:13px; font-weight:700; letter-spacing:-0.1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .main.code{ font-weight:950; }
+        .main.client{ font-weight:800; }
+        .sub{ margin-top:2px; font-size:12px; color:var(--ff-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .cell.milestone{ display:flex; justify-content:flex-end; align-items:center; }
 
-        .cell {
-          min-width: 0;
-        }
+        .miniMilestone{ display:inline-flex; align-items:center; gap:8px; border-radius:999px; border:1px solid; padding:6px 10px; font-weight:900; font-size:12px; line-height:16px; white-space:nowrap; }
+        .miniMilestoneTxt{ max-width:170px; overflow:hidden; text-overflow:ellipsis; }
 
-        .main {
-          font-size: 13px;
-          font-weight: 700;
-          letter-spacing: -0.1px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .main.code {
-          font-weight: 950;
-        }
-        .main.client {
-          font-weight: 800;
-        }
+        .tEmpty{ padding:12px; font-size:12px; color:var(--ff-muted); }
 
-        .sub {
-          margin-top: 2px;
-          font-size: 12px;
-          color: var(--ff-muted);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
+        .skeleton{ pointer-events:none; }
+        .sk{ border-radius:8px; background:rgba(15,23,42,0.06); overflow:hidden; position:relative; }
+        .sk:after{ content:""; position:absolute; inset:0; transform:translateX(-60%); background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0) 100%); animation:shimmer 1.1s infinite; }
+        @keyframes shimmer{ 0%{ transform:translateX(-60%);} 100%{ transform:translateX(60%);} }
+        .sk1{ height:12px; width:68%; }
+        .sk2{ height:10px; width:88%; margin-top:6px; }
+        .skPill{ height:26px; width:150px; border-radius:999px; }
 
-        .cell.dest {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-        }
+        /* Quick actions: 2-up en desktop */
+        .ctaGrid{ display:grid; grid-template-columns:1fr; gap:10px; }
+        @media (min-width:900px){ .ctaGrid{ grid-template-columns:1fr 1fr; } }
 
-        .cell.milestone {
-          display: flex;
-          justify-content: flex-end; /* ✅ alineación pill */
-          align-items: center;
-        }
+        .ctaCard{ text-decoration:none; border-radius:16px; border:1px solid rgba(15,23,42,0.1); padding:14px; display:grid; gap:10px; transition:transform 160ms ease, box-shadow 160ms ease, background 160ms ease, border-color 160ms ease; box-shadow:0 8px 22px rgba(2,6,23,0.05); }
+        .ctaCard:hover{ transform:translateY(-1px); box-shadow:0 14px 34px rgba(2,6,23,0.10); border-color:rgba(31,122,58,0.22); background:rgba(31,122,58,0.04); }
 
-        .miniMilestone {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          border-radius: 999px;
-          border: 1px solid;
-          padding: 6px 10px;
-          font-weight: 900;
-          font-size: 12px;
-          line-height: 16px;
-          white-space: nowrap;
-        }
-        .miniMilestoneTxt {
-          max-width: 170px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
+        .ctaIcon{ width:44px; height:44px; border-radius:14px; display:grid; place-items:center; border:1px solid rgba(15,23,42,0.12); background:rgba(15,23,42,0.03); }
+        .ctaTitle{ font-weight:950; letter-spacing:-0.2px; font-size:14px; line-height:18px; color:var(--ff-text); }
+        .ctaDesc{ font-size:12px; color:var(--ff-muted); line-height:16px; }
+        .ctaFoot{ font-size:11px; font-weight:950; letter-spacing:0.2px; text-transform:uppercase; color:rgba(15,23,42,0.55); margin-top:2px; }
 
-        .tEmpty {
-          padding: 12px;
-          font-size: 12px;
-          color: var(--ff-muted);
-        }
+        .ctaCard.primary{ background:linear-gradient(180deg, rgba(31,122,58,0.12) 0%, rgba(31,122,58,0.04) 100%); border-color:rgba(31,122,58,0.22); }
+        .ctaCard.primary .ctaIcon{ border-color:rgba(31,122,58,0.22); background:rgba(31,122,58,0.10); color:var(--ff-green-dark); }
 
-        /* ===== Skeleton ===== */
-        .skeleton {
-          pointer-events: none;
-        }
-        .sk {
-          border-radius: 8px;
-          background: rgba(15, 23, 42, 0.06);
-          overflow: hidden;
-          position: relative;
-        }
-        .sk:after {
-          content: "";
-          position: absolute;
-          inset: 0;
-          transform: translateX(-60%);
-          background: linear-gradient(
-            90deg,
-            rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0.55) 50%,
-            rgba(255, 255, 255, 0) 100%
-          );
-          animation: shimmer 1.1s infinite;
-        }
-        @keyframes shimmer {
-          0% {
-            transform: translateX(-60%);
-          }
-          100% {
-            transform: translateX(60%);
-          }
-        }
-        .sk1 {
-          height: 12px;
-          width: 68%;
-        }
-        .sk2 {
-          height: 10px;
-          width: 88%;
-          margin-top: 6px;
-        }
-        .skPill {
-          height: 26px;
-          width: 150px;
-          border-radius: 999px;
-        }
+        .ctaCard.secondary{ background:#fff; }
 
-        /* ===== Quick Actions (2-up desktop) ===== */
-        .ctaGrid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 10px;
-        }
-        @media (min-width: 900px) {
-          .ctaGrid {
-            grid-template-columns: 1fr 1fr; /* ✅ uno al lado del otro */
-          }
-        }
+        .miniGrid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        .miniCard{ display:inline-flex; align-items:center; gap:10px; padding:10px 10px; border-radius:12px; border:1px solid rgba(15,23,42,0.10); background:#fff; text-decoration:none; color:var(--ff-text); font-weight:900; font-size:12px; transition:background 160ms ease, border-color 160ms ease; }
+        .miniCard:hover{ background:rgba(31,122,58,0.05); border-color:rgba(31,122,58,0.18); }
 
-        .ctaCard {
-          text-decoration: none;
-          border-radius: 16px;
-          border: 1px solid rgba(15, 23, 42, 0.1);
-          padding: 14px;
-          display: grid;
-          gap: 10px;
-          transition: transform 160ms ease, box-shadow 160ms ease,
-            background 160ms ease, border-color 160ms ease;
-          box-shadow: 0 8px 22px rgba(2, 6, 23, 0.05);
-        }
+        .hint{ margin-top:10px; font-size:12px; color:var(--ff-muted); border-top:1px dashed rgba(15,23,42,0.10); padding-top:10px; }
+        .hintWarn{ margin-top:10px; font-size:12px; border-top:1px dashed rgba(209,119,17,0.28); padding-top:10px; color:rgba(122,63,0,0.95); }
 
-        .ctaCard .ctaIcon {
-          width: 44px;
-          height: 44px;
-          border-radius: 14px;
-          display: grid;
-          place-items: center; /* ✅ icono centrado */
-          border: 1px solid rgba(15, 23, 42, 0.12);
-          background: rgba(15, 23, 42, 0.03);
-        }
-
-        .ctaTitle {
-          font-weight: 950;
-          letter-spacing: -0.2px;
-          font-size: 14px;
-          line-height: 18px;
-        }
-        .ctaDesc {
-          font-size: 12px;
-          color: var(--ff-muted);
-          line-height: 16px;
-        }
-        .ctaFoot {
-          font-size: 11px;
-          font-weight: 950;
-          letter-spacing: 0.2px;
-          text-transform: uppercase;
-          color: rgba(15, 23, 42, 0.55);
-          margin-top: 2px;
-        }
-
-        .ctaCard.primary {
-          background: linear-gradient(
-            180deg,
-            rgba(31, 122, 58, 0.12) 0%,
-            rgba(31, 122, 58, 0.04) 100%
-          );
-          border-color: rgba(31, 122, 58, 0.22);
-        }
-        .ctaCard.primary .ctaIcon {
-          border-color: rgba(31, 122, 58, 0.22);
-          background: rgba(31, 122, 58, 0.1);
-          color: var(--ff-green-dark);
-        }
-
-        .ctaCard.secondary {
-          background: #fff;
-        }
-
-        .ctaCard:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 14px 34px rgba(2, 6, 23, 0.1);
-          border-color: rgba(31, 122, 58, 0.22);
-          background: rgba(31, 122, 58, 0.04);
-        }
-
-        .miniGrid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
-        }
-        .miniCard {
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-          padding: 10px 10px;
-          border-radius: 12px;
-          border: 1px solid rgba(15, 23, 42, 0.1);
-          background: #fff;
-          text-decoration: none;
-          color: var(--ff-text);
-          font-weight: 900;
-          font-size: 12px;
-          transition: background 160ms ease, border-color 160ms ease;
-        }
-        .miniCard:hover {
-          background: rgba(31, 122, 58, 0.05);
-          border-color: rgba(31, 122, 58, 0.18);
-        }
-
-        .hint {
-          margin-top: 10px;
-          font-size: 12px;
-          color: var(--ff-muted);
-          border-top: 1px dashed rgba(15, 23, 42, 0.1);
-          padding-top: 10px;
-        }
-        .hintWarn {
-          margin-top: 10px;
-          font-size: 12px;
-          border-top: 1px dashed rgba(209, 119, 17, 0.28);
-          padding-top: 10px;
-          color: rgba(122, 63, 0, 0.95);
-        }
-
-        .msgWarn {
-          border: 1px solid rgba(209, 119, 17, 0.35);
-          background: rgba(209, 119, 17, 0.08);
-          padding: 10px;
-          border-radius: var(--ff-radius);
-          font-size: 12px;
-        }
-
-        /* ===== Responsive tweaks ===== */
-        @media (max-width: 860px) {
-          .shipRow {
-            grid-template-columns: 1.2fr 1.4fr 0.6fr 1fr;
-          }
-          .miniMilestoneTxt {
-            max-width: 130px;
-          }
-          .skPill {
-            width: 130px;
-          }
-        }
-
-        @media (max-width: 520px) {
-          .shipRow {
-            grid-template-columns: 1.15fr 1.25fr 0.55fr 1fr;
-            padding: 10px 10px;
-          }
-          .miniMilestoneTxt {
-            max-width: 110px;
-          }
-          .skPill {
-            width: 110px;
-          }
-        }
+        .msgWarn{ border:1px solid rgba(209,119,17,0.35); background:rgba(209,119,17,0.08); padding:10px; border-radius:var(--ff-radius); font-size:12px; }
       `}</style>
     </AdminLayout>
   );
