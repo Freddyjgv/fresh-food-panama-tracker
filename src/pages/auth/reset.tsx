@@ -8,12 +8,18 @@ import { supabase } from "../../lib/supabaseClient";
 type ViewState = "checking" | "ready" | "done" | "error";
 
 function isStrongEnough(pw: string) {
-  // Simple y práctico: 8+ chars, 1 letra y 1 número
   if (!pw) return false;
   const okLen = pw.length >= 8;
   const hasLetter = /[A-Za-z]/.test(pw);
   const hasNumber = /\d/.test(pw);
   return okLen && hasLetter && hasNumber;
+}
+
+function parseHashParams() {
+  // Ejemplo: #access_token=...&refresh_token=...&type=recovery
+  const h = typeof window !== "undefined" ? window.location.hash : "";
+  if (!h || !h.startsWith("#")) return new URLSearchParams();
+  return new URLSearchParams(h.slice(1));
 }
 
 export default function ResetPasswordPage() {
@@ -38,35 +44,78 @@ export default function ResetPasswordPage() {
   }, [pw1, pw2]);
 
   useEffect(() => {
-    // Cuando el usuario llega desde el email, Supabase normalmente establece una sesión temporal.
-    // Aquí solo validamos que exista sesión. Si no existe, mostramos error útil.
-    (async () => {
+    let alive = true;
+
+    function toError(message: string) {
+      if (!alive) return;
+      setView("error");
+      setMsg(message);
+    }
+
+    async function ensureRecoverySession() {
       try {
-        const { data } = await supabase.auth.getSession();
-        const token = data.session?.access_token;
+        // 1) Escucha eventos: cuando Supabase detecta PASSWORD_RECOVERY, habilitamos form.
+        const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+          if (!alive) return;
+          if (event === "PASSWORD_RECOVERY") {
+            setView("ready");
+          }
+        });
 
-        // Algunos flows llegan con fragment en URL (#access_token=...)
-        // Supabase JS suele capturarlo solo, pero igual damos un tick.
-        if (token) {
-          setView("ready");
-          return;
+        // 2) Si venimos con tokens en el hash, establecemos sesión explícitamente (rápido y confiable)
+        const hp = parseHashParams();
+        const access_token = hp.get("access_token");
+        const refresh_token = hp.get("refresh_token");
+        const type = (hp.get("type") || "").toLowerCase();
+
+        if (access_token && refresh_token) {
+          const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+          if (error) {
+            sub.subscription.unsubscribe();
+            toError("El enlace de restablecimiento no es válido o ya expiró. Solicita uno nuevo.");
+            return;
+          }
+
+          // Limpia el hash para evitar re-procesos/ruido al recargar
+          if (typeof window !== "undefined" && window.location.hash) {
+            window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+          }
         }
 
-        // Espera corta por si el SDK está procesando el hash
-        await new Promise((r) => setTimeout(r, 250));
-        const { data: data2 } = await supabase.auth.getSession();
-        if (data2.session?.access_token) {
-          setView("ready");
-          return;
+        // 3) Confirmamos si ya hay sesión (sin redirigir)
+        //    *Importante*: NO fallar de inmediato; damos una ventana corta.
+        const started = Date.now();
+        const maxWaitMs = 1800;
+
+        while (alive && Date.now() - started < maxWaitMs) {
+          const { data } = await supabase.auth.getSession();
+          if (data.session?.access_token) {
+            if (!alive) break;
+            setView("ready");
+            sub.subscription.unsubscribe();
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 200));
         }
 
-        setView("error");
-        setMsg("El enlace de restablecimiento no es válido o ya expiró. Solicita uno nuevo.");
+        // 4) Si no hay sesión, mostramos error útil (sin mandar a login).
+        sub.subscription.unsubscribe();
+
+        if (type === "recovery") {
+          toError("El enlace de restablecimiento no es válido o ya expiró. Solicita uno nuevo.");
+        } else {
+          toError("No detectamos un enlace de recuperación válido. Solicita un restablecimiento de contraseña.");
+        }
       } catch {
-        setView("error");
-        setMsg("No pudimos validar tu sesión de restablecimiento. Intenta solicitar el enlace nuevamente.");
+        toError("No pudimos procesar el restablecimiento. Intenta solicitar el enlace nuevamente.");
       }
-    })();
+    }
+
+    ensureRecoverySession();
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
   async function onSave() {
@@ -76,6 +125,8 @@ export default function ResetPasswordPage() {
     setMsg(null);
 
     try {
+      // Aquí NO necesitamos validar sesión “a mano” con redirects.
+      // Si el enlace era válido, setSession/getSession ya dejó todo listo.
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData.session) {
         setView("error");
@@ -94,10 +145,9 @@ export default function ResetPasswordPage() {
       setView("done");
       setSaving(false);
 
-      // opcional: cerrar sesión para forzar login limpio
-      // await supabase.auth.signOut();
+      // Opcional: cerrar sesión para forzar login limpio (recomendado)
+      await supabase.auth.signOut();
 
-      // redirige suave al login
       setTimeout(() => {
         router.push("/login");
       }, 900);
@@ -112,7 +162,7 @@ export default function ResetPasswordPage() {
       <div className="card">
         <div className="head">
           <div className="brand">
-            <img src="/brand/freshfood-logo.svg" alt="Fresh Food Panamá" className="logo" />
+            <img src="/brand/freshfood-logo.svg" alt="Fresh Food Panamá" className="logo" draggable={false} />
           </div>
 
           <div className="title">Restablecer contraseña</div>
@@ -308,7 +358,7 @@ export default function ResetPasswordPage() {
         }
         .inputWrap:focus-within {
           border-color: rgba(31, 122, 58, 0.28);
-          box-shadow: 0 0 0 4px rgba(31, 122, 58, 0.10);
+          box-shadow: 0 0 0 4px rgba(31, 122, 58, 0.1);
         }
         input {
           border: 0;
@@ -382,7 +432,7 @@ export default function ResetPasswordPage() {
         }
         .btnPrimary:hover {
           filter: brightness(0.98);
-          box-shadow: 0 10px 22px rgba(2, 6, 23, 0.10);
+          box-shadow: 0 10px 22px rgba(2, 6, 23, 0.1);
           transform: translateY(-1px);
         }
         .btnPrimary:disabled {
