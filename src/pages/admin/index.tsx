@@ -13,12 +13,8 @@ import {
   Truck,
   PackageCheck,
   FileText,
-  ArrowRight,
-  TrendingUp,
 } from "lucide-react";
 
-import { supabase } from "../../lib/supabaseClient";
-import { requireAdminOrRedirect } from "../../lib/requireAdmin";
 import { AdminLayout } from "../../components/AdminLayout";
 import { labelStatus } from "../../lib/shipmentFlow";
 
@@ -115,28 +111,12 @@ function MiniMilestone({ status }: { status: string }) {
 
   const style: React.CSSProperties =
     tone === "success"
-      ? {
-          background: "rgba(31,122,58,.10)",
-          borderColor: "rgba(31,122,58,.22)",
-          color: "var(--ff-green-dark)",
-        }
+      ? { background: "rgba(31,122,58,.10)", borderColor: "rgba(31,122,58,.22)", color: "var(--ff-green-dark)" }
       : tone === "warn"
-      ? {
-          background: "rgba(209,119,17,.12)",
-          borderColor: "rgba(209,119,17,.24)",
-          color: "#7a3f00",
-        }
+      ? { background: "rgba(209,119,17,.12)", borderColor: "rgba(209,119,17,.24)", color: "#7a3f00" }
       : tone === "info"
-      ? {
-          background: "rgba(59,130,246,.10)",
-          borderColor: "rgba(59,130,246,.22)",
-          color: "rgba(30,64,175,1)",
-        }
-      : {
-          background: "rgba(15,23,42,.04)",
-          borderColor: "rgba(15,23,42,.12)",
-          color: "var(--ff-text)",
-        };
+      ? { background: "rgba(59,130,246,.10)", borderColor: "rgba(59,130,246,.22)", color: "rgba(30,64,175,1)" }
+      : { background: "rgba(15,23,42,.04)", borderColor: "rgba(15,23,42,.12)", color: "var(--ff-text)" };
 
   return (
     <span className="miniMilestone" style={style} title={label}>
@@ -146,67 +126,48 @@ function MiniMilestone({ status }: { status: string }) {
   );
 }
 
-// Fetch helper con timeout (evita “minutos” si algo se queda colgado)
-async function fetchWithTimeout(
-  input: RequestInfo,
-  init: RequestInit & { timeoutMs?: number } = {}
-) {
-  const { timeoutMs = 12000, ...rest } = init;
+async function fetchJsonWithTimeout<T>(url: string, timeoutMs = 9000): Promise<T> {
   const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
+  const id = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(input, { ...rest, signal: controller.signal });
+    const res = await fetch(url, { signal: controller.signal, redirect: "follow" });
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error(t || `HTTP ${res.status}`);
+    }
+    return (await res.json()) as T;
   } finally {
-    clearTimeout(id);
+    window.clearTimeout(id);
   }
-}
-
-async function getTokenOrRedirect() {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  if (!token) {
-    window.location.href = "/login";
-    return null;
-  }
-  return token;
 }
 
 export default function AdminDashboard() {
-  const [authReady, setAuthReady] = useState(false);
-
-  const [loading, setLoading] = useState(true);
+  // UI FIRST: render inmediato
   const [shipments, setShipments] = useState<ShipmentListItem[]>([]);
   const [shipmentsTotal, setShipmentsTotal] = useState<number>(0);
   const [clientsTotal, setClientsTotal] = useState<number>(0);
-  const [err, setErr] = useState<string | null>(null);
+
+  // Loads separados (no bloquea todo)
+  const [shipmentsLoading, setShipmentsLoading] = useState(true);
+  const [clientsLoading, setClientsLoading] = useState(true);
+
+  const [errShipments, setErrShipments] = useState<string | null>(null);
+  const [errClients, setErrClients] = useState<string | null>(null);
 
   const inFlightRef = useRef(false);
 
-  useEffect(() => {
-    (async () => {
-      const r = await requireAdminOrRedirect();
-      if (!r.ok) return;
-      setAuthReady(true);
-    })();
-  }, []);
-
-  const activeShipments = useMemo(
-    () => shipments.filter((s) => isActiveStatus(s.status)).length,
-    [shipments]
-  );
+  const activeShipments = useMemo(() => shipments.filter((s) => isActiveStatus(s.status)).length, [shipments]);
+  const anyLoading = shipmentsLoading || clientsLoading;
 
   async function load() {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
 
-    setLoading(true);
-    setErr(null);
-
-    const token = await getTokenOrRedirect();
-    if (!token) {
-      inFlightRef.current = false;
-      return;
-    }
+    // No “pantalla en blanco”: solo activa skeletons
+    setErrShipments(null);
+    setErrClients(null);
+    setShipmentsLoading(true);
+    setClientsLoading(true);
 
     try {
       const qs = new URLSearchParams();
@@ -214,191 +175,209 @@ export default function AdminDashboard() {
       qs.set("dir", "desc");
       qs.set("mode", "admin");
 
+      const shipmentsUrl = `/.netlify/functions/listShipments?${qs.toString()}`;
+      const clientsUrl = `/.netlify/functions/listClients`;
+
       const [sRes, cRes] = await Promise.allSettled([
-        fetchWithTimeout(`/.netlify/functions/listShipments?${qs.toString()}`, {
-          headers: { Authorization: `Bearer ${token}` },
-          timeoutMs: 12000,
-        }),
-        fetchWithTimeout(`/.netlify/functions/listClients`, {
-          headers: { Authorization: `Bearer ${token}` },
-          timeoutMs: 12000,
-        }),
+        fetchJsonWithTimeout<ShipmentsApiResponse>(shipmentsUrl, 9000),
+        fetchJsonWithTimeout<ClientsApiResponse>(clientsUrl, 9000),
       ]);
 
-      // Shipments
       if (sRes.status === "fulfilled") {
-        if (!sRes.value.ok) {
-          const t = await sRes.value.text().catch(() => "");
-          setErr(t || "No se pudieron cargar embarques");
-        } else {
-          const sJson = (await sRes.value.json()) as ShipmentsApiResponse;
-          setShipments(sJson.items?.slice(0, 10) || []);
-          setShipmentsTotal(sJson.total ?? (sJson.items?.length || 0));
-        }
+        setShipments(sRes.value.items?.slice(0, 10) || []);
+        setShipmentsTotal(sRes.value.total ?? (sRes.value.items?.length || 0));
+        setErrShipments(null);
       } else {
-        setErr("Timeout o error de red cargando embarques");
+        setErrShipments(sRes.reason?.message || "No se pudieron cargar embarques");
       }
 
-      // Clients total (no bloquea el dashboard si falla)
-      if (cRes.status === "fulfilled" && cRes.value.ok) {
-        const cJson = (await cRes.value.json()) as ClientsApiResponse;
+      if (cRes.status === "fulfilled") {
         const inferredTotal =
-          typeof cJson.total === "number" ? cJson.total : cJson.items?.length || 0;
+          typeof cRes.value.total === "number" ? cRes.value.total : cRes.value.items?.length || 0;
         setClientsTotal(inferredTotal);
+        setErrClients(null);
+      } else {
+        setErrClients(cRes.reason?.message || "No se pudieron cargar clientes");
       }
-    } catch {
-      setErr("Error inesperado cargando dashboard");
     } finally {
-      setLoading(false);
+      setShipmentsLoading(false);
+      setClientsLoading(false);
       inFlightRef.current = false;
     }
   }
 
   useEffect(() => {
-    if (!authReady) return;
+    // fetch NO bloqueante
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authReady]);
+  }, []);
 
   return (
-    <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Rápido, denso, estilo ERP.">
-      {/* KPIs compactos */}
+    <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Denso, rápido, estilo ERP.">
+      {/* KPI strip (compacto, jerarquía clara) */}
       <div className="kpiStrip">
         <div className="kpiChip">
           <span className="kpiLbl">Embarques</span>
-          <span className="kpiVal">{loading ? "—" : shipmentsTotal}</span>
+          <span className="kpiVal">{shipmentsLoading ? "—" : shipmentsTotal}</span>
         </div>
         <div className="kpiChip">
           <span className="kpiLbl">Activos</span>
-          <span className="kpiVal">{loading ? "—" : activeShipments}</span>
+          <span className="kpiVal">{shipmentsLoading ? "—" : activeShipments}</span>
         </div>
         <div className="kpiChip">
           <span className="kpiLbl">Clientes</span>
-          <span className="kpiVal">{loading ? "—" : clientsTotal}</span>
+          <span className="kpiVal">{clientsLoading ? "—" : clientsTotal}</span>
         </div>
 
-        <button className="btnGhost" type="button" onClick={load} disabled={loading} title="Refrescar">
+        <button className="btnGhost" type="button" onClick={load} disabled={anyLoading} title="Refrescar">
           <RefreshCcw size={16} />
-          {loading ? "Cargando…" : "Refrescar"}
+          {anyLoading ? "Actualizando…" : "Refrescar"}
         </button>
       </div>
 
       <div style={{ height: 12 }} />
 
       <div className="mainGrid">
-        {/* LEFT: shipments */}
+        {/* LEFT: Últimos embarques (sin headers, 4 columnas) */}
         <div className="card">
           <div className="cardHead">
             <div>
               <div className="cardTitle">Últimos embarques</div>
-              <div className="cardSub">Código · Cliente · Destino · Hito</div>
+              <div className="cardSub">Código · Cliente · Destino · Hito (sin ruido).</div>
             </div>
 
             <Link className="btnSmall" href="/admin/shipments">
-              Ver todos <ArrowRight size={16} />
+              Ver todos →
             </Link>
           </div>
 
           <div className="ff-divider" style={{ margin: "12px 0" }} />
 
-          {err ? (
+          {errShipments ? (
             <div className="msgWarn">
               <b>Error</b>
-              <div>{err}</div>
+              <div>{errShipments}</div>
             </div>
-          ) : loading ? (
-            <div className="tEmpty">Cargando…</div>
-          ) : shipments.length === 0 ? (
-            <div className="tEmpty">Aún no hay embarques.</div>
           ) : (
-            <div className="denseList">
-              {shipments.map((s) => (
-                <Link key={s.id} href={`/admin/shipments/${s.id}`} className="denseRow">
-                  {/* Col 1: Código */}
-                  <div className="c1">
-                    <div className="top">{s.code}</div>
-                    <div className="sub">{fmtDate(s.created_at)}</div>
-                  </div>
+            <div className="shipGrid">
+              {shipmentsLoading ? (
+                <>
+                  {Array.from({ length: 7 }).map((_, i) => (
+                    <div key={i} className="shipRow skeleton">
+                      <div className="cell">
+                        <div className="sk sk1" />
+                        <div className="sk sk2" />
+                      </div>
+                      <div className="cell">
+                        <div className="sk sk1" />
+                        <div className="sk sk2" />
+                      </div>
+                      <div className="cell dest">
+                        <div className="sk sk1" />
+                        <div className="sk sk2" />
+                      </div>
+                      <div className="cell milestone">
+                        <div className="sk skPill" />
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : shipments.length === 0 ? (
+                <div className="tEmpty">Aún no hay embarques.</div>
+              ) : (
+                shipments.map((s) => (
+                  <Link key={s.id} href={`/admin/shipments/${s.id}`} className="shipRow">
+                    {/* Col 1: Código */}
+                    <div className="cell">
+                      <div className="main code">{s.code}</div>
+                      <div className="sub">{fmtDate(s.created_at)}</div>
+                    </div>
 
-                  {/* Col 2: Cliente */}
-                  <div className="c2">
-                    <div className="top">{s.client_name || "—"}</div>
-                    <div className="sub">{productInline(s)}</div>
-                  </div>
+                    {/* Col 2: Cliente */}
+                    <div className="cell">
+                      <div className="main client">{s.client_name || "—"}</div>
+                      <div className="sub">{productInline(s)}</div>
+                    </div>
 
-                  {/* Col 3: Destino */}
-                  <div className="c3">
-                    <div className="top">{(s.destination || "—").toUpperCase()}</div>
-                    <div className="sub">&nbsp;</div>
-                  </div>
+                    {/* Col 3: Destino */}
+                    <div className="cell dest">
+                      <div className="main">{(s.destination || "").toUpperCase()}</div>
+                      <div className="sub">&nbsp;</div>
+                    </div>
 
-                  {/* Col 4: Hito */}
-                  <div className="c4">
-                    <MiniMilestone status={s.status} />
-                  </div>
-                </Link>
-              ))}
+                    {/* Col 4: Hito */}
+                    <div className="cell milestone">
+                      <MiniMilestone status={s.status} />
+                    </div>
+                  </Link>
+                ))
+              )}
             </div>
           )}
         </div>
 
-        {/* RIGHT: quick actions */}
+        {/* RIGHT: Quick actions (pro, invitantes) */}
         <div className="card">
           <div className="cardTitle">Acciones rápidas</div>
-          <div className="cardSub">Botones grandes, claros y con feedback (hover).</div>
+          <div className="cardSub">Botones grandes, claros y con hover “premium”.</div>
 
           <div className="ff-divider" style={{ margin: "12px 0" }} />
 
-          <div className="qaGrid">
-            <Link className="qaTile isPrimary" href="/admin/shipments">
-              <div className="qaIcon">
+          <div className="ctaGrid">
+            <Link className="ctaCard primary" href="/admin/shipments">
+              <div className="ctaIcon">
                 <PackagePlus size={22} />
               </div>
-              <div className="qaTitle">Crear embarque</div>
-              <div className="qaDesc">Operación · define destino y cliente.</div>
-              <div className="qaGo">
-                <span>Abrir</span>
-                <TrendingUp size={16} />
-              </div>
+              <div className="ctaTitle">Crear embarque</div>
+              <div className="ctaDesc">Inicia operación, hitos, docs y fotos.</div>
+              <div className="ctaFoot">Operación</div>
             </Link>
 
-            <Link className="qaTile" href="/admin/quotes/new">
-              <div className="qaIcon">
+            <Link className="ctaCard secondary" href="/admin/quotes/new">
+              <div className="ctaIcon">
                 <FilePlus2 size={22} />
               </div>
-              <div className="qaTitle">Nueva cotización</div>
-              <div className="qaDesc">Ventas · rápida y guardada en historial.</div>
-              <div className="qaGo">
-                <span>Crear</span>
-                <ArrowRight size={16} />
-              </div>
+              <div className="ctaTitle">Nueva cotización</div>
+              <div className="ctaDesc">Cotiza rápido (AIR/SEA) y guarda historial.</div>
+              <div className="ctaFoot">Ventas</div>
             </Link>
           </div>
 
           <div style={{ height: 10 }} />
 
           <div className="miniGrid">
-            <Link className="miniAction" href="/admin/shipments">
+            <Link className="miniCard" href="/admin/shipments">
               <Package2 size={16} />
-              Embarques
+              <span>Embarques</span>
             </Link>
-            <Link className="miniAction" href={QUOTE_PATH}>
+            <Link className="miniCard" href={QUOTE_PATH}>
               <Calculator size={16} />
-              Cotizador
+              <span>Cotizador</span>
             </Link>
-            <Link className="miniAction" href="/admin/users">
+            <Link className="miniCard" href="/admin/users">
               <Users2 size={16} />
-              Clientes
+              <span>Clientes</span>
             </Link>
-            <Link className="miniAction" href={QUOTE_PATH}>
+            <Link className="miniCard" href={QUOTE_PATH}>
               <History size={16} />
-              Historial
+              <span>Historial</span>
             </Link>
           </div>
+
+          {errClients ? (
+            <div className="hintWarn">
+              No se pudo cargar el total de clientes: <b>{errClients}</b>
+            </div>
+          ) : (
+            <div className="hint">
+              Tip: aquí podemos sumar mini-badges de “pendientes” (docs/fotos) por embarque.
+            </div>
+          )}
         </div>
       </div>
 
       <style jsx>{`
+        /* ===== Top KPIs ===== */
         .kpiStrip {
           display: flex;
           gap: 10px;
@@ -440,20 +419,17 @@ export default function AdminDashboard() {
           font-weight: 900;
           cursor: pointer;
           color: var(--ff-text);
-          transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
         }
         .btnGhost:hover {
-          background: rgba(15, 23, 42, 0.03);
-          transform: translateY(-1px);
-          box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+          background: rgba(31, 122, 58, 0.05);
+          border-color: rgba(31, 122, 58, 0.18);
         }
         .btnGhost:disabled {
           opacity: 0.6;
           cursor: not-allowed;
-          transform: none;
-          box-shadow: none;
         }
 
+        /* ===== Layout ===== */
         .mainGrid {
           display: grid;
           gap: 12px;
@@ -473,7 +449,6 @@ export default function AdminDashboard() {
           box-shadow: var(--ff-shadow);
           padding: 12px;
         }
-
         .cardHead {
           display: flex;
           align-items: flex-start;
@@ -481,7 +456,6 @@ export default function AdminDashboard() {
           gap: 10px;
           flex-wrap: wrap;
         }
-
         .cardTitle {
           font-weight: 950;
           font-size: 14px;
@@ -508,61 +482,58 @@ export default function AdminDashboard() {
           color: var(--ff-text);
           text-decoration: none;
           white-space: nowrap;
-          transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
         }
         .btnSmall:hover {
-          background: rgba(15, 23, 42, 0.03);
-          transform: translateY(-1px);
-          box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+          background: rgba(31, 122, 58, 0.05);
+          border-color: rgba(31, 122, 58, 0.18);
         }
 
-        .tEmpty {
-          padding: 12px;
-          font-size: 12px;
-          color: var(--ff-muted);
-        }
-
-        /* === Dense list (NO headers) === */
-        .denseList {
+        /* ===== Shipments “table” (no headers) ===== */
+        .shipGrid {
           border: 1px solid rgba(15, 23, 42, 0.08);
           border-radius: 12px;
           overflow: hidden;
           background: #fff;
         }
 
-        .denseRow {
+        .shipRow {
           display: grid;
-          grid-template-columns: 1.15fr 1.6fr 0.6fr 0.9fr;
+          grid-template-columns: 1.2fr 1.6fr 0.55fr 0.95fr; /* Código | Cliente | Destino | Hito */
           align-items: center;
-          gap: 10px;
+          gap: 0;
           padding: 10px 12px;
           text-decoration: none;
           color: var(--ff-text);
           border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-          transition: background .12s ease, box-shadow .12s ease, border-color .12s ease;
+          transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
         }
-        .denseRow:last-child {
+        .shipRow:last-child {
           border-bottom: 0;
         }
-
-        /* Hover verde tenue estilo shipments */
-        .denseRow:hover {
-          background: rgba(31, 122, 58, 0.045);
-          box-shadow: inset 0 0 0 1px rgba(31, 122, 58, 0.14);
+        /* Hover “verde muy tenue” estilo Shipments index */
+        .shipRow:hover {
+          background: rgba(31, 122, 58, 0.055);
         }
 
-        .c1, .c2, .c3 {
+        .cell {
           min-width: 0;
         }
 
-        .top {
+        .main {
           font-size: 13px;
-          font-weight: 850;
+          font-weight: 700; /* menos “2000 bold everywhere” */
           letter-spacing: -0.1px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
+        .main.code {
+          font-weight: 950; /* el más importante */
+        }
+        .main.client {
+          font-weight: 800;
+        }
+
         .sub {
           margin-top: 2px;
           font-size: 12px;
@@ -572,100 +543,156 @@ export default function AdminDashboard() {
           text-overflow: ellipsis;
         }
 
-        .c4 {
+        .cell.dest {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        /* Hito alineado (col 4) */
+        .cell.milestone {
           display: flex;
           justify-content: flex-end;
-          align-items: center; /* ✅ alinea el pill */
-          min-width: 0;
+          align-items: center;
         }
 
         .miniMilestone {
           display: inline-flex;
           align-items: center;
-          justify-content: center;
           gap: 8px;
           border-radius: 999px;
           border: 1px solid;
           padding: 6px 10px;
           font-weight: 900;
           font-size: 12px;
+          line-height: 16px;
           white-space: nowrap;
         }
         .miniMilestoneTxt {
-          max-width: 180px;
+          max-width: 170px;
           overflow: hidden;
           text-overflow: ellipsis;
         }
 
-        /* === Quick actions PRO === */
-        .qaGrid {
+        .tEmpty {
+          padding: 12px;
+          font-size: 12px;
+          color: var(--ff-muted);
+        }
+
+        /* ===== Skeleton ===== */
+        .skeleton {
+          pointer-events: none;
+        }
+        .sk {
+          border-radius: 8px;
+          background: rgba(15, 23, 42, 0.06);
+          overflow: hidden;
+          position: relative;
+        }
+        .sk:after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          transform: translateX(-60%);
+          background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.55) 50%,
+            rgba(255, 255, 255, 0) 100%
+          );
+          animation: shimmer 1.1s infinite;
+        }
+        @keyframes shimmer {
+          0% {
+            transform: translateX(-60%);
+          }
+          100% {
+            transform: translateX(60%);
+          }
+        }
+        .sk1 {
+          height: 12px;
+          width: 68%;
+        }
+        .sk2 {
+          height: 10px;
+          width: 88%;
+          margin-top: 6px;
+        }
+        .skPill {
+          height: 26px;
+          width: 150px;
+          border-radius: 999px;
+        }
+
+        /* ===== Quick Actions (impactantes) ===== */
+        .ctaGrid {
           display: grid;
           grid-template-columns: 1fr;
           gap: 10px;
         }
-        @media (min-width: 980px) {
-          .qaGrid {
-            grid-template-columns: 1fr 1fr;
-          }
-        }
 
-        .qaTile {
-          border: 1px solid rgba(15, 23, 42, 0.10);
-          border-radius: 14px;
-          background: #fff;
-          padding: 14px 12px;
+        .ctaCard {
           text-decoration: none;
-          color: var(--ff-text);
+          border-radius: 16px;
+          border: 1px solid rgba(15, 23, 42, 0.1);
+          padding: 14px;
           display: grid;
-          gap: 6px;
-          transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
-        }
-        .qaTile:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 14px 26px rgba(15, 23, 42, 0.10);
-          border-color: rgba(31, 122, 58, 0.18);
-          background: rgba(31, 122, 58, 0.03);
+          gap: 10px;
+          transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease, border-color 160ms ease;
+          box-shadow: 0 8px 22px rgba(2, 6, 23, 0.05);
         }
 
-        .qaTile.isPrimary {
-          background: rgba(31, 122, 58, 0.06);
-          border-color: rgba(31, 122, 58, 0.22);
-        }
-        .qaTile.isPrimary:hover {
-          background: rgba(31, 122, 58, 0.08);
-          border-color: rgba(31, 122, 58, 0.28);
-        }
-
-        .qaIcon {
+        .ctaCard .ctaIcon {
           width: 44px;
           height: 44px;
           border-radius: 14px;
           display: grid;
-          place-items: center; /* ✅ icono centrado */
-          border: 1px solid rgba(31, 122, 58, 0.18);
-          background: rgba(31, 122, 58, 0.06);
-          color: var(--ff-green-dark);
+          place-items: center; /* icono centrado */
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          background: rgba(15, 23, 42, 0.03);
         }
 
-        .qaTitle {
+        .ctaTitle {
           font-weight: 950;
-          font-size: 13px;
-          letter-spacing: -0.1px;
+          letter-spacing: -0.2px;
+          font-size: 14px;
+          line-height: 18px;
         }
-        .qaDesc {
+        .ctaDesc {
           font-size: 12px;
           color: var(--ff-muted);
           line-height: 16px;
         }
-        .qaGo {
-          margin-top: 6px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-          font-weight: 900;
-          font-size: 12px;
+        .ctaFoot {
+          font-size: 11px;
+          font-weight: 950;
+          letter-spacing: 0.2px;
+          text-transform: uppercase;
+          color: rgba(15, 23, 42, 0.55);
+          margin-top: 2px;
+        }
+
+        .ctaCard.primary {
+          background: linear-gradient(180deg, rgba(31, 122, 58, 0.12) 0%, rgba(31, 122, 58, 0.04) 100%);
+          border-color: rgba(31, 122, 58, 0.22);
+        }
+        .ctaCard.primary .ctaIcon {
+          border-color: rgba(31, 122, 58, 0.22);
+          background: rgba(31, 122, 58, 0.10);
           color: var(--ff-green-dark);
+        }
+
+        .ctaCard.secondary {
+          background: #fff;
+        }
+
+        .ctaCard:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 14px 34px rgba(2, 6, 23, 0.10);
+          border-color: rgba(31, 122, 58, 0.22);
+          background: rgba(31, 122, 58, 0.04);
         }
 
         .miniGrid {
@@ -673,7 +700,7 @@ export default function AdminDashboard() {
           grid-template-columns: 1fr 1fr;
           gap: 10px;
         }
-        .miniAction {
+        .miniCard {
           display: inline-flex;
           align-items: center;
           gap: 10px;
@@ -685,11 +712,26 @@ export default function AdminDashboard() {
           color: var(--ff-text);
           font-weight: 900;
           font-size: 12px;
-          transition: background .12s ease, transform .12s ease;
+          transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
         }
-        .miniAction:hover {
-          background: rgba(15, 23, 42, 0.02);
-          transform: translateY(-1px);
+        .miniCard:hover {
+          background: rgba(31, 122, 58, 0.05);
+          border-color: rgba(31, 122, 58, 0.18);
+        }
+
+        .hint {
+          margin-top: 10px;
+          font-size: 12px;
+          color: var(--ff-muted);
+          border-top: 1px dashed rgba(15, 23, 42, 0.10);
+          padding-top: 10px;
+        }
+        .hintWarn {
+          margin-top: 10px;
+          font-size: 12px;
+          border-top: 1px dashed rgba(209, 119, 17, 0.28);
+          padding-top: 10px;
+          color: rgba(122, 63, 0, 0.95);
         }
 
         .msgWarn {
@@ -700,27 +742,30 @@ export default function AdminDashboard() {
           font-size: 12px;
         }
 
-        @media (max-width: 720px) {
-          .denseRow {
-            grid-template-columns: 1.2fr 1.5fr 0.6fr 1fr;
+        /* ===== Responsive tweaks ===== */
+        @media (max-width: 860px) {
+          .shipRow {
+            grid-template-columns: 1.2fr 1.4fr 0.6fr 1fr;
           }
           .miniMilestoneTxt {
-            max-width: 120px;
+            max-width: 130px;
+          }
+          .skPill {
+            width: 130px;
           }
         }
 
         @media (max-width: 520px) {
-          /* En mobile: mantenemos 4 columnas pero más compactas */
-          .denseRow {
-            gap: 8px;
+          /* en móvil mantenemos 4 columnas pero más compactas */
+          .shipRow {
+            grid-template-columns: 1.15fr 1.25fr 0.55fr 1fr;
             padding: 10px 10px;
-            grid-template-columns: 1.25fr 1.35fr 0.55fr 1fr;
           }
-          .top {
-            font-size: 12.5px;
+          .miniMilestoneTxt {
+            max-width: 110px;
           }
-          .sub {
-            font-size: 11.5px;
+          .skPill {
+            width: 110px;
           }
         }
       `}</style>
