@@ -129,13 +129,12 @@ function MiniMilestone({ status }: { status: string }) {
 }
 
 /**
- * ✅ Arquitectura main@1bf36a1:
+ * ✅ Arquitectura estable:
  * - Dashboard NO llama supabase.auth.getSession()
- * - Tomamos token del storage (instantáneo, sin loops)
+ * - token desde storage (instantáneo, sin loops)
  */
 function getAccessTokenFromStorage(): string | null {
   try {
-    // Busca cualquier key tipo sb-xxxx-auth-token
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i) || "";
       if (!k.endsWith("-auth-token")) continue;
@@ -144,10 +143,7 @@ function getAccessTokenFromStorage(): string | null {
       if (!raw) continue;
 
       const parsed = JSON.parse(raw);
-      // Supabase suele guardar { access_token, refresh_token, ... }
       if (parsed?.access_token) return String(parsed.access_token);
-
-      // A veces viene anidado
       if (parsed?.currentSession?.access_token) return String(parsed.currentSession.access_token);
       if (parsed?.session?.access_token) return String(parsed.session.access_token);
     }
@@ -157,11 +153,7 @@ function getAccessTokenFromStorage(): string | null {
   }
 }
 
-async function fetchJsonWithTimeout<T>(
-  url: string,
-  token: string,
-  timeoutMs = 9000
-): Promise<T> {
+async function fetchJsonWithTimeout<T>(url: string, token: string, timeoutMs = 9000): Promise<T> {
   const controller = new AbortController();
   const id = window.setTimeout(() => controller.abort(), timeoutMs);
 
@@ -200,11 +192,7 @@ export default function AdminDashboard() {
 
   const inFlightRef = useRef(false);
 
-  const activeShipments = useMemo(
-    () => shipments.filter((s) => isActiveStatus(s.status)).length,
-    [shipments]
-  );
-
+  const activeShipments = useMemo(() => shipments.filter((s) => isActiveStatus(s.status)).length, [shipments]);
   const anyLoading = shipmentsLoading || clientsLoading;
 
   async function load() {
@@ -219,7 +207,6 @@ export default function AdminDashboard() {
     try {
       const token = getAccessTokenFromStorage();
       if (!token) {
-        // NO redirigimos, NO loop: solo mostramos error y dejamos UI viva
         setErrShipments("Sin token. Abre /login en otra pestaña y vuelve a cargar.");
         setErrClients("Sin token.");
         return;
@@ -246,8 +233,7 @@ export default function AdminDashboard() {
       }
 
       if (cRes.status === "fulfilled") {
-        const inferredTotal =
-          typeof cRes.value.total === "number" ? cRes.value.total : cRes.value.items?.length || 0;
+        const inferredTotal = typeof cRes.value.total === "number" ? cRes.value.total : cRes.value.items?.length || 0;
         setClientsTotal(inferredTotal);
       } else {
         setErrClients(cRes.reason?.message || "No se pudieron cargar clientes");
@@ -266,6 +252,7 @@ export default function AdminDashboard() {
 
   return (
     <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Denso, rápido, estilo ERP.">
+      {/* KPIs */}
       <div className="kpiStrip">
         <div className="kpiChip">
           <span className="kpiLbl">Embarques</span>
@@ -289,6 +276,7 @@ export default function AdminDashboard() {
       <div style={{ height: 12 }} />
 
       <div className="mainGrid">
+        {/* Últimos embarques */}
         <div className="card">
           <div className="cardHead">
             <div>
@@ -313,7 +301,7 @@ export default function AdminDashboard() {
               {shipmentsLoading ? (
                 <>
                   {Array.from({ length: 7 }).map((_, i) => (
-                    <div key={i} className="shipRow skeleton">
+                    <div key={i} className="shipRow skeleton" aria-hidden="true">
                       <div className="cell">
                         <div className="sk sk1" />
                         <div className="sk sk2" />
@@ -337,21 +325,25 @@ export default function AdminDashboard() {
               ) : (
                 shipments.map((s) => (
                   <Link key={s.id} href={`/admin/shipments/${s.id}`} className="shipRow">
+                    {/* Col 1: Código */}
                     <div className="cell">
                       <div className="main code">{s.code}</div>
                       <div className="sub">{fmtDate(s.created_at)}</div>
                     </div>
 
+                    {/* Col 2: Cliente */}
                     <div className="cell">
                       <div className="main client">{s.client_name || "—"}</div>
                       <div className="sub">{productInline(s)}</div>
                     </div>
 
+                    {/* Col 3: Destino */}
                     <div className="cell dest">
-                      <div className="main">{(s.destination || "").toUpperCase()}</div>
+                      <div className="main destIata">{(s.destination || "").toUpperCase()}</div>
                       <div className="sub">&nbsp;</div>
                     </div>
 
+                    {/* Col 4: Hito (alineado y “pill” compacto) */}
                     <div className="cell milestone">
                       <MiniMilestone status={s.status} />
                     </div>
@@ -362,12 +354,14 @@ export default function AdminDashboard() {
           )}
         </div>
 
+        {/* Quick Actions PRO */}
         <div className="card">
           <div className="cardTitle">Acciones rápidas</div>
-          <div className="cardSub">2-up pro, hover premium, íconos centrados.</div>
+          <div className="cardSub">Botones pro, visibles y con hover premium.</div>
 
           <div className="ff-divider" style={{ margin: "12px 0" }} />
 
+          {/* ✅ 2-up desktop, 1 col mobile */}
           <div className="ctaGrid">
             <Link className="ctaCard primary" href="/admin/shipments">
               <div className="ctaIcon">
@@ -420,74 +414,420 @@ export default function AdminDashboard() {
       </div>
 
       <style jsx>{`
-        .kpiStrip { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-        .kpiChip { display:inline-flex; align-items:baseline; gap:8px; padding:8px 10px; border:1px solid var(--ff-border); background:var(--ff-surface); border-radius:12px; box-shadow:var(--ff-shadow); }
-        .kpiLbl { font-size:12px; font-weight:900; color:var(--ff-muted); }
-        .kpiVal { font-size:16px; font-weight:950; letter-spacing:-0.2px; }
+        /* ===== KPIs ===== */
+        .kpiStrip {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .kpiChip {
+          display: inline-flex;
+          align-items: baseline;
+          gap: 8px;
+          padding: 8px 10px;
+          border: 1px solid var(--ff-border);
+          background: var(--ff-surface);
+          border-radius: 12px;
+          box-shadow: var(--ff-shadow);
+        }
+        .kpiLbl {
+          font-size: 12px;
+          font-weight: 900;
+          color: var(--ff-muted);
+        }
+        .kpiVal {
+          font-size: 16px;
+          font-weight: 950;
+          letter-spacing: -0.2px;
+        }
 
-        .btnGhost { margin-left:auto; display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 12px; border-radius:var(--ff-radius); border:1px solid var(--ff-border); background:#fff; font-size:12px; font-weight:900; cursor:pointer; color:var(--ff-text); }
-        .btnGhost:hover { background:rgba(31,122,58,0.05); border-color:rgba(31,122,58,0.18); }
-        .btnGhost:disabled { opacity:.6; cursor:not-allowed; }
+        .btnGhost {
+          margin-left: auto;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          height: 36px;
+          padding: 0 12px;
+          border-radius: var(--ff-radius);
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          font-size: 12px;
+          font-weight: 900;
+          cursor: pointer;
+          color: var(--ff-text);
+          transition: background 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+        }
+        .btnGhost:hover {
+          background: rgba(31, 122, 58, 0.05);
+          border-color: rgba(31, 122, 58, 0.18);
+          transform: translateY(-1px);
+          box-shadow: 0 10px 24px rgba(2, 6, 23, 0.06);
+        }
+        .btnGhost:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
+        }
 
-        .mainGrid { display:grid; gap:12px; grid-template-columns:1fr; }
-        @media (min-width:1100px){ .mainGrid{ grid-template-columns:1.7fr 1fr; align-items:start; } }
+        /* ===== Layout ===== */
+        .mainGrid {
+          display: grid;
+          gap: 12px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 1100px) {
+          .mainGrid {
+            grid-template-columns: 1.7fr 1fr;
+            align-items: start;
+          }
+        }
 
-        .card { background:var(--ff-surface); border:1px solid var(--ff-border); border-radius:var(--ff-radius); box-shadow:var(--ff-shadow); padding:12px; }
-        .cardHead { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; flex-wrap:wrap; }
-        .cardTitle { font-weight:950; font-size:14px; letter-spacing:-0.2px; }
-        .cardSub { margin-top:4px; font-size:12px; color:var(--ff-muted); }
+        .card {
+          background: var(--ff-surface);
+          border: 1px solid var(--ff-border);
+          border-radius: var(--ff-radius);
+          box-shadow: var(--ff-shadow);
+          padding: 12px;
+        }
+        .cardHead {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .cardTitle {
+          font-weight: 950;
+          font-size: 14px;
+          letter-spacing: -0.2px;
+        }
+        .cardSub {
+          margin-top: 4px;
+          font-size: 12px;
+          color: var(--ff-muted);
+        }
 
-        .btnSmall { display:inline-flex; align-items:center; gap:8px; height:34px; padding:0 10px; border-radius:var(--ff-radius); border:1px solid var(--ff-border); background:#fff; font-size:12px; font-weight:900; cursor:pointer; color:var(--ff-text); text-decoration:none; white-space:nowrap; }
-        .btnSmall:hover { background:rgba(31,122,58,0.05); border-color:rgba(31,122,58,0.18); }
+        .btnSmall {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          height: 34px;
+          padding: 0 10px;
+          border-radius: var(--ff-radius);
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          font-size: 12px;
+          font-weight: 900;
+          cursor: pointer;
+          color: var(--ff-text);
+          text-decoration: none;
+          white-space: nowrap;
+          transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+        }
+        .btnSmall:hover {
+          background: rgba(31, 122, 58, 0.05);
+          border-color: rgba(31, 122, 58, 0.18);
+          transform: translateY(-1px);
+        }
 
-        .shipGrid { border:1px solid rgba(15,23,42,0.08); border-radius:12px; overflow:hidden; background:#fff; }
-        .shipRow { display:grid; grid-template-columns:1.2fr 1.6fr 0.55fr 0.95fr; align-items:center; padding:10px 12px; text-decoration:none; color:var(--ff-text); border-bottom:1px solid rgba(15,23,42,0.06); transition:background 160ms ease; }
-        .shipRow:last-child{ border-bottom:0; }
-        .shipRow:hover{ background:rgba(31,122,58,0.055); }
+        /* ===== Últimos embarques (4 columnas, sin headers) ===== */
+        .shipGrid {
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          border-radius: 12px;
+          overflow: hidden;
+          background: #fff;
+        }
 
-        .cell{ min-width:0; }
-        .main{ font-size:13px; font-weight:700; letter-spacing:-0.1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .main.code{ font-weight:950; }
-        .main.client{ font-weight:800; }
-        .sub{ margin-top:2px; font-size:12px; color:var(--ff-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .cell.milestone{ display:flex; justify-content:flex-end; align-items:center; }
+        .shipRow {
+          display: grid;
+          grid-template-columns: 1.2fr 1.6fr 0.55fr 0.95fr; /* Código | Cliente | Destino | Hito */
+          align-items: center;
+          padding: 10px 12px;
+          text-decoration: none;
+          color: var(--ff-text);
+          border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+          transition: background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+        }
+        .shipRow:last-child {
+          border-bottom: 0;
+        }
 
-        .miniMilestone{ display:inline-flex; align-items:center; gap:8px; border-radius:999px; border:1px solid; padding:6px 10px; font-weight:900; font-size:12px; line-height:16px; white-space:nowrap; }
-        .miniMilestoneTxt{ max-width:170px; overflow:hidden; text-overflow:ellipsis; }
+        /* ✅ Hover verde muy tenue + toque “ERP moderno” (lift ultra sutil) */
+        .shipRow:hover {
+          background: rgba(31, 122, 58, 0.055);
+          transform: translateY(-0.5px);
+          box-shadow: 0 10px 22px rgba(2, 6, 23, 0.04);
+        }
 
-        .tEmpty{ padding:12px; font-size:12px; color:var(--ff-muted); }
+        .cell {
+          min-width: 0;
+        }
 
-        .skeleton{ pointer-events:none; }
-        .sk{ border-radius:8px; background:rgba(15,23,42,0.06); overflow:hidden; position:relative; }
-        .sk:after{ content:""; position:absolute; inset:0; transform:translateX(-60%); background:linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0) 100%); animation:shimmer 1.1s infinite; }
-        @keyframes shimmer{ 0%{ transform:translateX(-60%);} 100%{ transform:translateX(60%);} }
-        .sk1{ height:12px; width:68%; }
-        .sk2{ height:10px; width:88%; margin-top:6px; }
-        .skPill{ height:26px; width:150px; border-radius:999px; }
+        .main {
+          font-size: 13px;
+          font-weight: 700;
+          letter-spacing: -0.1px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .main.code {
+          font-weight: 950;
+        }
+        .main.client {
+          font-weight: 800;
+        }
+        .main.destIata {
+          font-weight: 950;
+          letter-spacing: 0.8px;
+        }
 
-        .ctaGrid{ display:grid; grid-template-columns:1fr; gap:10px; }
-        @media (min-width:900px){ .ctaGrid{ grid-template-columns:1fr 1fr; } }
+        .sub {
+          margin-top: 2px;
+          font-size: 12px;
+          color: var(--ff-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
 
-        .ctaCard{ text-decoration:none; border-radius:16px; border:1px solid rgba(15,23,42,0.1); padding:14px; display:grid; gap:10px; transition:transform 160ms ease, box-shadow 160ms ease, background 160ms ease, border-color 160ms ease; box-shadow:0 8px 22px rgba(2,6,23,0.05); }
-        .ctaCard:hover{ transform:translateY(-1px); box-shadow:0 14px 34px rgba(2,6,23,0.10); border-color:rgba(31,122,58,0.22); background:rgba(31,122,58,0.04); }
+        .cell.dest {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+        }
 
-        .ctaIcon{ width:44px; height:44px; border-radius:14px; display:grid; place-items:center; border:1px solid rgba(15,23,42,0.12); background:rgba(15,23,42,0.03); }
+        /* ✅ Hito alineado correctamente a la derecha */
+        .cell.milestone {
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
+          min-width: 0;
+        }
 
-        .ctaTitle{ font-weight:950; letter-spacing:-0.2px; font-size:14px; line-height:18px; color:var(--ff-text); }
-        .ctaDesc{ font-size:12px; color:var(--ff-muted); line-height:16px; }
-        .ctaFoot{ font-size:11px; font-weight:950; letter-spacing:0.2px; text-transform:uppercase; color:rgba(15,23,42,0.55); margin-top:2px; }
+        /* ✅ Pill compacto y consistente */
+        .miniMilestone {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          border-radius: 999px;
+          border: 1px solid;
+          padding: 6px 10px;
+          font-weight: 900;
+          font-size: 12px;
+          line-height: 16px;
+          white-space: nowrap;
+          max-width: 100%;
+        }
+        .miniMilestoneTxt {
+          max-width: 160px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
 
-        .ctaCard.primary{ background:linear-gradient(180deg, rgba(31,122,58,0.12) 0%, rgba(31,122,58,0.04) 100%); border-color:rgba(31,122,58,0.22); }
-        .ctaCard.primary .ctaIcon{ border-color:rgba(31,122,58,0.22); background:rgba(31,122,58,0.10); color:var(--ff-green-dark); }
-        .ctaCard.secondary{ background:#fff; }
+        .tEmpty {
+          padding: 12px;
+          font-size: 12px;
+          color: var(--ff-muted);
+        }
 
-        .miniGrid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-        .miniCard{ display:inline-flex; align-items:center; gap:10px; padding:10px 10px; border-radius:12px; border:1px solid rgba(15,23,42,0.10); background:#fff; text-decoration:none; color:var(--ff-text); font-weight:900; font-size:12px; transition:background 160ms ease, border-color 160ms ease; }
-        .miniCard:hover{ background:rgba(31,122,58,0.05); border-color:rgba(31,122,58,0.18); }
+        /* ===== Skeleton ===== */
+        .skeleton {
+          pointer-events: none;
+        }
+        .sk {
+          border-radius: 8px;
+          background: rgba(15, 23, 42, 0.06);
+          overflow: hidden;
+          position: relative;
+        }
+        .sk:after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          transform: translateX(-60%);
+          background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.55) 50%,
+            rgba(255, 255, 255, 0) 100%
+          );
+          animation: shimmer 1.1s infinite;
+        }
+        @keyframes shimmer {
+          0% {
+            transform: translateX(-60%);
+          }
+          100% {
+            transform: translateX(60%);
+          }
+        }
+        .sk1 {
+          height: 12px;
+          width: 68%;
+        }
+        .sk2 {
+          height: 10px;
+          width: 88%;
+          margin-top: 6px;
+        }
+        .skPill {
+          height: 26px;
+          width: 150px;
+          border-radius: 999px;
+        }
 
-        .hint{ margin-top:10px; font-size:12px; color:var(--ff-muted); border-top:1px dashed rgba(15,23,42,0.10); padding-top:10px; }
-        .hintWarn{ margin-top:10px; font-size:12px; border-top:1px dashed rgba(209,119,17,0.28); padding-top:10px; color:rgba(122,63,0,0.95); }
-        .msgWarn{ border:1px solid rgba(209,119,17,0.35); background:rgba(209,119,17,0.08); padding:10px; border-radius:var(--ff-radius); font-size:12px; }
+        /* ===== Quick Actions PRO ===== */
+        .ctaGrid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+        /* ✅ uno al lado del otro en desktop */
+        @media (min-width: 900px) {
+          .ctaGrid {
+            grid-template-columns: 1fr 1fr;
+          }
+        }
+
+        .ctaCard {
+          text-decoration: none;
+          border-radius: 16px;
+          border: 1px solid rgba(15, 23, 42, 0.1);
+          padding: 14px;
+          display: grid;
+          gap: 10px;
+          transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease, border-color 160ms ease;
+          box-shadow: 0 8px 22px rgba(2, 6, 23, 0.05);
+        }
+
+        .ctaCard .ctaIcon {
+          width: 46px;
+          height: 46px;
+          border-radius: 14px;
+          display: grid;
+          place-items: center; /* ✅ icono centrado */
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          background: rgba(15, 23, 42, 0.03);
+        }
+
+        .ctaTitle {
+          font-weight: 950;
+          letter-spacing: -0.2px;
+          font-size: 14px;
+          line-height: 18px;
+          color: var(--ff-text);
+        }
+        .ctaDesc {
+          font-size: 12px;
+          color: var(--ff-muted);
+          line-height: 16px;
+        }
+        .ctaFoot {
+          font-size: 11px;
+          font-weight: 950;
+          letter-spacing: 0.2px;
+          text-transform: uppercase;
+          color: rgba(15, 23, 42, 0.55);
+          margin-top: 2px;
+        }
+
+        .ctaCard.primary {
+          background: linear-gradient(180deg, rgba(31, 122, 58, 0.12) 0%, rgba(31, 122, 58, 0.04) 100%);
+          border-color: rgba(31, 122, 58, 0.22);
+        }
+        .ctaCard.primary .ctaIcon {
+          border-color: rgba(31, 122, 58, 0.22);
+          background: rgba(31, 122, 58, 0.1);
+          color: var(--ff-green-dark);
+        }
+
+        .ctaCard.secondary {
+          background: #fff;
+        }
+
+        /* ✅ Hover premium: lift + shadow + verde tenue */
+        .ctaCard:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 16px 40px rgba(2, 6, 23, 0.12);
+          border-color: rgba(31, 122, 58, 0.22);
+          background: rgba(31, 122, 58, 0.04);
+        }
+
+        .miniGrid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+        .miniCard {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 10px;
+          border-radius: 12px;
+          border: 1px solid rgba(15, 23, 42, 0.1);
+          background: #fff;
+          text-decoration: none;
+          color: var(--ff-text);
+          font-weight: 900;
+          font-size: 12px;
+          transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+        }
+        .miniCard:hover {
+          background: rgba(31, 122, 58, 0.05);
+          border-color: rgba(31, 122, 58, 0.18);
+          transform: translateY(-1px);
+        }
+
+        .hint {
+          margin-top: 10px;
+          font-size: 12px;
+          color: var(--ff-muted);
+          border-top: 1px dashed rgba(15, 23, 42, 0.1);
+          padding-top: 10px;
+        }
+        .hintWarn {
+          margin-top: 10px;
+          font-size: 12px;
+          border-top: 1px dashed rgba(209, 119, 17, 0.28);
+          padding-top: 10px;
+          color: rgba(122, 63, 0, 0.95);
+        }
+
+        .msgWarn {
+          border: 1px solid rgba(209, 119, 17, 0.35);
+          background: rgba(209, 119, 17, 0.08);
+          padding: 10px;
+          border-radius: var(--ff-radius);
+          font-size: 12px;
+        }
+
+        /* ===== Responsive shipments ===== */
+        @media (max-width: 860px) {
+          .shipRow {
+            grid-template-columns: 1.2fr 1.4fr 0.6fr 1fr;
+          }
+          .miniMilestoneTxt {
+            max-width: 130px;
+          }
+          .skPill {
+            width: 130px;
+          }
+        }
+        @media (max-width: 520px) {
+          .shipRow {
+            grid-template-columns: 1.15fr 1.25fr 0.55fr 1fr;
+            padding: 10px 10px;
+          }
+          .miniMilestoneTxt {
+            max-width: 110px;
+          }
+          .skPill {
+            width: 110px;
+          }
+        }
       `}</style>
     </AdminLayout>
   );
