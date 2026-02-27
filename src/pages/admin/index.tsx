@@ -15,7 +15,6 @@ import {
   FileText,
 } from "lucide-react";
 
-import { supabase } from "../../lib/supabaseClient";
 import { AdminLayout } from "../../components/AdminLayout";
 import { labelStatus } from "../../lib/shipmentFlow";
 
@@ -49,7 +48,11 @@ const QUOTE_PATH = "/admin/quotes";
 
 function fmtDate(iso: string) {
   try {
-    return new Date(iso).toLocaleDateString("es-PA", { year: "numeric", month: "short", day: "2-digit" });
+    return new Date(iso).toLocaleDateString("es-PA", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    });
   } catch {
     return iso;
   }
@@ -64,7 +67,6 @@ function productInline(s: ShipmentListItem) {
 
 function isActiveStatus(raw: string) {
   const s = String(raw || "").toUpperCase();
-  // Todo lo “En Destino” o finalizado NO es activo
   if (["AT_DESTINATION", "DELIVERED", "CLOSED"].includes(s)) return false;
   return true;
 }
@@ -95,12 +97,28 @@ function MiniMilestone({ status }: { status: string }) {
 
   const style: React.CSSProperties =
     tone === "success"
-      ? { background: "rgba(31,122,58,.10)", borderColor: "rgba(31,122,58,.22)", color: "var(--ff-green-dark)" }
+      ? {
+          background: "rgba(31,122,58,.10)",
+          borderColor: "rgba(31,122,58,.22)",
+          color: "var(--ff-green-dark)",
+        }
       : tone === "warn"
-      ? { background: "rgba(209,119,17,.12)", borderColor: "rgba(209,119,17,.24)", color: "#7a3f00" }
+      ? {
+          background: "rgba(209,119,17,.12)",
+          borderColor: "rgba(209,119,17,.24)",
+          color: "#7a3f00",
+        }
       : tone === "info"
-      ? { background: "rgba(59,130,246,.10)", borderColor: "rgba(59,130,246,.22)", color: "rgba(30,64,175,1)" }
-      : { background: "rgba(15,23,42,.04)", borderColor: "rgba(15,23,42,.12)", color: "var(--ff-text)" };
+      ? {
+          background: "rgba(59,130,246,.10)",
+          borderColor: "rgba(59,130,246,.22)",
+          color: "rgba(30,64,175,1)",
+        }
+      : {
+          background: "rgba(15,23,42,.04)",
+          borderColor: "rgba(15,23,42,.12)",
+          color: "var(--ff-text)",
+        };
 
   return (
     <span className="miniMilestone" style={style} title={label}>
@@ -110,9 +128,33 @@ function MiniMilestone({ status }: { status: string }) {
   );
 }
 
-async function getTokenOrNull(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token || null;
+/**
+ * ✅ Arquitectura main@1bf36a1:
+ * - Dashboard NO llama supabase.auth.getSession()
+ * - Tomamos token del storage (instantáneo, sin loops)
+ */
+function getAccessTokenFromStorage(): string | null {
+  try {
+    // Busca cualquier key tipo sb-xxxx-auth-token
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i) || "";
+      if (!k.endsWith("-auth-token")) continue;
+
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw);
+      // Supabase suele guardar { access_token, refresh_token, ... }
+      if (parsed?.access_token) return String(parsed.access_token);
+
+      // A veces viene anidado
+      if (parsed?.currentSession?.access_token) return String(parsed.currentSession.access_token);
+      if (parsed?.session?.access_token) return String(parsed.session.access_token);
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchJsonWithTimeout<T>(
@@ -145,12 +187,11 @@ async function fetchJsonWithTimeout<T>(
 }
 
 export default function AdminDashboard() {
-  // UI FIRST: render inmediato
+  // UI FIRST
   const [shipments, setShipments] = useState<ShipmentListItem[]>([]);
   const [shipmentsTotal, setShipmentsTotal] = useState<number>(0);
   const [clientsTotal, setClientsTotal] = useState<number>(0);
 
-  // Loads separados (no bloquea todo)
   const [shipmentsLoading, setShipmentsLoading] = useState(true);
   const [clientsLoading, setClientsLoading] = useState(true);
 
@@ -170,17 +211,17 @@ export default function AdminDashboard() {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
 
-    // No “pantalla en blanco”: solo skeletons
     setErrShipments(null);
     setErrClients(null);
     setShipmentsLoading(true);
     setClientsLoading(true);
 
     try {
-      const token = await getTokenOrNull();
+      const token = getAccessTokenFromStorage();
       if (!token) {
-        setErrShipments("Sesión inválida (sin token). Vuelve a iniciar sesión.");
-        setErrClients("Sesión inválida (sin token).");
+        // NO redirigimos, NO loop: solo mostramos error y dejamos UI viva
+        setErrShipments("Sin token. Abre /login en otra pestaña y vuelve a cargar.");
+        setErrClients("Sin token.");
         return;
       }
 
@@ -206,7 +247,7 @@ export default function AdminDashboard() {
 
       if (cRes.status === "fulfilled") {
         const inferredTotal =
-          typeof cRes.value.total === "number" ? cRes.value.total : (cRes.value.items?.length || 0);
+          typeof cRes.value.total === "number" ? cRes.value.total : cRes.value.items?.length || 0;
         setClientsTotal(inferredTotal);
       } else {
         setErrClients(cRes.reason?.message || "No se pudieron cargar clientes");
@@ -219,14 +260,12 @@ export default function AdminDashboard() {
   }
 
   useEffect(() => {
-    // fetch NO bloqueante
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Denso, rápido, estilo ERP.">
-      {/* KPI strip */}
       <div className="kpiStrip">
         <div className="kpiChip">
           <span className="kpiLbl">Embarques</span>
@@ -250,7 +289,6 @@ export default function AdminDashboard() {
       <div style={{ height: 12 }} />
 
       <div className="mainGrid">
-        {/* LEFT: Últimos embarques (4 columnas, sin headers) */}
         <div className="card">
           <div className="cardHead">
             <div>
@@ -324,10 +362,9 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        {/* RIGHT: Quick actions PRO (2-up) */}
         <div className="card">
           <div className="cardTitle">Acciones rápidas</div>
-          <div className="cardSub">Botones pro: visibles y con hover premium.</div>
+          <div className="cardSub">2-up pro, hover premium, íconos centrados.</div>
 
           <div className="ff-divider" style={{ margin: "12px 0" }} />
 
@@ -428,7 +465,6 @@ export default function AdminDashboard() {
         .sk2{ height:10px; width:88%; margin-top:6px; }
         .skPill{ height:26px; width:150px; border-radius:999px; }
 
-        /* Quick actions: 2-up en desktop */
         .ctaGrid{ display:grid; grid-template-columns:1fr; gap:10px; }
         @media (min-width:900px){ .ctaGrid{ grid-template-columns:1fr 1fr; } }
 
@@ -436,13 +472,13 @@ export default function AdminDashboard() {
         .ctaCard:hover{ transform:translateY(-1px); box-shadow:0 14px 34px rgba(2,6,23,0.10); border-color:rgba(31,122,58,0.22); background:rgba(31,122,58,0.04); }
 
         .ctaIcon{ width:44px; height:44px; border-radius:14px; display:grid; place-items:center; border:1px solid rgba(15,23,42,0.12); background:rgba(15,23,42,0.03); }
+
         .ctaTitle{ font-weight:950; letter-spacing:-0.2px; font-size:14px; line-height:18px; color:var(--ff-text); }
         .ctaDesc{ font-size:12px; color:var(--ff-muted); line-height:16px; }
         .ctaFoot{ font-size:11px; font-weight:950; letter-spacing:0.2px; text-transform:uppercase; color:rgba(15,23,42,0.55); margin-top:2px; }
 
         .ctaCard.primary{ background:linear-gradient(180deg, rgba(31,122,58,0.12) 0%, rgba(31,122,58,0.04) 100%); border-color:rgba(31,122,58,0.22); }
         .ctaCard.primary .ctaIcon{ border-color:rgba(31,122,58,0.22); background:rgba(31,122,58,0.10); color:var(--ff-green-dark); }
-
         .ctaCard.secondary{ background:#fff; }
 
         .miniGrid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
@@ -451,7 +487,6 @@ export default function AdminDashboard() {
 
         .hint{ margin-top:10px; font-size:12px; color:var(--ff-muted); border-top:1px dashed rgba(15,23,42,0.10); padding-top:10px; }
         .hintWarn{ margin-top:10px; font-size:12px; border-top:1px dashed rgba(209,119,17,0.28); padding-top:10px; color:rgba(122,63,0,0.95); }
-
         .msgWarn{ border:1px solid rgba(209,119,17,0.35); background:rgba(209,119,17,0.08); padding:10px; border-radius:var(--ff-radius); font-size:12px; }
       `}</style>
     </AdminLayout>
