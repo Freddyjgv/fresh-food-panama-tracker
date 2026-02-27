@@ -61,10 +61,6 @@ type ClientsApiResponse = {
 
 const QUOTE_PATH = "/admin/quotes";
 
-// Cache para render inmediato
-const CACHE_KEY = "ff_admin_dashboard_cache_v2";
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
-
 function fmtDate(iso: string) {
   try {
     return new Date(iso).toLocaleDateString("es-PA", {
@@ -103,15 +99,15 @@ function MiniMilestone({ status }: { status: string }) {
   const tone = milestoneTone(status);
   const label = labelStatus(status);
 
-  const S = String(status || "").toUpperCase();
+  const up = String(status || "").toUpperCase();
   const Icon =
-    S === "AT_DESTINATION"
+    up === "AT_DESTINATION"
       ? MapPin
-      : S === "IN_TRANSIT"
+      : up === "IN_TRANSIT"
       ? Truck
-      : S === "DOCS_READY"
+      : up === "DOCS_READY"
       ? FileText
-      : S === "PACKED"
+      : up === "PACKED"
       ? PackageCheck
       : Package2;
 
@@ -148,162 +144,106 @@ function MiniMilestone({ status }: { status: string }) {
   );
 }
 
-async function getAccessTokenFast(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token || null;
-  if (!token) {
-    window.location.href = "/login";
-    return null;
-  }
-  return token;
-}
-
-function withTimeout(ms: number) {
+// Fetch helper with timeout (evita “minutos” si algo se queda colgado)
+async function fetchWithTimeout(input: RequestInfo, init: RequestInit & { timeoutMs?: number } = {}) {
+  const { timeoutMs = 12000, ...rest } = init;
   const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), ms);
-  return { controller, cancel: () => clearTimeout(id) };
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(input, { ...rest, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(id);
+  }
 }
 
 export default function AdminDashboard() {
   const [authReady, setAuthReady] = useState(false);
-
-  // UI states (separados para no “bloquear todo”)
-  const [shipmentsLoading, setShipmentsLoading] = useState(true);
-  const [clientsLoading, setClientsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   const [shipments, setShipments] = useState<ShipmentListItem[]>([]);
   const [shipmentsTotal, setShipmentsTotal] = useState<number>(0);
   const [clientsTotal, setClientsTotal] = useState<number>(0);
+  const [err, setErr] = useState<string | null>(null);
 
-  const [errShipments, setErrShipments] = useState<string | null>(null);
-  const [errClients, setErrClients] = useState<string | null>(null);
-
-  const tokenRef = useRef<string | null>(null);
   const inFlightRef = useRef(false);
 
-  // Gate admin (una sola vez)
+  async function getTokenOrRedirect() {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      window.location.href = "/login";
+      return null;
+    }
+    return token;
+  }
+
   useEffect(() => {
     (async () => {
       const r = await requireAdminOrRedirect();
       if (!r.ok) return;
-      const token = await getAccessTokenFast();
-      if (!token) return;
-      tokenRef.current = token;
       setAuthReady(true);
     })();
   }, []);
 
-  // Leer cache para pintar instantáneo
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(CACHE_KEY);
-      if (!raw) return;
-      const js = JSON.parse(raw);
-      if (!js || typeof js !== "object") return;
-      if (!js.ts || Date.now() - Number(js.ts) > CACHE_TTL_MS) return;
-
-      if (Array.isArray(js.shipments)) setShipments(js.shipments);
-      if (typeof js.shipmentsTotal === "number") setShipmentsTotal(js.shipmentsTotal);
-      if (typeof js.clientsTotal === "number") setClientsTotal(js.clientsTotal);
-
-      // Pintamos “como si ya estuviera”
-      setShipmentsLoading(false);
-      setClientsLoading(false);
-    } catch {
-      // ignore
-    }
-  }, []);
-
   async function load() {
-    if (!tokenRef.current) return;
-    if (inFlightRef.current) return; // evita dobles loads
+    if (inFlightRef.current) return;
     inFlightRef.current = true;
 
-    setErrShipments(null);
-    setErrClients(null);
+    setLoading(true);
+    setErr(null);
 
-    // No vuelvas a dejar la UI “en blanco”: solo activa loaders por bloque
-    setShipmentsLoading(true);
-    setClientsLoading(true);
+    const token = await getTokenOrRedirect();
+    if (!token) {
+      inFlightRef.current = false;
+      return;
+    }
 
-    const token = tokenRef.current;
-
-    // Timeouts (evita “minutos colgado”)
-    const t1 = withTimeout(12000);
-    const t2 = withTimeout(12000);
-
-    // Shipments QS (limitamos a 10 para dashboard)
+    // Últimos embarques (rápido)
     const qs = new URLSearchParams();
     qs.set("page", "1");
     qs.set("dir", "desc");
     qs.set("mode", "admin");
-    qs.set("pageSize", "10"); // si tu function lo ignora, no rompe
 
-    const pShipments = fetch(`/.netlify/functions/listShipments?${qs.toString()}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: t1.controller.signal,
-    })
-      .then(async (res) => {
-        if (!res.ok) throw new Error((await res.text().catch(() => "")) || `HTTP ${res.status}`);
-        return (await res.json()) as ShipmentsApiResponse;
-      })
-      .then((sJson) => {
-        const list = sJson.items?.slice(0, 10) || [];
-        setShipments(list);
-        setShipmentsTotal(sJson.total ?? list.length);
-        setShipmentsLoading(false);
-        return { list, total: sJson.total ?? list.length };
-      })
-      .catch((e: any) => {
-        const msg = e?.name === "AbortError" ? "Timeout cargando embarques" : String(e?.message || e || "Error embarques");
-        setErrShipments(msg);
-        setShipmentsLoading(false);
-        return { list: null as any, total: null as any };
-      })
-      .finally(() => t1.cancel());
+    try {
+      const [sRes, cRes] = await Promise.all([
+        fetchWithTimeout(`/.netlify/functions/listShipments?${qs.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          timeoutMs: 12000,
+        }),
+        fetchWithTimeout(`/.netlify/functions/listClients`, {
+          headers: { Authorization: `Bearer ${token}` },
+          timeoutMs: 12000,
+        }),
+      ]);
 
-    const pClients = fetch(`/.netlify/functions/listClients`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: t2.controller.signal,
-    })
-      .then(async (res) => {
-        if (!res.ok) throw new Error((await res.text().catch(() => "")) || `HTTP ${res.status}`);
-        return (await res.json()) as ClientsApiResponse;
-      })
-      .then((cJson) => {
+      if (!sRes.ok) {
+        const t = await sRes.text().catch(() => "");
+        setErr(t || "No se pudieron cargar embarques");
+        setLoading(false);
+        inFlightRef.current = false;
+        return;
+      }
+
+      const sJson = (await sRes.json()) as ShipmentsApiResponse;
+      setShipments(sJson.items?.slice(0, 10) || []);
+      setShipmentsTotal(sJson.total ?? (sJson.items?.length || 0));
+
+      if (cRes.ok) {
+        const cJson = (await cRes.json()) as ClientsApiResponse;
         const inferredTotal = typeof cJson.total === "number" ? cJson.total : cJson.items?.length || 0;
         setClientsTotal(inferredTotal);
-        setClientsLoading(false);
-        return { total: inferredTotal };
-      })
-      .catch((e: any) => {
-        const msg = e?.name === "AbortError" ? "Timeout cargando clientes" : String(e?.message || e || "Error clientes");
-        setErrClients(msg);
-        setClientsLoading(false);
-        return { total: null as any };
-      })
-      .finally(() => t2.cancel());
+      }
 
-    // Ejecutar en paralelo
-    const [sRes, cRes] = await Promise.all([pShipments, pClients]);
-
-    // Guardar cache SOLO si tuvimos al menos algo útil
-    try {
-      const cache = {
-        ts: Date.now(),
-        shipments: Array.isArray(shipments) && shipments.length ? shipments : (sRes as any)?.list || [],
-        shipmentsTotal: typeof shipmentsTotal === "number" && shipmentsTotal ? shipmentsTotal : (sRes as any)?.total || 0,
-        clientsTotal: typeof clientsTotal === "number" && clientsTotal ? clientsTotal : (cRes as any)?.total || 0,
-      };
-      sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache));
-    } catch {
-      // ignore
+      setLoading(false);
+      inFlightRef.current = false;
+    } catch (e: any) {
+      setErr(e?.name === "AbortError" ? "Timeout cargando dashboard (12s). Reintenta." : "Error de red cargando dashboard");
+      setLoading(false);
+      inFlightRef.current = false;
     }
-
-    inFlightRef.current = false;
   }
 
-  // Autoload al quedar listo
   useEffect(() => {
     if (!authReady) return;
     load();
@@ -312,47 +252,38 @@ export default function AdminDashboard() {
 
   const activeShipments = useMemo(() => shipments.filter((s) => isActiveStatus(s.status)).length, [shipments]);
 
-  // Loader global: solo para el gate (no para data)
-  if (!authReady) {
-    return (
-      <AdminLayout title="Dashboard" subtitle="Verificando acceso…">
-        <div className="ff-card2">Cargando…</div>
-      </AdminLayout>
-    );
-  }
-
   return (
-    <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Rápido, denso, estilo ERP.">
+    <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Denso, rápido, estilo ERP.">
       {/* KPI strip */}
       <div className="kpiStrip">
         <div className="kpiChip">
           <span className="kpiLbl">Embarques</span>
-          <span className="kpiVal">{shipmentsLoading ? "—" : shipmentsTotal}</span>
+          <span className="kpiVal">{loading ? "—" : shipmentsTotal}</span>
         </div>
         <div className="kpiChip">
           <span className="kpiLbl">Activos</span>
-          <span className="kpiVal">{shipmentsLoading ? "—" : activeShipments}</span>
+          <span className="kpiVal">{loading ? "—" : activeShipments}</span>
         </div>
         <div className="kpiChip">
           <span className="kpiLbl">Clientes</span>
-          <span className="kpiVal">{clientsLoading ? "—" : clientsTotal}</span>
+          <span className="kpiVal">{loading ? "—" : clientsTotal}</span>
         </div>
 
-        <button className="btnGhost" type="button" onClick={load} disabled={shipmentsLoading || clientsLoading} title="Refrescar">
+        <button className="btnGhost" type="button" onClick={load} disabled={loading} title="Refrescar">
           <RefreshCcw size={16} />
-          {(shipmentsLoading || clientsLoading) ? "Cargando…" : "Refrescar"}
+          {loading ? "Cargando…" : "Refrescar"}
         </button>
       </div>
 
       <div style={{ height: 12 }} />
 
       <div className="mainGrid">
-        {/* LEFT: Últimos embarques */}
+        {/* LEFT: Shipments list (4 cols, SIN headers) */}
         <div className="card">
           <div className="cardHead">
             <div>
               <div className="cardTitle">Últimos embarques</div>
-              <div className="cardSub">Entra en 1 click. Compacto y legible.</div>
+              <div className="cardSub">4 columnas: Código / Cliente / Destino / Hito. Sin headers.</div>
             </div>
 
             <Link className="btnSmall" href="/admin/shipments">
@@ -362,80 +293,65 @@ export default function AdminDashboard() {
 
           <div className="ff-divider" style={{ margin: "12px 0" }} />
 
-          {errShipments ? (
+          {err ? (
             <div className="msgWarn">
-              <b>Error embarques</b>
-              <div>{errShipments}</div>
+              <b>Error</b>
+              <div>{err}</div>
             </div>
+          ) : loading ? (
+            <div className="tEmpty">Cargando…</div>
+          ) : shipments.length === 0 ? (
+            <div className="tEmpty">Aún no hay embarques.</div>
           ) : (
-            <div className="table">
-              <div className="thead">
-                <div>Código</div>
-                <div>Cliente</div>
-                <div>Destino</div>
-                <div className="thRight">Hito</div>
-              </div>
+            <div className="tableNoHead" role="list">
+              {shipments.map((s) => (
+                <Link key={s.id} href={`/admin/shipments/${s.id}`} className="trow" role="listitem">
+                  {/* Col 1: Código (importante) */}
+                  <div className="cell">
+                    <div className="main">{s.code}</div>
+                    <div className="sub">{fmtDate(s.created_at)}</div>
+                  </div>
 
-              {shipmentsLoading ? (
-                <div className="tEmpty">Cargando embarques…</div>
-              ) : shipments.length === 0 ? (
-                <div className="tEmpty">Aún no hay embarques.</div>
-              ) : (
-                shipments.map((s) => (
-                  <Link key={s.id} href={`/admin/shipments/${s.id}`} className="trow">
-                    <div className="cell">
-                      <div className="main">{s.code}</div>
-                      <div className="sub">{fmtDate(s.created_at)}</div>
-                    </div>
+                  {/* Col 2: Cliente */}
+                  <div className="cell">
+                    <div className="main">{s.client_name || "—"}</div>
+                    <div className="sub">{productInline(s)}</div>
+                  </div>
 
-                    <div className="cell">
-                      <div className="main">{s.client_name || "—"}</div>
-                      <div className="sub">{productInline(s)}</div>
-                    </div>
+                  {/* Col 3: Destino */}
+                  <div className="cell">
+                    <div className="main">{(s.destination || "—").toUpperCase()}</div>
+                    <div className="sub">&nbsp;</div>
+                  </div>
 
-                    <div className="cell">
-                      <div className="main">{(s.destination || "").toUpperCase()}</div>
-                      <div className="sub"> </div>
-                    </div>
-
-                    <div className="cellRight">
-                      <MiniMilestone status={s.status} />
-                    </div>
-                  </Link>
-                ))
-              )}
+                  {/* Col 4: Hito */}
+                  <div className="cellRight">
+                    <MiniMilestone status={s.status} />
+                  </div>
+                </Link>
+              ))}
             </div>
           )}
         </div>
 
-        {/* RIGHT: Quick actions */}
+        {/* RIGHT: Quick Actions */}
         <div className="card">
           <div className="cardTitle">Acciones rápidas</div>
-          <div className="cardSub">Operar sin navegar: botones grandes y claros.</div>
+          <div className="cardSub">Botones visibles para operar sin pensar.</div>
 
           <div className="ff-divider" style={{ margin: "12px 0" }} />
 
           <div className="ctaGrid">
-            <Link className="actionBtn primary" href="/admin/shipments">
-              <div className="actionIcon">
-                <PackagePlus size={18} />
-              </div>
-              <div className="actionText">
-                <div className="actionTitle">Crear embarque</div>
-                <div className="actionDesc">Crea, asigna cliente, define destino.</div>
-              </div>
-              <span className="actionTag">Operación</span>
+            <Link className="btnPrimary" href="/admin/shipments">
+              <PackagePlus size={18} />
+              Crear embarque
+              <span className="btnHint">Operación</span>
             </Link>
 
-            <Link className="actionBtn" href="/admin/quotes/new">
-              <div className="actionIcon">
-                <FilePlus2 size={18} />
-              </div>
-              <div className="actionText">
-                <div className="actionTitle">Nueva cotización</div>
-                <div className="actionDesc">Genera rápida y guarda historial.</div>
-              </div>
-              <span className="actionTag neutral">Ventas</span>
+            <Link className="btnSecondary" href="/admin/quotes/new">
+              <FilePlus2 size={18} />
+              Nueva cotización
+              <span className="btnHint">Ventas</span>
             </Link>
           </div>
 
@@ -460,12 +376,7 @@ export default function AdminDashboard() {
             </Link>
           </div>
 
-          {errClients ? (
-            <div className="msgWarn" style={{ marginTop: 10 }}>
-              <b>Error clientes</b>
-              <div>{errClients}</div>
-            </div>
-          ) : null}
+          <div className="tip">Tip: aquí podemos sumar “Pendientes” (docs/fotos) por embarque como mini badges.</div>
         </div>
       </div>
 
@@ -490,6 +401,7 @@ export default function AdminDashboard() {
           font-size: 12px;
           font-weight: 900;
           color: var(--ff-muted);
+          letter-spacing: -0.1px;
         }
         .kpiVal {
           font-size: 16px;
@@ -579,41 +491,32 @@ export default function AdminDashboard() {
           background: rgba(15, 23, 42, 0.03);
         }
 
-        /* Dense table */
-        .table {
+        /* LIST (no headers) */
+        .tableNoHead {
           border: 1px solid rgba(15, 23, 42, 0.08);
           border-radius: 12px;
           overflow: hidden;
           background: #fff;
         }
-        .thead {
-          display: grid;
-          grid-template-columns: 1.1fr 1.6fr 0.7fr 1fr;
-          padding: 10px 12px;
-          background: rgba(15, 23, 42, 0.02);
-          border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-          font-size: 12px;
-          font-weight: 900;
-          color: rgba(15, 23, 42, 0.6);
-        }
-        .thRight {
-          text-align: right;
-        }
 
         .trow {
           display: grid;
-          grid-template-columns: 1.1fr 1.6fr 0.7fr 1fr;
+          grid-template-columns: 1.1fr 1.6fr 0.6fr 1fr;
           align-items: center;
           padding: 10px 12px;
           text-decoration: none;
           color: var(--ff-text);
           border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+
+          /* ✅ hover “marcado” verde muy tenue */
+          transition: background 0.15s ease, border-color 0.15s ease;
         }
         .trow:last-child {
           border-bottom: 0;
         }
         .trow:hover {
-          background: rgba(15, 23, 42, 0.02);
+          background: rgba(31, 122, 58, 0.04);
+          border-bottom-color: rgba(31, 122, 58, 0.18);
         }
 
         .cell {
@@ -640,6 +543,7 @@ export default function AdminDashboard() {
           display: flex;
           justify-content: flex-end;
           align-items: center;
+          gap: 8px;
           min-width: 0;
         }
 
@@ -655,7 +559,7 @@ export default function AdminDashboard() {
           white-space: nowrap;
         }
         .miniMilestoneTxt {
-          max-width: 190px;
+          max-width: 180px;
           overflow: hidden;
           text-overflow: ellipsis;
         }
@@ -666,91 +570,57 @@ export default function AdminDashboard() {
           color: var(--ff-muted);
         }
 
-        /* Quick actions (más “real app”) */
+        /* Quick actions */
         .ctaGrid {
           display: grid;
           grid-template-columns: 1fr;
           gap: 10px;
         }
 
-        .actionBtn {
+        .btnPrimary,
+        .btnSecondary {
           position: relative;
-          display: flex;
-          gap: 12px;
+          display: grid;
+          grid-template-columns: 22px 1fr;
           align-items: center;
-          padding: 12px;
+          gap: 10px;
+          padding: 12px 12px;
           border-radius: 14px;
           text-decoration: none;
-          border: 1px solid rgba(15, 23, 42, 0.10);
+          font-weight: 950;
+          letter-spacing: -0.2px;
+          border: 1px solid rgba(15, 23, 42, 0.1);
+        }
+        .btnPrimary {
+          background: var(--ff-green);
+          color: #fff;
+          border-color: rgba(31, 122, 58, 0.35);
+        }
+        .btnPrimary:hover {
+          filter: brightness(0.98);
+        }
+
+        .btnSecondary {
           background: #fff;
           color: var(--ff-text);
-          transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
         }
-        .actionBtn:hover {
+        .btnSecondary:hover {
           background: rgba(15, 23, 42, 0.02);
-          transform: translateY(-1px);
-          box-shadow: 0 10px 24px rgba(2, 6, 23, 0.08);
         }
 
-        .actionBtn.primary {
-          border-color: rgba(31, 122, 58, 0.28);
-          background: rgba(31, 122, 58, 0.06);
-        }
-        .actionBtn.primary:hover {
-          background: rgba(31, 122, 58, 0.08);
-        }
-
-        .actionIcon {
-          width: 40px;
-          height: 40px;
-          display: grid;
-          place-items: center;
-          border-radius: 12px;
-          border: 1px solid rgba(15, 23, 42, 0.10);
-          background: rgba(15, 23, 42, 0.03);
-          flex: 0 0 auto;
-        }
-        .actionBtn.primary .actionIcon {
-          border-color: rgba(31, 122, 58, 0.22);
-          background: rgba(31, 122, 58, 0.10);
-          color: var(--ff-green-dark);
-        }
-
-        .actionText {
-          min-width: 0;
-          flex: 1 1 auto;
-        }
-        .actionTitle {
-          font-weight: 950;
-          font-size: 13px;
-          letter-spacing: -0.1px;
-          line-height: 18px;
-        }
-        .actionDesc {
-          margin-top: 2px;
-          font-size: 12px;
-          color: var(--ff-muted);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .actionTag {
+        .btnHint {
           position: absolute;
-          top: 10px;
           right: 10px;
+          top: 10px;
           font-size: 11px;
-          font-weight: 950;
-          padding: 4px 8px;
-          border-radius: 999px;
-          border: 1px solid rgba(31, 122, 58, 0.22);
-          background: rgba(31, 122, 58, 0.10);
-          color: var(--ff-green-dark);
+          font-weight: 900;
+          opacity: 0.85;
         }
-        .actionTag.neutral {
-          border-color: rgba(15, 23, 42, 0.12);
-          background: rgba(15, 23, 42, 0.04);
-          color: rgba(15, 23, 42, 0.7);
+        .btnPrimary .btnHint {
+          color: rgba(255, 255, 255, 0.9);
+        }
+        .btnSecondary .btnHint {
+          color: rgba(15, 23, 42, 0.6);
         }
 
         .miniGrid {
@@ -764,7 +634,7 @@ export default function AdminDashboard() {
           gap: 10px;
           padding: 10px 10px;
           border-radius: 12px;
-          border: 1px solid rgba(15, 23, 42, 0.10);
+          border: 1px solid rgba(15, 23, 42, 0.1);
           background: #fff;
           text-decoration: none;
           color: var(--ff-text);
@@ -773,6 +643,14 @@ export default function AdminDashboard() {
         }
         .miniAction:hover {
           background: rgba(15, 23, 42, 0.02);
+        }
+
+        .tip {
+          margin-top: 10px;
+          font-size: 12px;
+          color: var(--ff-muted);
+          border-top: 1px dashed rgba(15, 23, 42, 0.1);
+          padding-top: 10px;
         }
 
         .msgWarn {
@@ -784,8 +662,8 @@ export default function AdminDashboard() {
         }
 
         @media (max-width: 520px) {
-          .thead, .trow {
-            grid-template-columns: 1fr 1.1fr 0.6fr 1fr;
+          .trow {
+            grid-template-columns: 1.1fr 1.2fr 0.55fr 1fr;
           }
           .miniMilestoneTxt {
             max-width: 120px;
