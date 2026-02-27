@@ -14,6 +14,7 @@ import {
   PackageCheck,
   FileText,
   ArrowRight,
+  TrendingUp,
 } from "lucide-react";
 
 import { supabase } from "../../lib/supabaseClient";
@@ -114,12 +115,28 @@ function MiniMilestone({ status }: { status: string }) {
 
   const style: React.CSSProperties =
     tone === "success"
-      ? { background: "rgba(31,122,58,.10)", borderColor: "rgba(31,122,58,.22)", color: "var(--ff-green-dark)" }
+      ? {
+          background: "rgba(31,122,58,.10)",
+          borderColor: "rgba(31,122,58,.22)",
+          color: "var(--ff-green-dark)",
+        }
       : tone === "warn"
-      ? { background: "rgba(209,119,17,.12)", borderColor: "rgba(209,119,17,.24)", color: "#7a3f00" }
+      ? {
+          background: "rgba(209,119,17,.12)",
+          borderColor: "rgba(209,119,17,.24)",
+          color: "#7a3f00",
+        }
       : tone === "info"
-      ? { background: "rgba(59,130,246,.10)", borderColor: "rgba(59,130,246,.22)", color: "rgba(30,64,175,1)" }
-      : { background: "rgba(15,23,42,.04)", borderColor: "rgba(15,23,42,.12)", color: "var(--ff-text)" };
+      ? {
+          background: "rgba(59,130,246,.10)",
+          borderColor: "rgba(59,130,246,.22)",
+          color: "rgba(30,64,175,1)",
+        }
+      : {
+          background: "rgba(15,23,42,.04)",
+          borderColor: "rgba(15,23,42,.12)",
+          color: "var(--ff-text)",
+        };
 
   return (
     <span className="miniMilestone" style={style} title={label}>
@@ -130,7 +147,10 @@ function MiniMilestone({ status }: { status: string }) {
 }
 
 // Fetch helper con timeout (evita “minutos” si algo se queda colgado)
-async function fetchWithTimeout(input: RequestInfo, init: RequestInit & { timeoutMs?: number } = {}) {
+async function fetchWithTimeout(
+  input: RequestInfo,
+  init: RequestInit & { timeoutMs?: number } = {}
+) {
   const { timeoutMs = 12000, ...rest } = init;
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
@@ -169,6 +189,11 @@ export default function AdminDashboard() {
       setAuthReady(true);
     })();
   }, []);
+
+  const activeShipments = useMemo(
+    () => shipments.filter((s) => isActiveStatus(s.status)).length,
+    [shipments]
+  );
 
   async function load() {
     if (inFlightRef.current) return;
@@ -217,7 +242,8 @@ export default function AdminDashboard() {
       // Clients total (no bloquea el dashboard si falla)
       if (cRes.status === "fulfilled" && cRes.value.ok) {
         const cJson = (await cRes.value.json()) as ClientsApiResponse;
-        const inferredTotal = typeof cJson.total === "number" ? cJson.total : cJson.items?.length || 0;
+        const inferredTotal =
+          typeof cJson.total === "number" ? cJson.total : cJson.items?.length || 0;
         setClientsTotal(inferredTotal);
       }
     } catch {
@@ -234,25 +260,21 @@ export default function AdminDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady]);
 
-  const activeShipments = useMemo(() => shipments.filter((s) => isActiveStatus(s.status)).length, [shipments]);
-
   return (
-    <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Denso, rápido, estilo ERP.">
-      {/* KPIs + Refresh */}
-      <div className="topBar">
-        <div className="kpiStrip">
-          <div className="kpiChip">
-            <span className="kpiLbl">Embarques</span>
-            <span className="kpiVal">{loading ? "—" : shipmentsTotal}</span>
-          </div>
-          <div className="kpiChip">
-            <span className="kpiLbl">Activos</span>
-            <span className="kpiVal">{loading ? "—" : activeShipments}</span>
-          </div>
-          <div className="kpiChip">
-            <span className="kpiLbl">Clientes</span>
-            <span className="kpiVal">{loading ? "—" : clientsTotal}</span>
-          </div>
+    <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Rápido, denso, estilo ERP.">
+      {/* KPIs compactos */}
+      <div className="kpiStrip">
+        <div className="kpiChip">
+          <span className="kpiLbl">Embarques</span>
+          <span className="kpiVal">{loading ? "—" : shipmentsTotal}</span>
+        </div>
+        <div className="kpiChip">
+          <span className="kpiLbl">Activos</span>
+          <span className="kpiVal">{loading ? "—" : activeShipments}</span>
+        </div>
+        <div className="kpiChip">
+          <span className="kpiLbl">Clientes</span>
+          <span className="kpiVal">{loading ? "—" : clientsTotal}</span>
         </div>
 
         <button className="btnGhost" type="button" onClick={load} disabled={loading} title="Refrescar">
@@ -264,10 +286,10 @@ export default function AdminDashboard() {
       <div style={{ height: 12 }} />
 
       <div className="mainGrid">
-        {/* LEFT: Últimos embarques */}
+        {/* LEFT: shipments */}
         <div className="card">
           <div className="cardHead">
-            <div style={{ minWidth: 0 }}>
+            <div>
               <div className="cardTitle">Últimos embarques</div>
               <div className="cardSub">Código · Cliente · Destino · Hito</div>
             </div>
@@ -289,99 +311,94 @@ export default function AdminDashboard() {
           ) : shipments.length === 0 ? (
             <div className="tEmpty">Aún no hay embarques.</div>
           ) : (
-            <div className="sTable" role="list">
+            <div className="denseList">
               {shipments.map((s) => (
-                <Link key={s.id} href={`/admin/shipments/${s.id}`} className="sRow" role="listitem">
+                <Link key={s.id} href={`/admin/shipments/${s.id}`} className="denseRow">
                   {/* Col 1: Código */}
                   <div className="c1">
-                    <div className="cMain">{s.code}</div>
-                    <div className="cSub">{fmtDate(s.created_at)}</div>
+                    <div className="top">{s.code}</div>
+                    <div className="sub">{fmtDate(s.created_at)}</div>
                   </div>
 
                   {/* Col 2: Cliente */}
                   <div className="c2">
-                    <div className="cMain">{s.client_name || "—"}</div>
+                    <div className="top">{s.client_name || "—"}</div>
+                    <div className="sub">{productInline(s)}</div>
                   </div>
 
                   {/* Col 3: Destino */}
                   <div className="c3">
-                    <span className="iata">{(s.destination || "").toUpperCase()}</span>
+                    <div className="top">{(s.destination || "—").toUpperCase()}</div>
+                    <div className="sub">&nbsp;</div>
                   </div>
 
                   {/* Col 4: Hito */}
                   <div className="c4">
                     <MiniMilestone status={s.status} />
                   </div>
-
-                  {/* Línea secundaria (spans col 1-2) */}
-                  <div className="subline">{`${productInline(s)}`}</div>
                 </Link>
               ))}
             </div>
           )}
         </div>
 
-        {/* RIGHT: Acciones rápidas */}
+        {/* RIGHT: quick actions */}
         <div className="card">
           <div className="cardTitle">Acciones rápidas</div>
-          <div className="cardSub">Operación y ventas sin fricción.</div>
+          <div className="cardSub">Botones grandes, claros y con feedback (hover).</div>
 
           <div className="ff-divider" style={{ margin: "12px 0" }} />
 
-          <div className="actionGrid">
-            <Link className="actionCard primary" href="/admin/shipments">
-              <div className="actionIcon">
-                <PackagePlus size={20} />
+          <div className="qaGrid">
+            <Link className="qaTile isPrimary" href="/admin/shipments">
+              <div className="qaIcon">
+                <PackagePlus size={22} />
               </div>
-              <div className="actionTitle">Crear embarque</div>
-              <div className="actionMeta">Operación</div>
+              <div className="qaTitle">Crear embarque</div>
+              <div className="qaDesc">Operación · define destino y cliente.</div>
+              <div className="qaGo">
+                <span>Abrir</span>
+                <TrendingUp size={16} />
+              </div>
             </Link>
 
-            <Link className="actionCard" href="/admin/quotes/new">
-              <div className="actionIcon">
-                <FilePlus2 size={20} />
+            <Link className="qaTile" href="/admin/quotes/new">
+              <div className="qaIcon">
+                <FilePlus2 size={22} />
               </div>
-              <div className="actionTitle">Nueva cotización</div>
-              <div className="actionMeta">Ventas</div>
+              <div className="qaTitle">Nueva cotización</div>
+              <div className="qaDesc">Ventas · rápida y guardada en historial.</div>
+              <div className="qaGo">
+                <span>Crear</span>
+                <ArrowRight size={16} />
+              </div>
             </Link>
           </div>
 
-          <div style={{ height: 12 }} />
+          <div style={{ height: 10 }} />
 
-          <div className="miniLinks">
-            <Link className="miniLink" href="/admin/shipments">
+          <div className="miniGrid">
+            <Link className="miniAction" href="/admin/shipments">
               <Package2 size={16} />
-              <span>Embarques</span>
+              Embarques
             </Link>
-            <Link className="miniLink" href={QUOTE_PATH}>
+            <Link className="miniAction" href={QUOTE_PATH}>
               <Calculator size={16} />
-              <span>Cotizador</span>
+              Cotizador
             </Link>
-            <Link className="miniLink" href="/admin/users">
+            <Link className="miniAction" href="/admin/users">
               <Users2 size={16} />
-              <span>Clientes</span>
+              Clientes
             </Link>
-            <Link className="miniLink" href={QUOTE_PATH}>
+            <Link className="miniAction" href={QUOTE_PATH}>
               <History size={16} />
-              <span>Historial</span>
+              Historial
             </Link>
-          </div>
-
-          <div className="tip">
-            Tip: luego agregamos “Pendientes” por embarque (docs/fotos) como mini badges.
           </div>
         </div>
       </div>
 
       <style jsx>{`
-        .topBar {
-          display: flex;
-          gap: 10px;
-          align-items: center;
-          justify-content: space-between;
-          flex-wrap: wrap;
-        }
-
         .kpiStrip {
           display: flex;
           gap: 10px;
@@ -410,6 +427,7 @@ export default function AdminDashboard() {
         }
 
         .btnGhost {
+          margin-left: auto;
           display: inline-flex;
           align-items: center;
           gap: 8px;
@@ -422,16 +440,18 @@ export default function AdminDashboard() {
           font-weight: 900;
           cursor: pointer;
           color: var(--ff-text);
-          transition: background 160ms ease, transform 160ms ease;
+          transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
         }
         .btnGhost:hover {
           background: rgba(15, 23, 42, 0.03);
           transform: translateY(-1px);
+          box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
         }
         .btnGhost:disabled {
           opacity: 0.6;
           cursor: not-allowed;
           transform: none;
+          box-shadow: none;
         }
 
         .mainGrid {
@@ -479,7 +499,7 @@ export default function AdminDashboard() {
           gap: 8px;
           height: 34px;
           padding: 0 10px;
-          border-radius: 999px;
+          border-radius: var(--ff-radius);
           border: 1px solid var(--ff-border);
           background: #fff;
           font-size: 12px;
@@ -488,124 +508,12 @@ export default function AdminDashboard() {
           color: var(--ff-text);
           text-decoration: none;
           white-space: nowrap;
-          transition: background 160ms ease, transform 160ms ease;
+          transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
         }
         .btnSmall:hover {
           background: rgba(15, 23, 42, 0.03);
           transform: translateY(-1px);
-        }
-
-        /* ===== Shipments: compact 4-col (no headers) ===== */
-        .sTable {
-          border: 1px solid rgba(15, 23, 42, 0.08);
-          border-radius: 14px;
-          background: #fff;
-          overflow: hidden;
-        }
-
-        .sRow {
-          display: grid;
-          grid-template-columns: 1.15fr 1.35fr 0.55fr 0.95fr;
-          grid-auto-rows: auto;
-          align-items: center; /* ✅ alinea todo verticalmente */
-          gap: 0;
-          padding: 10px 12px;
-          text-decoration: none;
-          color: var(--ff-text);
-          border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-          position: relative;
-          transition: background 140ms ease, border-left-color 140ms ease;
-          border-left: 3px solid transparent; /* para el efecto ERP */
-        }
-        .sRow:last-child {
-          border-bottom: 0;
-        }
-
-        /* ✅ Hover tipo ERP (verde MUY tenue) */
-        .sRow:hover {
-          background: rgba(31, 122, 58, 0.045);
-          border-left-color: rgba(31, 122, 58, 0.35);
-        }
-
-        .c1,
-        .c2,
-        .c3,
-        .c4 {
-          min-width: 0;
-        }
-
-        .cMain {
-          font-size: 13px;
-          font-weight: 900;
-          letter-spacing: -0.1px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          line-height: 18px;
-        }
-        .cSub {
-          margin-top: 2px;
-          font-size: 12px;
-          color: var(--ff-muted);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          line-height: 16px;
-        }
-
-        .c3 {
-          display: flex;
-          justify-content: center;
-        }
-        .iata {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          height: 26px;
-          padding: 0 10px;
-          border-radius: 999px;
-          border: 1px solid rgba(15, 23, 42, 0.12);
-          background: rgba(15, 23, 42, 0.02);
-          font-size: 12px;
-          font-weight: 950;
-          letter-spacing: 0.3px;
-          color: rgba(15, 23, 42, 0.75);
-          min-width: 52px;
-        }
-
-        .c4 {
-          display: flex;
-          justify-content: flex-end;
-          align-items: center; /* ✅ */
-          min-width: 0;
-        }
-
-        .subline {
-          grid-column: 1 / span 2; /* ✅ Feb + producto debajo de Código+Cliente */
-          margin-top: 4px;
-          font-size: 12px;
-          color: var(--ff-muted);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .miniMilestone {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          border-radius: 999px;
-          border: 1px solid;
-          padding: 6px 10px;
-          font-weight: 900;
-          font-size: 12px;
-          white-space: nowrap;
-          line-height: 16px;
-        }
-        .miniMilestoneTxt {
-          max-width: 190px;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
         }
 
         .tEmpty {
@@ -614,90 +522,158 @@ export default function AdminDashboard() {
           color: var(--ff-muted);
         }
 
-        .msgWarn {
-          border: 1px solid rgba(209, 119, 17, 0.35);
-          background: rgba(209, 119, 17, 0.08);
-          padding: 10px;
-          border-radius: var(--ff-radius);
-          font-size: 12px;
+        /* === Dense list (NO headers) === */
+        .denseList {
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          border-radius: 12px;
+          overflow: hidden;
+          background: #fff;
         }
 
-        /* ===== Quick Actions: modern tiles ===== */
-        .actionGrid {
+        .denseRow {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: 1.15fr 1.6fr 0.6fr 0.9fr;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 12px;
+          text-decoration: none;
+          color: var(--ff-text);
+          border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+          transition: background .12s ease, box-shadow .12s ease, border-color .12s ease;
+        }
+        .denseRow:last-child {
+          border-bottom: 0;
+        }
+
+        /* Hover verde tenue estilo shipments */
+        .denseRow:hover {
+          background: rgba(31, 122, 58, 0.045);
+          box-shadow: inset 0 0 0 1px rgba(31, 122, 58, 0.14);
+        }
+
+        .c1, .c2, .c3 {
+          min-width: 0;
+        }
+
+        .top {
+          font-size: 13px;
+          font-weight: 850;
+          letter-spacing: -0.1px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .sub {
+          margin-top: 2px;
+          font-size: 12px;
+          color: var(--ff-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .c4 {
+          display: flex;
+          justify-content: flex-end;
+          align-items: center; /* ✅ alinea el pill */
+          min-width: 0;
+        }
+
+        .miniMilestone {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          border-radius: 999px;
+          border: 1px solid;
+          padding: 6px 10px;
+          font-weight: 900;
+          font-size: 12px;
+          white-space: nowrap;
+        }
+        .miniMilestoneTxt {
+          max-width: 180px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        /* === Quick actions PRO === */
+        .qaGrid {
+          display: grid;
+          grid-template-columns: 1fr;
           gap: 10px;
         }
-        @media (max-width: 520px) {
-          .actionGrid {
-            grid-template-columns: 1fr;
+        @media (min-width: 980px) {
+          .qaGrid {
+            grid-template-columns: 1fr 1fr;
           }
         }
 
-        .actionCard {
-          border: 1px solid rgba(15, 23, 42, 0.12);
+        .qaTile {
+          border: 1px solid rgba(15, 23, 42, 0.10);
+          border-radius: 14px;
           background: #fff;
-          border-radius: 16px;
           padding: 14px 12px;
           text-decoration: none;
           color: var(--ff-text);
           display: grid;
-          justify-items: center; /* ✅ icono centrado */
-          text-align: center;
-          gap: 8px;
-          box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
-          transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease, border-color 160ms ease;
-          position: relative;
-          overflow: hidden;
+          gap: 6px;
+          transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
         }
-        .actionCard:hover {
-          transform: translateY(-2px);
+        .qaTile:hover {
+          transform: translateY(-1px);
           box-shadow: 0 14px 26px rgba(15, 23, 42, 0.10);
           border-color: rgba(31, 122, 58, 0.18);
           background: rgba(31, 122, 58, 0.03);
         }
 
-        .actionCard.primary {
-          border-color: rgba(31, 122, 58, 0.24);
-          background: rgba(31, 122, 58, 0.045);
-        }
-        .actionCard.primary:hover {
+        .qaTile.isPrimary {
           background: rgba(31, 122, 58, 0.06);
-          border-color: rgba(31, 122, 58, 0.30);
+          border-color: rgba(31, 122, 58, 0.22);
+        }
+        .qaTile.isPrimary:hover {
+          background: rgba(31, 122, 58, 0.08);
+          border-color: rgba(31, 122, 58, 0.28);
         }
 
-        .actionIcon {
+        .qaIcon {
           width: 44px;
           height: 44px;
           border-radius: 14px;
-          border: 1px solid rgba(15, 23, 42, 0.10);
-          background: rgba(15, 23, 42, 0.02);
           display: grid;
-          place-items: center;
+          place-items: center; /* ✅ icono centrado */
+          border: 1px solid rgba(31, 122, 58, 0.18);
+          background: rgba(31, 122, 58, 0.06);
           color: var(--ff-green-dark);
         }
-        .primary .actionIcon {
-          border-color: rgba(31, 122, 58, 0.22);
-          background: rgba(31, 122, 58, 0.08);
-        }
 
-        .actionTitle {
+        .qaTitle {
           font-weight: 950;
           font-size: 13px;
-          letter-spacing: -0.15px;
+          letter-spacing: -0.1px;
         }
-        .actionMeta {
+        .qaDesc {
           font-size: 12px;
           color: var(--ff-muted);
-          font-weight: 800;
+          line-height: 16px;
+        }
+        .qaGo {
+          margin-top: 6px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          font-weight: 900;
+          font-size: 12px;
+          color: var(--ff-green-dark);
         }
 
-        .miniLinks {
+        .miniGrid {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 10px;
         }
-        .miniLink {
+        .miniAction {
           display: inline-flex;
           align-items: center;
           gap: 10px;
@@ -709,32 +685,42 @@ export default function AdminDashboard() {
           color: var(--ff-text);
           font-weight: 900;
           font-size: 12px;
-          transition: background 160ms ease, transform 160ms ease, border-color 160ms ease;
+          transition: background .12s ease, transform .12s ease;
         }
-        .miniLink:hover {
-          background: rgba(31, 122, 58, 0.035);
-          border-color: rgba(31, 122, 58, 0.18);
+        .miniAction:hover {
+          background: rgba(15, 23, 42, 0.02);
           transform: translateY(-1px);
         }
 
-        .tip {
-          margin-top: 12px;
+        .msgWarn {
+          border: 1px solid rgba(209, 119, 17, 0.35);
+          background: rgba(209, 119, 17, 0.08);
+          padding: 10px;
+          border-radius: var(--ff-radius);
           font-size: 12px;
-          color: var(--ff-muted);
-          border-top: 1px dashed rgba(15, 23, 42, 0.10);
-          padding-top: 10px;
         }
 
-        /* Responsive */
         @media (max-width: 720px) {
-          .sRow {
-            grid-template-columns: 1.2fr 1.2fr 0.55fr 1fr;
+          .denseRow {
+            grid-template-columns: 1.2fr 1.5fr 0.6fr 1fr;
           }
           .miniMilestoneTxt {
-            max-width: 130px;
+            max-width: 120px;
           }
-          .subline {
-            max-width: 100%;
+        }
+
+        @media (max-width: 520px) {
+          /* En mobile: mantenemos 4 columnas pero más compactas */
+          .denseRow {
+            gap: 8px;
+            padding: 10px 10px;
+            grid-template-columns: 1.25fr 1.35fr 0.55fr 1fr;
+          }
+          .top {
+            font-size: 12.5px;
+          }
+          .sub {
+            font-size: 11.5px;
           }
         }
       `}</style>
