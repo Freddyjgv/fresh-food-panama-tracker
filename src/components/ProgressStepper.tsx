@@ -58,21 +58,40 @@ function getMilestoneTime(m: Milestone) {
 
 function fmtStepTime(iso: string) {
   try {
-    // compacto
-    return new Date(iso).toLocaleString("es-PA", { year: "2-digit", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleString("es-PA", {
+      year: "2-digit",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   } catch {
     return iso;
   }
 }
 
 function computeCurrentIndex(milestones: Milestone[]) {
-  // hito más avanzado registrado; si no hay, asumimos CREATED
   const types = new Set((milestones ?? []).map((m) => String(m.type).toUpperCase()));
   let idx = 0;
   for (let i = 0; i < STEPS.length; i++) {
     if (types.has(String(STEPS[i].type).toUpperCase())) idx = i;
   }
   return idx;
+}
+
+/** ✅ Parse: IB0258/27 -> { airline:"IB", number:"0258", raw:"IB 0258" } */
+function parseFlight(raw?: string | null) {
+  const s = String(raw || "").trim().toUpperCase();
+  // Acepta: IB0258/27, IB0258, IB 0258/27, IB 258/7, etc.
+  const m = s.match(/^([A-Z]{2,3})\s*(\d{2,4})(?:\/\d{1,2})?$/);
+  if (!m) return null;
+  return { airline: m[1], number: m[2], raw: `${m[1]} ${m[2]}` };
+}
+
+function googleFlightStatusUrl(raw?: string | null) {
+  const p = parseFlight(raw);
+  const q = p ? `${p.airline} ${p.number} flight status` : `flight status ${raw || ""}`;
+  return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
 }
 
 export function ProgressStepper({
@@ -119,6 +138,19 @@ export function ProgressStepper({
 
   const currentLabel = STEPS[currentIndex]?.label ?? "—";
 
+  // ✅ Tooltip de vuelo SOLO si ya se llegó a IN_TRANSIT (o superior)
+  const transitReached = currentIndex >= IN_TRANSIT_INDEX && IN_TRANSIT_INDEX >= 0;
+  const parsed = useMemo(() => parseFlight(flightNumber), [flightNumber]);
+  const flightLabel = parsed?.raw || (flightNumber ? String(flightNumber).trim().toUpperCase() : null);
+  const flightUrl = useMemo(() => googleFlightStatusUrl(flightNumber), [flightNumber]);
+
+  // Posición exacta del hito IN_TRANSIT dentro de la barra (independiente del progreso actual)
+  const transitPct = useMemo(() => {
+    if (IN_TRANSIT_INDEX < 0) return 0;
+    if (STEPS.length <= 1) return 0;
+    return (IN_TRANSIT_INDEX / (STEPS.length - 1)) * 100;
+  }, []);
+
   return (
     <div className="ff-card ff-card-pad" style={{ boxShadow: "none", background: "var(--ff-surface)", padding: 12 }}>
       {/* Header compacto */}
@@ -138,7 +170,7 @@ export function ProgressStepper({
       <div className="ff-divider" style={{ margin: "10px 0" }} />
 
       {/* Barra + ícono */}
-      <div style={{ position: "relative", marginTop: 6 }}>
+      <div className="barWrap" style={{ position: "relative", marginTop: 6 }}>
         <div
           style={{
             height: 8,
@@ -158,6 +190,52 @@ export function ProgressStepper({
             }}
           />
         </div>
+
+        {/* ✅ Hotspot con tooltip (solo IN_TRANSIT) */}
+        {transitReached ? (
+          <div
+            className="flightHotspot"
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: `calc(${transitPct}% - 12px)`,
+              transform: "translateY(-50%)",
+              width: 24,
+              height: 24,
+              borderRadius: 999,
+              pointerEvents: "auto",
+              display: "grid",
+              placeItems: "center",
+            }}
+            aria-label="Ver estado del vuelo"
+          >
+            <a
+              className="flightDot"
+              href={flightUrl}
+              target="_blank"
+              rel="noreferrer"
+              title={flightLabel ? `Ver estado del vuelo ${flightLabel}` : "Ver estado del vuelo"}
+            >
+              <span className="flightDotInner" />
+            </a>
+
+            <div className="flightTip" role="tooltip">
+              <div className="tipTitle">Estado del vuelo</div>
+              <div className="tipRow">
+                <span className="tipLbl">Vuelo</span>
+                <b className="tipVal">{flightLabel || "—"}</b>
+              </div>
+              <div className="tipHint">Abre Google (flight status) en una pestaña nueva.</div>
+
+              <div style={{ height: 8 }} />
+
+              <a className="tipBtn" href={flightUrl} target="_blank" rel="noreferrer">
+                Ver en Google
+                <span className="tipArrow">↗</span>
+              </a>
+            </div>
+          </div>
+        ) : null}
 
         <div
           style={{
@@ -184,7 +262,6 @@ export function ProgressStepper({
           const hit = hitMap.get(String(s.type).toUpperCase());
           const time = hit ? getMilestoneTime(hit) : null;
 
-          // Vuelo debajo de IN_TRANSIT (solo si existe o si ya se alcanzó el hito)
           const showFlightLine = i === IN_TRANSIT_INDEX && (Boolean(flightNumber?.trim()) || currentIndex >= IN_TRANSIT_INDEX);
           const flightLine = flightNumber?.trim() ? `Vuelo: ${flightNumber.trim()}` : "Vuelo: —";
 
@@ -231,7 +308,7 @@ export function ProgressStepper({
           border-radius: 12px;
           padding: 10px;
           box-shadow: none;
-          min-height: 66px; /* compacto */
+          min-height: 66px;
         }
 
         .stepTop {
@@ -279,15 +356,127 @@ export function ProgressStepper({
           text-overflow: ellipsis;
         }
 
-        /* Responsive: 3 y 2 columnas, sin ocupar media pantalla */
+        /* ✅ Flight hotspot (PRO) */
+        .flightDot {
+          width: 18px;
+          height: 18px;
+          border-radius: 999px;
+          border: 1px solid rgba(31, 122, 58, 0.35);
+          background: rgba(31, 122, 58, 0.10);
+          display: grid;
+          place-items: center;
+          box-shadow: 0 6px 16px rgba(2, 6, 23, 0.08);
+          text-decoration: none;
+        }
+        .flightDotInner {
+          width: 8px;
+          height: 8px;
+          border-radius: 999px;
+          background: rgba(39, 118, 50, 0.95);
+        }
+        .flightHotspot:hover .flightDot {
+          background: rgba(31, 122, 58, 0.14);
+          border-color: rgba(31, 122, 58, 0.45);
+          transform: translateY(-1px);
+          box-shadow: 0 12px 26px rgba(2, 6, 23, 0.12);
+        }
+
+        .flightTip {
+          position: absolute;
+          top: 32px;
+          left: 50%;
+          transform: translateX(-50%);
+          min-width: 240px;
+          max-width: 280px;
+          border-radius: 14px;
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          background: #fff;
+          box-shadow: 0 18px 44px rgba(2, 6, 23, 0.14);
+          padding: 10px;
+          z-index: 20;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 140ms ease, transform 140ms ease;
+        }
+        .flightHotspot:hover .flightTip {
+          opacity: 1;
+          pointer-events: auto;
+          transform: translateX(-50%) translateY(0);
+        }
+
+        .tipTitle {
+          font-weight: 950;
+          font-size: 12px;
+          letter-spacing: -0.2px;
+        }
+        .tipRow {
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          margin-top: 8px;
+          padding-top: 8px;
+          border-top: 1px dashed rgba(15, 23, 42, 0.12);
+          font-size: 12px;
+        }
+        .tipLbl {
+          color: var(--ff-muted);
+          font-weight: 900;
+        }
+        .tipVal {
+          color: rgba(15, 23, 42, 0.86);
+          font-weight: 950;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 170px;
+        }
+        .tipHint {
+          margin-top: 6px;
+          font-size: 11px;
+          color: var(--ff-muted);
+          line-height: 14px;
+        }
+        .tipBtn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          height: 34px;
+          width: 100%;
+          border-radius: 12px;
+          border: 1px solid rgba(31, 122, 58, 0.28);
+          background: rgba(31, 122, 58, 0.08);
+          color: var(--ff-green-dark);
+          font-weight: 950;
+          font-size: 12px;
+          text-decoration: none;
+        }
+        .tipBtn:hover {
+          background: rgba(31, 122, 58, 0.12);
+          border-color: rgba(31, 122, 58, 0.38);
+          box-shadow: 0 10px 22px rgba(2, 6, 23, 0.08);
+          transform: translateY(-1px);
+        }
+        .tipArrow {
+          font-weight: 950;
+        }
+
+        /* Responsive */
         @media (max-width: 980px) {
           .stepsGrid {
             grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+          .flightTip {
+            min-width: 220px;
           }
         }
         @media (max-width: 560px) {
           .stepsGrid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .flightTip {
+            min-width: 210px;
+            max-width: 250px;
           }
         }
       `}</style>
