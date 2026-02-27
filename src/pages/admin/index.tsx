@@ -1,5 +1,5 @@
 // src/pages/admin/index.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   RefreshCcw,
@@ -15,6 +15,7 @@ import {
   FileText,
 } from "lucide-react";
 
+import { supabase } from "../../lib/supabaseClient";
 import { AdminLayout } from "../../components/AdminLayout";
 import { labelStatus } from "../../lib/shipmentFlow";
 
@@ -40,7 +41,7 @@ type ShipmentsApiResponse = {
 };
 
 type ClientsApiResponse = {
-  items: { id: string; name: string }[];
+  items: any[];
   total?: number;
 };
 
@@ -67,6 +68,7 @@ function productInline(s: ShipmentListItem) {
 
 function isActiveStatus(raw: string) {
   const s = String(raw || "").toUpperCase();
+  // Todo lo “En Destino” o finalizado NO es activo
   if (["AT_DESTINATION", "DELIVERED", "CLOSED"].includes(s)) return false;
   return true;
 }
@@ -129,34 +131,26 @@ function MiniMilestone({ status }: { status: string }) {
 }
 
 /**
- * ✅ Arquitectura estable:
- * - Dashboard NO llama supabase.auth.getSession()
- * - token desde storage (instantáneo, sin loops)
+ * Token “1 sola vez”:
+ * - NO usamos requireAdmin aquí
+ * - NO bloqueamos el render
+ * - No hacemos redirect (AdminLayout ya se encarga del flujo de sesión)
  */
-function getAccessTokenFromStorage(): string | null {
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i) || "";
-      if (!k.endsWith("-auth-token")) continue;
-
-      const raw = localStorage.getItem(k);
-      if (!raw) continue;
-
-      const parsed = JSON.parse(raw);
-      if (parsed?.access_token) return String(parsed.access_token);
-      if (parsed?.currentSession?.access_token) return String(parsed.currentSession.access_token);
-      if (parsed?.session?.access_token) return String(parsed.session.access_token);
-    }
-    return null;
-  } catch {
-    return null;
-  }
+async function getAccessTokenOnce(tokenRef: React.MutableRefObject<string | null>) {
+  if (tokenRef.current) return tokenRef.current;
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token || null;
+  tokenRef.current = token;
+  return token;
 }
 
-async function fetchJsonWithTimeout<T>(url: string, token: string, timeoutMs = 9000): Promise<T> {
+async function fetchJsonWithTimeout<T>(
+  url: string,
+  token: string,
+  timeoutMs = 9000
+): Promise<T> {
   const controller = new AbortController();
   const id = window.setTimeout(() => controller.abort(), timeoutMs);
-
   try {
     const res = await fetch(url, {
       signal: controller.signal,
@@ -168,31 +162,33 @@ async function fetchJsonWithTimeout<T>(url: string, token: string, timeoutMs = 9
       const t = await res.text().catch(() => "");
       throw new Error(t || `HTTP ${res.status}`);
     }
-
     return (await res.json()) as T;
-  } catch (e: any) {
-    if (e?.name === "AbortError") throw new Error("Timeout (abort)");
-    throw e;
   } finally {
     window.clearTimeout(id);
   }
 }
 
 export default function AdminDashboard() {
-  // UI FIRST
+  // UI FIRST: render inmediato
   const [shipments, setShipments] = useState<ShipmentListItem[]>([]);
   const [shipmentsTotal, setShipmentsTotal] = useState<number>(0);
   const [clientsTotal, setClientsTotal] = useState<number>(0);
 
+  // Loads separados (no bloquea todo)
   const [shipmentsLoading, setShipmentsLoading] = useState(true);
   const [clientsLoading, setClientsLoading] = useState(true);
 
   const [errShipments, setErrShipments] = useState<string | null>(null);
   const [errClients, setErrClients] = useState<string | null>(null);
 
+  const tokenRef = useRef<string | null>(null);
   const inFlightRef = useRef(false);
 
-  const activeShipments = useMemo(() => shipments.filter((s) => isActiveStatus(s.status)).length, [shipments]);
+  const activeShipments = useMemo(
+    () => shipments.filter((s) => isActiveStatus(s.status)).length,
+    [shipments]
+  );
+
   const anyLoading = shipmentsLoading || clientsLoading;
 
   async function load() {
@@ -205,10 +201,11 @@ export default function AdminDashboard() {
     setClientsLoading(true);
 
     try {
-      const token = getAccessTokenFromStorage();
+      const token = await getAccessTokenOnce(tokenRef);
+
       if (!token) {
-        setErrShipments("Sin token. Abre /login en otra pestaña y vuelve a cargar.");
-        setErrClients("Sin token.");
+        setErrShipments("Sesión no disponible. Reabre /login.");
+        setErrClients("Sesión no disponible. Reabre /login.");
         return;
       }
 
@@ -228,13 +225,18 @@ export default function AdminDashboard() {
       if (sRes.status === "fulfilled") {
         setShipments(sRes.value.items?.slice(0, 10) || []);
         setShipmentsTotal(sRes.value.total ?? (sRes.value.items?.length || 0));
+        setErrShipments(null);
       } else {
         setErrShipments(sRes.reason?.message || "No se pudieron cargar embarques");
       }
 
       if (cRes.status === "fulfilled") {
-        const inferredTotal = typeof cRes.value.total === "number" ? cRes.value.total : cRes.value.items?.length || 0;
+        const inferredTotal =
+          typeof cRes.value.total === "number"
+            ? cRes.value.total
+            : cRes.value.items?.length || 0;
         setClientsTotal(inferredTotal);
+        setErrClients(null);
       } else {
         setErrClients(cRes.reason?.message || "No se pudieron cargar clientes");
       }
@@ -246,13 +248,14 @@ export default function AdminDashboard() {
   }
 
   useEffect(() => {
+    // fetch NO bloqueante
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Denso, rápido, estilo ERP.">
-      {/* KPIs */}
+      {/* KPI strip */}
       <div className="kpiStrip">
         <div className="kpiChip">
           <span className="kpiLbl">Embarques</span>
@@ -276,7 +279,7 @@ export default function AdminDashboard() {
       <div style={{ height: 12 }} />
 
       <div className="mainGrid">
-        {/* Últimos embarques */}
+        {/* LEFT: Últimos embarques (sin headers) */}
         <div className="card">
           <div className="cardHead">
             <div>
@@ -301,7 +304,7 @@ export default function AdminDashboard() {
               {shipmentsLoading ? (
                 <>
                   {Array.from({ length: 7 }).map((_, i) => (
-                    <div key={i} className="shipRow skeleton" aria-hidden="true">
+                    <div key={i} className="shipRow skeleton">
                       <div className="cell">
                         <div className="sk sk1" />
                         <div className="sk sk2" />
@@ -325,25 +328,25 @@ export default function AdminDashboard() {
               ) : (
                 shipments.map((s) => (
                   <Link key={s.id} href={`/admin/shipments/${s.id}`} className="shipRow">
-                    {/* Col 1: Código */}
+                    {/* 1) Código */}
                     <div className="cell">
                       <div className="main code">{s.code}</div>
                       <div className="sub">{fmtDate(s.created_at)}</div>
                     </div>
 
-                    {/* Col 2: Cliente */}
+                    {/* 2) Cliente */}
                     <div className="cell">
                       <div className="main client">{s.client_name || "—"}</div>
                       <div className="sub">{productInline(s)}</div>
                     </div>
 
-                    {/* Col 3: Destino */}
+                    {/* 3) Destino */}
                     <div className="cell dest">
-                      <div className="main destIata">{(s.destination || "").toUpperCase()}</div>
+                      <div className="main">{(s.destination || "").toUpperCase()}</div>
                       <div className="sub">&nbsp;</div>
                     </div>
 
-                    {/* Col 4: Hito (alineado y “pill” compacto) */}
+                    {/* 4) Hito */}
                     <div className="cell milestone">
                       <MiniMilestone status={s.status} />
                     </div>
@@ -354,21 +357,20 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        {/* Quick Actions PRO */}
+        {/* RIGHT: Quick actions (PRO) */}
         <div className="card">
           <div className="cardTitle">Acciones rápidas</div>
-          <div className="cardSub">Botones pro, visibles y con hover premium.</div>
+          <div className="cardSub">Botones grandes, claros y con hover premium.</div>
 
           <div className="ff-divider" style={{ margin: "12px 0" }} />
 
-          {/* ✅ 2-up desktop, 1 col mobile */}
           <div className="ctaGrid">
             <Link className="ctaCard primary" href="/admin/shipments">
               <div className="ctaIcon">
                 <PackagePlus size={22} />
               </div>
               <div className="ctaTitle">Crear embarque</div>
-              <div className="ctaDesc">Operación, hitos, docs y fotos.</div>
+              <div className="ctaDesc">Inicia operación, hitos, docs y fotos.</div>
               <div className="ctaFoot">Operación</div>
             </Link>
 
@@ -408,13 +410,12 @@ export default function AdminDashboard() {
               No se pudo cargar el total de clientes: <b>{errClients}</b>
             </div>
           ) : (
-            <div className="hint">Tip: luego sumamos mini-badges de pendientes (docs/fotos).</div>
+            <div className="hint">Tip: podemos sumar mini-badges de pendientes (docs/fotos) por embarque.</div>
           )}
         </div>
       </div>
 
       <style jsx>{`
-        /* ===== KPIs ===== */
         .kpiStrip {
           display: flex;
           gap: 10px;
@@ -456,22 +457,16 @@ export default function AdminDashboard() {
           font-weight: 900;
           cursor: pointer;
           color: var(--ff-text);
-          transition: background 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
         }
         .btnGhost:hover {
           background: rgba(31, 122, 58, 0.05);
           border-color: rgba(31, 122, 58, 0.18);
-          transform: translateY(-1px);
-          box-shadow: 0 10px 24px rgba(2, 6, 23, 0.06);
         }
         .btnGhost:disabled {
           opacity: 0.6;
           cursor: not-allowed;
-          transform: none;
-          box-shadow: none;
         }
 
-        /* ===== Layout ===== */
         .mainGrid {
           display: grid;
           gap: 12px;
@@ -524,47 +519,39 @@ export default function AdminDashboard() {
           color: var(--ff-text);
           text-decoration: none;
           white-space: nowrap;
-          transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
         }
         .btnSmall:hover {
           background: rgba(31, 122, 58, 0.05);
           border-color: rgba(31, 122, 58, 0.18);
-          transform: translateY(-1px);
         }
 
-        /* ===== Últimos embarques (4 columnas, sin headers) ===== */
+        /* Shipments grid (no headers) */
         .shipGrid {
           border: 1px solid rgba(15, 23, 42, 0.08);
           border-radius: 12px;
           overflow: hidden;
           background: #fff;
         }
-
         .shipRow {
           display: grid;
-          grid-template-columns: 1.2fr 1.6fr 0.55fr 0.95fr; /* Código | Cliente | Destino | Hito */
+          grid-template-columns: 1.2fr 1.6fr 0.55fr 0.95fr;
           align-items: center;
           padding: 10px 12px;
           text-decoration: none;
           color: var(--ff-text);
           border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-          transition: background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+          transition: background 160ms ease;
         }
         .shipRow:last-child {
           border-bottom: 0;
         }
-
-        /* ✅ Hover verde muy tenue + toque “ERP moderno” (lift ultra sutil) */
         .shipRow:hover {
           background: rgba(31, 122, 58, 0.055);
-          transform: translateY(-0.5px);
-          box-shadow: 0 10px 22px rgba(2, 6, 23, 0.04);
         }
 
         .cell {
           min-width: 0;
         }
-
         .main {
           font-size: 13px;
           font-weight: 700;
@@ -579,11 +566,6 @@ export default function AdminDashboard() {
         .main.client {
           font-weight: 800;
         }
-        .main.destIata {
-          font-weight: 950;
-          letter-spacing: 0.8px;
-        }
-
         .sub {
           margin-top: 2px;
           font-size: 12px;
@@ -592,22 +574,12 @@ export default function AdminDashboard() {
           overflow: hidden;
           text-overflow: ellipsis;
         }
-
-        .cell.dest {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-        }
-
-        /* ✅ Hito alineado correctamente a la derecha */
         .cell.milestone {
           display: flex;
           justify-content: flex-end;
           align-items: center;
-          min-width: 0;
         }
 
-        /* ✅ Pill compacto y consistente */
         .miniMilestone {
           display: inline-flex;
           align-items: center;
@@ -619,10 +591,9 @@ export default function AdminDashboard() {
           font-size: 12px;
           line-height: 16px;
           white-space: nowrap;
-          max-width: 100%;
         }
         .miniMilestoneTxt {
-          max-width: 160px;
+          max-width: 170px;
           overflow: hidden;
           text-overflow: ellipsis;
         }
@@ -633,15 +604,15 @@ export default function AdminDashboard() {
           color: var(--ff-muted);
         }
 
-        /* ===== Skeleton ===== */
+        /* Skeleton */
         .skeleton {
           pointer-events: none;
         }
         .sk {
           border-radius: 8px;
           background: rgba(15, 23, 42, 0.06);
-          overflow: hidden;
           position: relative;
+          overflow: hidden;
         }
         .sk:after {
           content: "";
@@ -679,16 +650,15 @@ export default function AdminDashboard() {
           border-radius: 999px;
         }
 
-        /* ===== Quick Actions PRO ===== */
+        /* Quick actions PRO */
         .ctaGrid {
           display: grid;
           grid-template-columns: 1fr;
           gap: 10px;
         }
-        /* ✅ uno al lado del otro en desktop */
-        @media (min-width: 900px) {
+        @media (min-width: 980px) {
           .ctaGrid {
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1fr; /* lado a lado en desktop */
           }
         }
 
@@ -701,14 +671,21 @@ export default function AdminDashboard() {
           gap: 10px;
           transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease, border-color 160ms ease;
           box-shadow: 0 8px 22px rgba(2, 6, 23, 0.05);
+          background: #fff;
+        }
+        .ctaCard:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 14px 34px rgba(2, 6, 23, 0.1);
+          border-color: rgba(31, 122, 58, 0.22);
+          background: rgba(31, 122, 58, 0.04);
         }
 
-        .ctaCard .ctaIcon {
-          width: 46px;
-          height: 46px;
+        .ctaIcon {
+          width: 44px;
+          height: 44px;
           border-radius: 14px;
           display: grid;
-          place-items: center; /* ✅ icono centrado */
+          place-items: center; /* icono centrado */
           border: 1px solid rgba(15, 23, 42, 0.12);
           background: rgba(15, 23, 42, 0.03);
         }
@@ -718,7 +695,6 @@ export default function AdminDashboard() {
           letter-spacing: -0.2px;
           font-size: 14px;
           line-height: 18px;
-          color: var(--ff-text);
         }
         .ctaDesc {
           font-size: 12px;
@@ -731,7 +707,6 @@ export default function AdminDashboard() {
           letter-spacing: 0.2px;
           text-transform: uppercase;
           color: rgba(15, 23, 42, 0.55);
-          margin-top: 2px;
         }
 
         .ctaCard.primary {
@@ -740,26 +715,15 @@ export default function AdminDashboard() {
         }
         .ctaCard.primary .ctaIcon {
           border-color: rgba(31, 122, 58, 0.22);
-          background: rgba(31, 122, 58, 0.1);
+          background: rgba(31, 122, 58, 0.10);
           color: var(--ff-green-dark);
-        }
-
-        .ctaCard.secondary {
-          background: #fff;
-        }
-
-        /* ✅ Hover premium: lift + shadow + verde tenue */
-        .ctaCard:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 16px 40px rgba(2, 6, 23, 0.12);
-          border-color: rgba(31, 122, 58, 0.22);
-          background: rgba(31, 122, 58, 0.04);
         }
 
         .miniGrid {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 10px;
+          margin-top: 10px;
         }
         .miniCard {
           display: inline-flex;
@@ -767,25 +731,24 @@ export default function AdminDashboard() {
           gap: 10px;
           padding: 10px 10px;
           border-radius: 12px;
-          border: 1px solid rgba(15, 23, 42, 0.1);
+          border: 1px solid rgba(15, 23, 42, 0.10);
           background: #fff;
           text-decoration: none;
           color: var(--ff-text);
           font-weight: 900;
           font-size: 12px;
-          transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+          transition: background 160ms ease, border-color 160ms ease;
         }
         .miniCard:hover {
           background: rgba(31, 122, 58, 0.05);
           border-color: rgba(31, 122, 58, 0.18);
-          transform: translateY(-1px);
         }
 
         .hint {
           margin-top: 10px;
           font-size: 12px;
           color: var(--ff-muted);
-          border-top: 1px dashed rgba(15, 23, 42, 0.1);
+          border-top: 1px dashed rgba(15, 23, 42, 0.10);
           padding-top: 10px;
         }
         .hintWarn {
@@ -804,7 +767,6 @@ export default function AdminDashboard() {
           font-size: 12px;
         }
 
-        /* ===== Responsive shipments ===== */
         @media (max-width: 860px) {
           .shipRow {
             grid-template-columns: 1.2fr 1.4fr 0.6fr 1fr;
