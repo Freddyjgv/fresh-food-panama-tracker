@@ -68,7 +68,6 @@ function productInline(s: ShipmentListItem) {
 
 function isActiveStatus(raw: string) {
   const s = String(raw || "").toUpperCase();
-  // Todo lo “En Destino” o finalizado NO es activo
   if (["AT_DESTINATION", "DELIVERED", "CLOSED"].includes(s)) return false;
   return true;
 }
@@ -99,28 +98,12 @@ function MiniMilestone({ status }: { status: string }) {
 
   const style: React.CSSProperties =
     tone === "success"
-      ? {
-          background: "rgba(31,122,58,.10)",
-          borderColor: "rgba(31,122,58,.22)",
-          color: "var(--ff-green-dark)",
-        }
+      ? { background: "rgba(31,122,58,.10)", borderColor: "rgba(31,122,58,.22)", color: "var(--ff-green-dark)" }
       : tone === "warn"
-      ? {
-          background: "rgba(209,119,17,.12)",
-          borderColor: "rgba(209,119,17,.24)",
-          color: "#7a3f00",
-        }
+      ? { background: "rgba(209,119,17,.12)", borderColor: "rgba(209,119,17,.24)", color: "#7a3f00" }
       : tone === "info"
-      ? {
-          background: "rgba(59,130,246,.10)",
-          borderColor: "rgba(59,130,246,.22)",
-          color: "rgba(30,64,175,1)",
-        }
-      : {
-          background: "rgba(15,23,42,.04)",
-          borderColor: "rgba(15,23,42,.12)",
-          color: "var(--ff-text)",
-        };
+      ? { background: "rgba(59,130,246,.10)", borderColor: "rgba(59,130,246,.22)", color: "rgba(30,64,175,1)" }
+      : { background: "rgba(15,23,42,.04)", borderColor: "rgba(15,23,42,.12)", color: "var(--ff-text)" };
 
   return (
     <span className="miniMilestone" style={style} title={label}>
@@ -130,12 +113,6 @@ function MiniMilestone({ status }: { status: string }) {
   );
 }
 
-/**
- * Token “1 sola vez”:
- * - NO usamos requireAdmin aquí
- * - NO bloqueamos el render
- * - No hacemos redirect (AdminLayout ya se encarga del flujo de sesión)
- */
 async function getAccessTokenOnce(tokenRef: React.MutableRefObject<string | null>) {
   if (tokenRef.current) return tokenRef.current;
   const { data } = await supabase.auth.getSession();
@@ -144,11 +121,7 @@ async function getAccessTokenOnce(tokenRef: React.MutableRefObject<string | null
   return token;
 }
 
-async function fetchJsonWithTimeout<T>(
-  url: string,
-  token: string,
-  timeoutMs = 9000
-): Promise<T> {
+async function fetchJsonWithTimeout<T>(url: string, token: string, timeoutMs = 9000): Promise<T> {
   const controller = new AbortController();
   const id = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -157,7 +130,6 @@ async function fetchJsonWithTimeout<T>(
       redirect: "follow",
       headers: { Authorization: `Bearer ${token}` },
     });
-
     if (!res.ok) {
       const t = await res.text().catch(() => "");
       throw new Error(t || `HTTP ${res.status}`);
@@ -169,12 +141,10 @@ async function fetchJsonWithTimeout<T>(
 }
 
 export default function AdminDashboard() {
-  // UI FIRST: render inmediato
   const [shipments, setShipments] = useState<ShipmentListItem[]>([]);
   const [shipmentsTotal, setShipmentsTotal] = useState<number>(0);
   const [clientsTotal, setClientsTotal] = useState<number>(0);
 
-  // Loads separados (no bloquea todo)
   const [shipmentsLoading, setShipmentsLoading] = useState(true);
   const [clientsLoading, setClientsLoading] = useState(true);
 
@@ -188,7 +158,6 @@ export default function AdminDashboard() {
     () => shipments.filter((s) => isActiveStatus(s.status)).length,
     [shipments]
   );
-
   const anyLoading = shipmentsLoading || clientsLoading;
 
   async function load() {
@@ -232,9 +201,7 @@ export default function AdminDashboard() {
 
       if (cRes.status === "fulfilled") {
         const inferredTotal =
-          typeof cRes.value.total === "number"
-            ? cRes.value.total
-            : cRes.value.items?.length || 0;
+          typeof cRes.value.total === "number" ? cRes.value.total : cRes.value.items?.length || 0;
         setClientsTotal(inferredTotal);
         setErrClients(null);
       } else {
@@ -248,14 +215,12 @@ export default function AdminDashboard() {
   }
 
   useEffect(() => {
-    // fetch NO bloqueante
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Denso, rápido, estilo ERP.">
-      {/* KPI strip */}
       <div className="kpiStrip">
         <div className="kpiChip">
           <span className="kpiLbl">Embarques</span>
@@ -279,7 +244,6 @@ export default function AdminDashboard() {
       <div style={{ height: 12 }} />
 
       <div className="mainGrid">
-        {/* LEFT: Últimos embarques (sin headers) */}
         <div className="card">
           <div className="cardHead">
             <div>
@@ -287,8 +251,8 @@ export default function AdminDashboard() {
               <div className="cardSub">Código · Cliente · Destino · Hito</div>
             </div>
 
-            <Link className="btnSmall" href="/admin/shipments">
-              Ver todos →
+            <Link href="/admin/shipments" legacyBehavior>
+              <a className="btnSmall">Ver todos →</a>
             </Link>
           </div>
 
@@ -327,29 +291,27 @@ export default function AdminDashboard() {
                 <div className="tEmpty">Aún no hay embarques.</div>
               ) : (
                 shipments.map((s) => (
-                  <Link key={s.id} href={`/admin/shipments/${s.id}`} className="shipRow">
-                    {/* 1) Código */}
-                    <div className="cell">
-                      <div className="main code">{s.code}</div>
-                      <div className="sub">{fmtDate(s.created_at)}</div>
-                    </div>
+                  <Link key={s.id} href={`/admin/shipments/${s.id}`} legacyBehavior>
+                    <a className="shipRow">
+                      <div className="cell">
+                        <div className="main code">{s.code}</div>
+                        <div className="sub">{fmtDate(s.created_at)}</div>
+                      </div>
 
-                    {/* 2) Cliente */}
-                    <div className="cell">
-                      <div className="main client">{s.client_name || "—"}</div>
-                      <div className="sub">{productInline(s)}</div>
-                    </div>
+                      <div className="cell">
+                        <div className="main client">{s.client_name || "—"}</div>
+                        <div className="sub">{productInline(s)}</div>
+                      </div>
 
-                    {/* 3) Destino */}
-                    <div className="cell dest">
-                      <div className="main">{(s.destination || "").toUpperCase()}</div>
-                      <div className="sub">&nbsp;</div>
-                    </div>
+                      <div className="cell dest">
+                        <div className="main">{(s.destination || "").toUpperCase()}</div>
+                        <div className="sub">&nbsp;</div>
+                      </div>
 
-                    {/* 4) Hito */}
-                    <div className="cell milestone">
-                      <MiniMilestone status={s.status} />
-                    </div>
+                      <div className="cell milestone">
+                        <MiniMilestone status={s.status} />
+                      </div>
+                    </a>
                   </Link>
                 ))
               )}
@@ -357,7 +319,6 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        {/* RIGHT: Quick actions (PRO) */}
         <div className="card">
           <div className="cardTitle">Acciones rápidas</div>
           <div className="cardSub">Botones grandes, claros y con hover premium.</div>
@@ -365,43 +326,55 @@ export default function AdminDashboard() {
           <div className="ff-divider" style={{ margin: "12px 0" }} />
 
           <div className="ctaGrid">
-            <Link className="ctaCard primary" href="/admin/shipments">
-              <div className="ctaIcon">
-                <PackagePlus size={22} />
-              </div>
-              <div className="ctaTitle">Crear embarque</div>
-              <div className="ctaDesc">Inicia operación, hitos, docs y fotos.</div>
-              <div className="ctaFoot">Operación</div>
+            <Link href="/admin/shipments" legacyBehavior>
+              <a className="ctaCard primary">
+                <div className="ctaIcon">
+                  <PackagePlus size={22} />
+                </div>
+                <div className="ctaTitle">Crear embarque</div>
+                <div className="ctaDesc">Inicia operación, hitos, docs y fotos.</div>
+                <div className="ctaFoot">Operación</div>
+              </a>
             </Link>
 
-            <Link className="ctaCard secondary" href="/admin/quotes/new">
-              <div className="ctaIcon">
-                <FilePlus2 size={22} />
-              </div>
-              <div className="ctaTitle">Nueva cotización</div>
-              <div className="ctaDesc">Cotiza rápido (AIR/SEA) y guarda historial.</div>
-              <div className="ctaFoot">Ventas</div>
+            <Link href="/admin/quotes/new" legacyBehavior>
+              <a className="ctaCard secondary">
+                <div className="ctaIcon">
+                  <FilePlus2 size={22} />
+                </div>
+                <div className="ctaTitle">Nueva cotización</div>
+                <div className="ctaDesc">Cotiza rápido (AIR/SEA) y guarda historial.</div>
+                <div className="ctaFoot">Ventas</div>
+              </a>
             </Link>
           </div>
 
           <div style={{ height: 10 }} />
 
           <div className="miniGrid">
-            <Link className="miniCard" href="/admin/shipments">
-              <Package2 size={16} />
-              <span>Embarques</span>
+            <Link href="/admin/shipments" legacyBehavior>
+              <a className="miniCard">
+                <Package2 size={16} />
+                <span>Embarques</span>
+              </a>
             </Link>
-            <Link className="miniCard" href={QUOTE_PATH}>
-              <Calculator size={16} />
-              <span>Cotizador</span>
+            <Link href={QUOTE_PATH} legacyBehavior>
+              <a className="miniCard">
+                <Calculator size={16} />
+                <span>Cotizador</span>
+              </a>
             </Link>
-            <Link className="miniCard" href="/admin/users">
-              <Users2 size={16} />
-              <span>Clientes</span>
+            <Link href="/admin/users" legacyBehavior>
+              <a className="miniCard">
+                <Users2 size={16} />
+                <span>Clientes</span>
+              </a>
             </Link>
-            <Link className="miniCard" href={QUOTE_PATH}>
-              <History size={16} />
-              <span>Historial</span>
+            <Link href={QUOTE_PATH} legacyBehavior>
+              <a className="miniCard">
+                <History size={16} />
+                <span>Historial</span>
+              </a>
             </Link>
           </div>
 
@@ -525,7 +498,6 @@ export default function AdminDashboard() {
           border-color: rgba(31, 122, 58, 0.18);
         }
 
-        /* Shipments grid (no headers) */
         .shipGrid {
           border: 1px solid rgba(15, 23, 42, 0.08);
           border-radius: 12px;
@@ -604,7 +576,6 @@ export default function AdminDashboard() {
           color: var(--ff-muted);
         }
 
-        /* Skeleton */
         .skeleton {
           pointer-events: none;
         }
@@ -650,7 +621,6 @@ export default function AdminDashboard() {
           border-radius: 999px;
         }
 
-        /* Quick actions PRO */
         .ctaGrid {
           display: grid;
           grid-template-columns: 1fr;
@@ -658,7 +628,7 @@ export default function AdminDashboard() {
         }
         @media (min-width: 980px) {
           .ctaGrid {
-            grid-template-columns: 1fr 1fr; /* lado a lado en desktop */
+            grid-template-columns: 1fr 1fr;
           }
         }
 
@@ -685,7 +655,7 @@ export default function AdminDashboard() {
           height: 44px;
           border-radius: 14px;
           display: grid;
-          place-items: center; /* icono centrado */
+          place-items: center;
           border: 1px solid rgba(15, 23, 42, 0.12);
           background: rgba(15, 23, 42, 0.03);
         }
