@@ -1,8 +1,7 @@
 // src/pages/admin/index.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  PlusCircle,
   RefreshCcw,
   PackagePlus,
   FilePlus2,
@@ -17,7 +16,6 @@ import {
 } from "lucide-react";
 
 import { supabase } from "../../lib/supabaseClient";
-import { requireAdminOrRedirect } from "../../lib/requireAdmin";
 import { AdminLayout } from "../../components/AdminLayout";
 import { labelStatus } from "../../lib/shipmentFlow";
 
@@ -64,7 +62,11 @@ const QUOTE_PATH = "/admin/quotes";
 
 function fmtDate(iso: string) {
   try {
-    return new Date(iso).toLocaleDateString("es-PA", { year: "numeric", month: "short", day: "2-digit" });
+    return new Date(iso).toLocaleDateString("es-PA", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    });
   } catch {
     return iso;
   }
@@ -81,7 +83,6 @@ function isActiveStatus(raw: string) {
   const s = String(raw || "").toUpperCase();
   // Todo lo “En Destino” o finalizado NO es activo
   if (["AT_DESTINATION", "DELIVERED", "CLOSED"].includes(s)) return false;
-  // Opcional: si tienes otros estados finales, agrégalos aquí
   return true;
 }
 
@@ -90,7 +91,6 @@ function milestoneTone(raw: string): "neutral" | "success" | "warn" | "info" {
   if (["PACKED", "DOCS_READY"].includes(s)) return "success";
   if (["AT_ORIGIN", "ARRIVED_PTY", "DEPARTED"].includes(s)) return "warn";
   if (["IN_TRANSIT"].includes(s)) return "info";
-  if (["AT_DESTINATION", "DELIVERED", "CLOSED"].includes(s)) return "neutral";
   return "neutral";
 }
 
@@ -111,12 +111,28 @@ function MiniMilestone({ status }: { status: string }) {
 
   const style: React.CSSProperties =
     tone === "success"
-      ? { background: "rgba(31,122,58,.10)", borderColor: "rgba(31,122,58,.22)", color: "var(--ff-green-dark)" }
+      ? {
+          background: "rgba(31,122,58,.10)",
+          borderColor: "rgba(31,122,58,.22)",
+          color: "var(--ff-green-dark)",
+        }
       : tone === "warn"
-      ? { background: "rgba(209,119,17,.12)", borderColor: "rgba(209,119,17,.24)", color: "#7a3f00" }
+      ? {
+          background: "rgba(209,119,17,.12)",
+          borderColor: "rgba(209,119,17,.24)",
+          color: "#7a3f00",
+        }
       : tone === "info"
-      ? { background: "rgba(59,130,246,.10)", borderColor: "rgba(59,130,246,.22)", color: "rgba(30,64,175,1)" }
-      : { background: "rgba(15,23,42,.04)", borderColor: "rgba(15,23,42,.12)", color: "var(--ff-text)" };
+      ? {
+          background: "rgba(59,130,246,.10)",
+          borderColor: "rgba(59,130,246,.22)",
+          color: "rgba(30,64,175,1)",
+        }
+      : {
+          background: "rgba(15,23,42,.04)",
+          borderColor: "rgba(15,23,42,.12)",
+          color: "var(--ff-text)",
+        };
 
   return (
     <span className="miniMilestone" style={style} title={label}>
@@ -126,86 +142,120 @@ function MiniMilestone({ status }: { status: string }) {
   );
 }
 
-export default function AdminDashboard() {
-  const [authReady, setAuthReady] = useState(false);
-  const [loading, setLoading] = useState(true);
+/** Fetch con timeout para evitar “se queda cargando minutos” */
+async function fetchWithTimeout(url: string, opts: RequestInit & { timeoutMs?: number } = {}) {
+  const { timeoutMs = 12000, ...rest } = opts;
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
 
+  try {
+    const res = await fetch(url, { ...rest, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+export default function AdminDashboard() {
+  const [token, setToken] = useState<string | null>(null);
+
+  const [loading, setLoading] = useState(true);
   const [shipments, setShipments] = useState<ShipmentListItem[]>([]);
   const [shipmentsTotal, setShipmentsTotal] = useState<number>(0);
   const [clientsTotal, setClientsTotal] = useState<number>(0);
   const [err, setErr] = useState<string | null>(null);
 
-  async function getTokenOrRedirect() {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) {
-      window.location.href = "/login";
-      return null;
-    }
-    return token;
-  }
+  // Evita setState si el componente se desmonta o si llega un load viejo
+  const loadSeq = useRef(0);
 
   useEffect(() => {
     (async () => {
-      const r = await requireAdminOrRedirect();
-      if (!r.ok) return;
-      setAuthReady(true);
+      const { data } = await supabase.auth.getSession();
+      const t = data.session?.access_token || null;
+      if (!t) {
+        window.location.href = "/login";
+        return;
+      }
+      setToken(t);
     })();
   }, []);
 
   async function load() {
+    if (!token) return;
+
+    const seq = ++loadSeq.current;
     setLoading(true);
     setErr(null);
 
-    const token = await getTokenOrRedirect();
-    if (!token) return;
+    try {
+      // Shipments: pide poquitos + total, para dashboard
+      const qs = new URLSearchParams();
+      qs.set("page", "1");
+      qs.set("dir", "desc");
+      qs.set("mode", "admin");
+      qs.set("pageSize", "12"); // si tu lambda lo soporta; si no, lo ignora sin romper
 
-    // Últimos embarques
-    const qs = new URLSearchParams();
-    qs.set("page", "1");
-    qs.set("dir", "desc");
-    qs.set("mode", "admin");
+      const sUrl = `/.netlify/functions/listShipments?${qs.toString()}`;
+      const cUrl = `/.netlify/functions/listClients`;
 
-    const sRes = await fetch(`/.netlify/functions/listShipments?${qs.toString()}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+      const [sRes, cRes] = await Promise.all([
+        fetchWithTimeout(sUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+          timeoutMs: 12000,
+        }),
+        fetchWithTimeout(cUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+          timeoutMs: 12000,
+        }),
+      ]);
 
-    if (!sRes.ok) {
-      const t = await sRes.text().catch(() => "");
-      setErr(t || "No se pudieron cargar embarques");
-      setLoading(false);
-      return;
+      // Si llegó un load viejo, ignoramos
+      if (seq !== loadSeq.current) return;
+
+      // Shipments
+      if (!sRes.ok) {
+        const t = await sRes.text().catch(() => "");
+        setErr(t || "No se pudieron cargar embarques");
+        return;
+      }
+      const sJson = (await sRes.json()) as ShipmentsApiResponse;
+      setShipments(sJson.items?.slice(0, 10) || []);
+      setShipmentsTotal(sJson.total ?? (sJson.items?.length || 0));
+
+      // Clients total (si falla, no tumba el dashboard)
+      if (cRes.ok) {
+        const cJson = (await cRes.json()) as ClientsApiResponse;
+        const inferredTotal = typeof cJson.total === "number" ? cJson.total : (cJson.items?.length || 0);
+        setClientsTotal(inferredTotal);
+      }
+    } catch (e: any) {
+      if (seq !== loadSeq.current) return;
+
+      // Abort = timeout
+      if (e?.name === "AbortError") {
+        setErr("Timeout cargando dashboard. Revisa Netlify functions / red.");
+        return;
+      }
+      setErr("Error inesperado cargando dashboard.");
+    } finally {
+      if (seq === loadSeq.current) setLoading(false);
     }
-
-    const sJson = (await sRes.json()) as ShipmentsApiResponse;
-    setShipments(sJson.items?.slice(0, 10) || []);
-    setShipmentsTotal(sJson.total ?? (sJson.items?.length || 0));
-
-    // Total clientes
-    const cRes = await fetch(`/.netlify/functions/listClients`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (cRes.ok) {
-      const cJson = (await cRes.json()) as ClientsApiResponse;
-      const inferredTotal = typeof cJson.total === "number" ? cJson.total : (cJson.items?.length || 0);
-      setClientsTotal(inferredTotal);
-    }
-
-    setLoading(false);
   }
 
   useEffect(() => {
-    if (!authReady) return;
+    if (!token) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authReady]);
+  }, [token]);
 
-  const activeShipments = useMemo(() => shipments.filter((s) => isActiveStatus(s.status)).length, [shipments]);
+  const activeShipments = useMemo(
+    () => shipments.filter((s) => isActiveStatus(s.status)).length,
+    [shipments]
+  );
 
   return (
-    <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Denso, rápido, estilo ERP.">
-      {/* Top strip KPIs (compactos) */}
+    <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Rápido y denso (ERP).">
+      {/* KPI strip + refresh */}
       <div className="kpiStrip">
         <div className="kpiChip">
           <span className="kpiLbl">Embarques</span>
@@ -229,14 +279,13 @@ export default function AdminDashboard() {
       <div style={{ height: 12 }} />
 
       <div className="mainGrid">
-        {/* LEFT: Shipments table */}
+        {/* LEFT: Últimos embarques (denso y compacto) */}
         <div className="card">
           <div className="cardHead">
             <div>
               <div className="cardTitle">Últimos embarques</div>
-              <div className="cardSub">Click para abrir. Tabla densa (ERP).</div>
+              <div className="cardSub">Entrar en 1 click. Compacto y legible.</div>
             </div>
-
             <Link className="btnSmall" href="/admin/shipments">
               Ver todos →
             </Link>
@@ -255,7 +304,7 @@ export default function AdminDashboard() {
                 <div>Código</div>
                 <div>Cliente</div>
                 <div>Destino</div>
-                <div className="thRight">Estado</div>
+                <div className="thRight">Hito</div>
               </div>
 
               {loading ? (
@@ -290,7 +339,7 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        {/* RIGHT: Quick Actions */}
+        {/* RIGHT: Acciones rápidas */}
         <div className="card">
           <div className="cardTitle">Acciones rápidas</div>
           <div className="cardSub">Botones visibles para operar sin pensar.</div>
@@ -333,7 +382,7 @@ export default function AdminDashboard() {
           </div>
 
           <div className="tip">
-            Tip: dejamos esto listo para agregar “Pendientes” por embarque (docs/fotos) como mini badges.
+            Tip: aquí podemos poner “Pendientes” por embarque (docs/fotos) como badges, sin cargar más data.
           </div>
         </div>
       </div>
@@ -359,6 +408,7 @@ export default function AdminDashboard() {
           font-size: 12px;
           font-weight: 900;
           color: var(--ff-muted);
+          letter-spacing: -0.1px;
         }
         .kpiVal {
           font-size: 16px;
@@ -448,7 +498,7 @@ export default function AdminDashboard() {
           background: rgba(15, 23, 42, 0.03);
         }
 
-        /* Modern dense table */
+        /* Dense table */
         .table {
           border: 1px solid rgba(15, 23, 42, 0.08);
           border-radius: 12px;
@@ -458,7 +508,6 @@ export default function AdminDashboard() {
         .thead {
           display: grid;
           grid-template-columns: 1.1fr 1.6fr 0.7fr 0.9fr;
-          gap: 0;
           padding: 10px 12px;
           background: rgba(15, 23, 42, 0.02);
           border-bottom: 1px solid rgba(15, 23, 42, 0.06);
@@ -510,7 +559,6 @@ export default function AdminDashboard() {
           display: flex;
           justify-content: flex-end;
           align-items: center;
-          gap: 8px;
           min-width: 0;
         }
 
@@ -556,7 +604,7 @@ export default function AdminDashboard() {
           text-decoration: none;
           font-weight: 950;
           letter-spacing: -0.2px;
-          border: 1px solid rgba(15, 23, 42, 0.10);
+          border: 1px solid rgba(15, 23, 42, 0.1);
         }
         .btnPrimary {
           background: var(--ff-green);
@@ -566,7 +614,6 @@ export default function AdminDashboard() {
         .btnPrimary:hover {
           filter: brightness(0.98);
         }
-
         .btnSecondary {
           background: #fff;
           color: var(--ff-text);
@@ -601,7 +648,7 @@ export default function AdminDashboard() {
           gap: 10px;
           padding: 10px 10px;
           border-radius: 12px;
-          border: 1px solid rgba(15, 23, 42, 0.10);
+          border: 1px solid rgba(15, 23, 42, 0.1);
           background: #fff;
           text-decoration: none;
           color: var(--ff-text);
@@ -616,7 +663,7 @@ export default function AdminDashboard() {
           margin-top: 10px;
           font-size: 12px;
           color: var(--ff-muted);
-          border-top: 1px dashed rgba(15, 23, 42, 0.10);
+          border-top: 1px dashed rgba(15, 23, 42, 0.1);
           padding-top: 10px;
         }
 
@@ -629,7 +676,8 @@ export default function AdminDashboard() {
         }
 
         @media (max-width: 520px) {
-          .thead, .trow {
+          .thead,
+          .trow {
             grid-template-columns: 1.1fr 1.2fr 0.6fr 1fr;
           }
           .miniMilestoneTxt {
