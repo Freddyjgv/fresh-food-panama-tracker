@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { supabase } from "../../lib/supabaseClient";
+import { requireAdminOrRedirect } from "../../lib/requireAdmin";
 import { AdminLayout } from "../../components/AdminLayout";
 import { labelStatus } from "../../lib/shipmentFlow";
 
@@ -60,6 +61,10 @@ type ClientsApiResponse = {
 
 const QUOTE_PATH = "/admin/quotes";
 
+// Cache para render inmediato
+const CACHE_KEY = "ff_admin_dashboard_cache_v2";
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+
 function fmtDate(iso: string) {
   try {
     return new Date(iso).toLocaleDateString("es-PA", {
@@ -98,14 +103,15 @@ function MiniMilestone({ status }: { status: string }) {
   const tone = milestoneTone(status);
   const label = labelStatus(status);
 
+  const S = String(status || "").toUpperCase();
   const Icon =
-    String(status || "").toUpperCase() === "AT_DESTINATION"
+    S === "AT_DESTINATION"
       ? MapPin
-      : String(status || "").toUpperCase() === "IN_TRANSIT"
+      : S === "IN_TRANSIT"
       ? Truck
-      : String(status || "").toUpperCase() === "DOCS_READY"
+      : S === "DOCS_READY"
       ? FileText
-      : String(status || "").toUpperCase() === "PACKED"
+      : S === "PACKED"
       ? PackageCheck
       : Package2;
 
@@ -142,150 +148,213 @@ function MiniMilestone({ status }: { status: string }) {
   );
 }
 
-/** Fetch con timeout para evitar “se queda cargando minutos” */
-async function fetchWithTimeout(url: string, opts: RequestInit & { timeoutMs?: number } = {}) {
-  const { timeoutMs = 12000, ...rest } = opts;
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const res = await fetch(url, { ...rest, signal: controller.signal });
-    return res;
-  } finally {
-    clearTimeout(t);
+async function getAccessTokenFast(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token || null;
+  if (!token) {
+    window.location.href = "/login";
+    return null;
   }
+  return token;
+}
+
+function withTimeout(ms: number) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), ms);
+  return { controller, cancel: () => clearTimeout(id) };
 }
 
 export default function AdminDashboard() {
-  const [token, setToken] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
-  const [loading, setLoading] = useState(true);
+  // UI states (separados para no “bloquear todo”)
+  const [shipmentsLoading, setShipmentsLoading] = useState(true);
+  const [clientsLoading, setClientsLoading] = useState(true);
+
   const [shipments, setShipments] = useState<ShipmentListItem[]>([]);
   const [shipmentsTotal, setShipmentsTotal] = useState<number>(0);
   const [clientsTotal, setClientsTotal] = useState<number>(0);
-  const [err, setErr] = useState<string | null>(null);
 
-  // Evita setState si el componente se desmonta o si llega un load viejo
-  const loadSeq = useRef(0);
+  const [errShipments, setErrShipments] = useState<string | null>(null);
+  const [errClients, setErrClients] = useState<string | null>(null);
 
+  const tokenRef = useRef<string | null>(null);
+  const inFlightRef = useRef(false);
+
+  // Gate admin (una sola vez)
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      const t = data.session?.access_token || null;
-      if (!t) {
-        window.location.href = "/login";
-        return;
-      }
-      setToken(t);
+      const r = await requireAdminOrRedirect();
+      if (!r.ok) return;
+      const token = await getAccessTokenFast();
+      if (!token) return;
+      tokenRef.current = token;
+      setAuthReady(true);
     })();
   }, []);
 
-  async function load() {
-    if (!token) return;
-
-    const seq = ++loadSeq.current;
-    setLoading(true);
-    setErr(null);
-
+  // Leer cache para pintar instantáneo
+  useEffect(() => {
     try {
-      // Shipments: pide poquitos + total, para dashboard
-      const qs = new URLSearchParams();
-      qs.set("page", "1");
-      qs.set("dir", "desc");
-      qs.set("mode", "admin");
-      qs.set("pageSize", "12"); // si tu lambda lo soporta; si no, lo ignora sin romper
+      const raw = sessionStorage.getItem(CACHE_KEY);
+      if (!raw) return;
+      const js = JSON.parse(raw);
+      if (!js || typeof js !== "object") return;
+      if (!js.ts || Date.now() - Number(js.ts) > CACHE_TTL_MS) return;
 
-      const sUrl = `/.netlify/functions/listShipments?${qs.toString()}`;
-      const cUrl = `/.netlify/functions/listClients`;
+      if (Array.isArray(js.shipments)) setShipments(js.shipments);
+      if (typeof js.shipmentsTotal === "number") setShipmentsTotal(js.shipmentsTotal);
+      if (typeof js.clientsTotal === "number") setClientsTotal(js.clientsTotal);
 
-      const [sRes, cRes] = await Promise.all([
-        fetchWithTimeout(sUrl, {
-          headers: { Authorization: `Bearer ${token}` },
-          timeoutMs: 12000,
-        }),
-        fetchWithTimeout(cUrl, {
-          headers: { Authorization: `Bearer ${token}` },
-          timeoutMs: 12000,
-        }),
-      ]);
-
-      // Si llegó un load viejo, ignoramos
-      if (seq !== loadSeq.current) return;
-
-      // Shipments
-      if (!sRes.ok) {
-        const t = await sRes.text().catch(() => "");
-        setErr(t || "No se pudieron cargar embarques");
-        return;
-      }
-      const sJson = (await sRes.json()) as ShipmentsApiResponse;
-      setShipments(sJson.items?.slice(0, 10) || []);
-      setShipmentsTotal(sJson.total ?? (sJson.items?.length || 0));
-
-      // Clients total (si falla, no tumba el dashboard)
-      if (cRes.ok) {
-        const cJson = (await cRes.json()) as ClientsApiResponse;
-        const inferredTotal = typeof cJson.total === "number" ? cJson.total : (cJson.items?.length || 0);
-        setClientsTotal(inferredTotal);
-      }
-    } catch (e: any) {
-      if (seq !== loadSeq.current) return;
-
-      // Abort = timeout
-      if (e?.name === "AbortError") {
-        setErr("Timeout cargando dashboard. Revisa Netlify functions / red.");
-        return;
-      }
-      setErr("Error inesperado cargando dashboard.");
-    } finally {
-      if (seq === loadSeq.current) setLoading(false);
+      // Pintamos “como si ya estuviera”
+      setShipmentsLoading(false);
+      setClientsLoading(false);
+    } catch {
+      // ignore
     }
+  }, []);
+
+  async function load() {
+    if (!tokenRef.current) return;
+    if (inFlightRef.current) return; // evita dobles loads
+    inFlightRef.current = true;
+
+    setErrShipments(null);
+    setErrClients(null);
+
+    // No vuelvas a dejar la UI “en blanco”: solo activa loaders por bloque
+    setShipmentsLoading(true);
+    setClientsLoading(true);
+
+    const token = tokenRef.current;
+
+    // Timeouts (evita “minutos colgado”)
+    const t1 = withTimeout(12000);
+    const t2 = withTimeout(12000);
+
+    // Shipments QS (limitamos a 10 para dashboard)
+    const qs = new URLSearchParams();
+    qs.set("page", "1");
+    qs.set("dir", "desc");
+    qs.set("mode", "admin");
+    qs.set("pageSize", "10"); // si tu function lo ignora, no rompe
+
+    const pShipments = fetch(`/.netlify/functions/listShipments?${qs.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: t1.controller.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error((await res.text().catch(() => "")) || `HTTP ${res.status}`);
+        return (await res.json()) as ShipmentsApiResponse;
+      })
+      .then((sJson) => {
+        const list = sJson.items?.slice(0, 10) || [];
+        setShipments(list);
+        setShipmentsTotal(sJson.total ?? list.length);
+        setShipmentsLoading(false);
+        return { list, total: sJson.total ?? list.length };
+      })
+      .catch((e: any) => {
+        const msg = e?.name === "AbortError" ? "Timeout cargando embarques" : String(e?.message || e || "Error embarques");
+        setErrShipments(msg);
+        setShipmentsLoading(false);
+        return { list: null as any, total: null as any };
+      })
+      .finally(() => t1.cancel());
+
+    const pClients = fetch(`/.netlify/functions/listClients`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: t2.controller.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error((await res.text().catch(() => "")) || `HTTP ${res.status}`);
+        return (await res.json()) as ClientsApiResponse;
+      })
+      .then((cJson) => {
+        const inferredTotal = typeof cJson.total === "number" ? cJson.total : cJson.items?.length || 0;
+        setClientsTotal(inferredTotal);
+        setClientsLoading(false);
+        return { total: inferredTotal };
+      })
+      .catch((e: any) => {
+        const msg = e?.name === "AbortError" ? "Timeout cargando clientes" : String(e?.message || e || "Error clientes");
+        setErrClients(msg);
+        setClientsLoading(false);
+        return { total: null as any };
+      })
+      .finally(() => t2.cancel());
+
+    // Ejecutar en paralelo
+    const [sRes, cRes] = await Promise.all([pShipments, pClients]);
+
+    // Guardar cache SOLO si tuvimos al menos algo útil
+    try {
+      const cache = {
+        ts: Date.now(),
+        shipments: Array.isArray(shipments) && shipments.length ? shipments : (sRes as any)?.list || [],
+        shipmentsTotal: typeof shipmentsTotal === "number" && shipmentsTotal ? shipmentsTotal : (sRes as any)?.total || 0,
+        clientsTotal: typeof clientsTotal === "number" && clientsTotal ? clientsTotal : (cRes as any)?.total || 0,
+      };
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+    } catch {
+      // ignore
+    }
+
+    inFlightRef.current = false;
   }
 
+  // Autoload al quedar listo
   useEffect(() => {
-    if (!token) return;
+    if (!authReady) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [authReady]);
 
-  const activeShipments = useMemo(
-    () => shipments.filter((s) => isActiveStatus(s.status)).length,
-    [shipments]
-  );
+  const activeShipments = useMemo(() => shipments.filter((s) => isActiveStatus(s.status)).length, [shipments]);
+
+  // Loader global: solo para el gate (no para data)
+  if (!authReady) {
+    return (
+      <AdminLayout title="Dashboard" subtitle="Verificando acceso…">
+        <div className="ff-card2">Cargando…</div>
+      </AdminLayout>
+    );
+  }
 
   return (
-    <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Rápido y denso (ERP).">
-      {/* KPI strip + refresh */}
+    <AdminLayout title="Dashboard" subtitle="Operación diaria en 1 click. Rápido, denso, estilo ERP.">
+      {/* KPI strip */}
       <div className="kpiStrip">
         <div className="kpiChip">
           <span className="kpiLbl">Embarques</span>
-          <span className="kpiVal">{loading ? "—" : shipmentsTotal}</span>
+          <span className="kpiVal">{shipmentsLoading ? "—" : shipmentsTotal}</span>
         </div>
         <div className="kpiChip">
           <span className="kpiLbl">Activos</span>
-          <span className="kpiVal">{loading ? "—" : activeShipments}</span>
+          <span className="kpiVal">{shipmentsLoading ? "—" : activeShipments}</span>
         </div>
         <div className="kpiChip">
           <span className="kpiLbl">Clientes</span>
-          <span className="kpiVal">{loading ? "—" : clientsTotal}</span>
+          <span className="kpiVal">{clientsLoading ? "—" : clientsTotal}</span>
         </div>
 
-        <button className="btnGhost" type="button" onClick={load} disabled={loading} title="Refrescar">
+        <button className="btnGhost" type="button" onClick={load} disabled={shipmentsLoading || clientsLoading} title="Refrescar">
           <RefreshCcw size={16} />
-          {loading ? "Cargando…" : "Refrescar"}
+          {(shipmentsLoading || clientsLoading) ? "Cargando…" : "Refrescar"}
         </button>
       </div>
 
       <div style={{ height: 12 }} />
 
       <div className="mainGrid">
-        {/* LEFT: Últimos embarques (denso y compacto) */}
+        {/* LEFT: Últimos embarques */}
         <div className="card">
           <div className="cardHead">
             <div>
               <div className="cardTitle">Últimos embarques</div>
-              <div className="cardSub">Entrar en 1 click. Compacto y legible.</div>
+              <div className="cardSub">Entra en 1 click. Compacto y legible.</div>
             </div>
+
             <Link className="btnSmall" href="/admin/shipments">
               Ver todos →
             </Link>
@@ -293,10 +362,10 @@ export default function AdminDashboard() {
 
           <div className="ff-divider" style={{ margin: "12px 0" }} />
 
-          {err ? (
+          {errShipments ? (
             <div className="msgWarn">
-              <b>Error</b>
-              <div>{err}</div>
+              <b>Error embarques</b>
+              <div>{errShipments}</div>
             </div>
           ) : (
             <div className="table">
@@ -307,8 +376,8 @@ export default function AdminDashboard() {
                 <div className="thRight">Hito</div>
               </div>
 
-              {loading ? (
-                <div className="tEmpty">Cargando…</div>
+              {shipmentsLoading ? (
+                <div className="tEmpty">Cargando embarques…</div>
               ) : shipments.length === 0 ? (
                 <div className="tEmpty">Aún no hay embarques.</div>
               ) : (
@@ -326,7 +395,7 @@ export default function AdminDashboard() {
 
                     <div className="cell">
                       <div className="main">{(s.destination || "").toUpperCase()}</div>
-                      <div className="sub">Destino</div>
+                      <div className="sub"> </div>
                     </div>
 
                     <div className="cellRight">
@@ -339,24 +408,34 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        {/* RIGHT: Acciones rápidas */}
+        {/* RIGHT: Quick actions */}
         <div className="card">
           <div className="cardTitle">Acciones rápidas</div>
-          <div className="cardSub">Botones visibles para operar sin pensar.</div>
+          <div className="cardSub">Operar sin navegar: botones grandes y claros.</div>
 
           <div className="ff-divider" style={{ margin: "12px 0" }} />
 
           <div className="ctaGrid">
-            <Link className="btnPrimary" href="/admin/shipments">
-              <PackagePlus size={18} />
-              Crear embarque
-              <span className="btnHint">Operación</span>
+            <Link className="actionBtn primary" href="/admin/shipments">
+              <div className="actionIcon">
+                <PackagePlus size={18} />
+              </div>
+              <div className="actionText">
+                <div className="actionTitle">Crear embarque</div>
+                <div className="actionDesc">Crea, asigna cliente, define destino.</div>
+              </div>
+              <span className="actionTag">Operación</span>
             </Link>
 
-            <Link className="btnSecondary" href="/admin/quotes/new">
-              <FilePlus2 size={18} />
-              Nueva cotización
-              <span className="btnHint">Ventas</span>
+            <Link className="actionBtn" href="/admin/quotes/new">
+              <div className="actionIcon">
+                <FilePlus2 size={18} />
+              </div>
+              <div className="actionText">
+                <div className="actionTitle">Nueva cotización</div>
+                <div className="actionDesc">Genera rápida y guarda historial.</div>
+              </div>
+              <span className="actionTag neutral">Ventas</span>
             </Link>
           </div>
 
@@ -381,9 +460,12 @@ export default function AdminDashboard() {
             </Link>
           </div>
 
-          <div className="tip">
-            Tip: aquí podemos poner “Pendientes” por embarque (docs/fotos) como badges, sin cargar más data.
-          </div>
+          {errClients ? (
+            <div className="msgWarn" style={{ marginTop: 10 }}>
+              <b>Error clientes</b>
+              <div>{errClients}</div>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -408,7 +490,6 @@ export default function AdminDashboard() {
           font-size: 12px;
           font-weight: 900;
           color: var(--ff-muted);
-          letter-spacing: -0.1px;
         }
         .kpiVal {
           font-size: 16px;
@@ -507,7 +588,7 @@ export default function AdminDashboard() {
         }
         .thead {
           display: grid;
-          grid-template-columns: 1.1fr 1.6fr 0.7fr 0.9fr;
+          grid-template-columns: 1.1fr 1.6fr 0.7fr 1fr;
           padding: 10px 12px;
           background: rgba(15, 23, 42, 0.02);
           border-bottom: 1px solid rgba(15, 23, 42, 0.06);
@@ -521,7 +602,7 @@ export default function AdminDashboard() {
 
         .trow {
           display: grid;
-          grid-template-columns: 1.1fr 1.6fr 0.7fr 0.9fr;
+          grid-template-columns: 1.1fr 1.6fr 0.7fr 1fr;
           align-items: center;
           padding: 10px 12px;
           text-decoration: none;
@@ -574,7 +655,7 @@ export default function AdminDashboard() {
           white-space: nowrap;
         }
         .miniMilestoneTxt {
-          max-width: 180px;
+          max-width: 190px;
           overflow: hidden;
           text-overflow: ellipsis;
         }
@@ -585,56 +666,91 @@ export default function AdminDashboard() {
           color: var(--ff-muted);
         }
 
-        /* Quick actions */
+        /* Quick actions (más “real app”) */
         .ctaGrid {
           display: grid;
           grid-template-columns: 1fr;
           gap: 10px;
         }
 
-        .btnPrimary,
-        .btnSecondary {
+        .actionBtn {
           position: relative;
-          display: grid;
-          grid-template-columns: 22px 1fr;
+          display: flex;
+          gap: 12px;
           align-items: center;
-          gap: 10px;
-          padding: 12px 12px;
+          padding: 12px;
           border-radius: 14px;
           text-decoration: none;
-          font-weight: 950;
-          letter-spacing: -0.2px;
-          border: 1px solid rgba(15, 23, 42, 0.1);
-        }
-        .btnPrimary {
-          background: var(--ff-green);
-          color: #fff;
-          border-color: rgba(31, 122, 58, 0.35);
-        }
-        .btnPrimary:hover {
-          filter: brightness(0.98);
-        }
-        .btnSecondary {
+          border: 1px solid rgba(15, 23, 42, 0.10);
           background: #fff;
           color: var(--ff-text);
+          transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
         }
-        .btnSecondary:hover {
+        .actionBtn:hover {
           background: rgba(15, 23, 42, 0.02);
+          transform: translateY(-1px);
+          box-shadow: 0 10px 24px rgba(2, 6, 23, 0.08);
         }
 
-        .btnHint {
+        .actionBtn.primary {
+          border-color: rgba(31, 122, 58, 0.28);
+          background: rgba(31, 122, 58, 0.06);
+        }
+        .actionBtn.primary:hover {
+          background: rgba(31, 122, 58, 0.08);
+        }
+
+        .actionIcon {
+          width: 40px;
+          height: 40px;
+          display: grid;
+          place-items: center;
+          border-radius: 12px;
+          border: 1px solid rgba(15, 23, 42, 0.10);
+          background: rgba(15, 23, 42, 0.03);
+          flex: 0 0 auto;
+        }
+        .actionBtn.primary .actionIcon {
+          border-color: rgba(31, 122, 58, 0.22);
+          background: rgba(31, 122, 58, 0.10);
+          color: var(--ff-green-dark);
+        }
+
+        .actionText {
+          min-width: 0;
+          flex: 1 1 auto;
+        }
+        .actionTitle {
+          font-weight: 950;
+          font-size: 13px;
+          letter-spacing: -0.1px;
+          line-height: 18px;
+        }
+        .actionDesc {
+          margin-top: 2px;
+          font-size: 12px;
+          color: var(--ff-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .actionTag {
           position: absolute;
-          right: 10px;
           top: 10px;
+          right: 10px;
           font-size: 11px;
-          font-weight: 900;
-          opacity: 0.85;
+          font-weight: 950;
+          padding: 4px 8px;
+          border-radius: 999px;
+          border: 1px solid rgba(31, 122, 58, 0.22);
+          background: rgba(31, 122, 58, 0.10);
+          color: var(--ff-green-dark);
         }
-        .btnPrimary .btnHint {
-          color: rgba(255, 255, 255, 0.9);
-        }
-        .btnSecondary .btnHint {
-          color: rgba(15, 23, 42, 0.6);
+        .actionTag.neutral {
+          border-color: rgba(15, 23, 42, 0.12);
+          background: rgba(15, 23, 42, 0.04);
+          color: rgba(15, 23, 42, 0.7);
         }
 
         .miniGrid {
@@ -648,7 +764,7 @@ export default function AdminDashboard() {
           gap: 10px;
           padding: 10px 10px;
           border-radius: 12px;
-          border: 1px solid rgba(15, 23, 42, 0.1);
+          border: 1px solid rgba(15, 23, 42, 0.10);
           background: #fff;
           text-decoration: none;
           color: var(--ff-text);
@@ -657,14 +773,6 @@ export default function AdminDashboard() {
         }
         .miniAction:hover {
           background: rgba(15, 23, 42, 0.02);
-        }
-
-        .tip {
-          margin-top: 10px;
-          font-size: 12px;
-          color: var(--ff-muted);
-          border-top: 1px dashed rgba(15, 23, 42, 0.1);
-          padding-top: 10px;
         }
 
         .msgWarn {
@@ -676,9 +784,8 @@ export default function AdminDashboard() {
         }
 
         @media (max-width: 520px) {
-          .thead,
-          .trow {
-            grid-template-columns: 1.1fr 1.2fr 0.6fr 1fr;
+          .thead, .trow {
+            grid-template-columns: 1fr 1.1fr 0.6fr 1fr;
           }
           .miniMilestoneTxt {
             max-width: 120px;
