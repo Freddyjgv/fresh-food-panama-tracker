@@ -1,3 +1,4 @@
+// src/components/AdminLayout.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -12,10 +13,12 @@ import {
   LogOut,
   UserCircle2,
   FileText,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 const LOGO_SRC = "/brand/freshfood-logo.svg";
-const SIDEBAR_STORE_KEY = "ff.sidebarCollapsed.v1";
+const LS_KEY = "ff_admin_sidebar_collapsed";
 
 type Me = { email: string | null; role: string | null };
 
@@ -45,7 +48,6 @@ export function AdminLayout({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  // ✅ Sidebar collapse
   const [sideCollapsed, setSideCollapsed] = useState(false);
 
   const nav = useMemo(
@@ -59,6 +61,20 @@ export function AdminLayout({
   );
 
   useEffect(() => {
+    // restore collapsed state
+    try {
+      const raw = window.localStorage.getItem(LS_KEY);
+      if (raw === "1") setSideCollapsed(true);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LS_KEY, sideCollapsed ? "1" : "0");
+    } catch {}
+  }, [sideCollapsed]);
+
+  useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (!menuRef.current) return;
       if (!menuRef.current.contains(e.target as any)) setMenuOpen(false);
@@ -66,28 +82,6 @@ export function AdminLayout({
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
-
-  // ✅ Load sidebar state once
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(SIDEBAR_STORE_KEY);
-      if (raw === "1") setSideCollapsed(true);
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  function toggleSidebar() {
-    setSideCollapsed((v) => {
-      const next = !v;
-      try {
-        localStorage.setItem(SIDEBAR_STORE_KEY, next ? "1" : "0");
-      } catch {
-        // ignore
-      }
-      return next;
-    });
-  }
 
   useEffect(() => {
     (async () => {
@@ -179,15 +173,15 @@ export function AdminLayout({
 
       {/* SIDEBAR (DEBAJO DEL HEADER) */}
       <aside className="ff-side">
-        {/* ✅ Lateral toggle (a mitad del sidebar) */}
+        {/* Toggle lateral (en el borde del sidebar) */}
         <button
           type="button"
           className="ff-side__toggle"
-          onClick={toggleSidebar}
-          aria-label={sideCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={sideCollapsed ? (lang === "es" ? "Expandir" : "Expand") : (lang === "es" ? "Contraer" : "Collapse")}
+          onClick={() => setSideCollapsed((v) => !v)}
+          aria-label={sideCollapsed ? "Expandir sidebar" : "Colapsar sidebar"}
+          title={sideCollapsed ? "Expandir" : "Colapsar"}
         >
-          {sideCollapsed ? ">" : "<"}
+          {sideCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
 
         <nav className="ff-side__nav">
@@ -195,16 +189,12 @@ export function AdminLayout({
             const Icon = n.icon;
             const active = activePath === n.href || (n.href !== "/admin" && activePath.startsWith(n.href));
 
-            // ✅ Tooltip siempre (en collapsed es crítico)
-            const tip = n.label;
-
             return (
               <Link
                 key={n.href}
                 href={n.href}
                 className={`ff-side__item ${active ? "is-active" : ""}`}
-                title={tip}
-                aria-label={tip}
+                title={sideCollapsed ? n.label : undefined}
               >
                 <span className="ff-side__ico" aria-hidden="true">
                   <Icon size={16} />
@@ -216,7 +206,10 @@ export function AdminLayout({
         </nav>
 
         <div className="ff-side__foot">
-          <div className="ff-side__footBadge" title={lang === "es" ? "Conectado" : "Connected"}>
+          <div
+            className="ff-side__footBadge"
+            title={sideCollapsed ? (lang === "es" ? "Conectado" : "Connected") : undefined}
+          >
             <span className="ff-dot" />
             <span className="ff-side__footText">{lang === "es" ? "Conectado" : "Connected"}</span>
           </div>

@@ -156,7 +156,7 @@ a {
 -------------------------------- */
 .ff-side {
   grid-area: side;
-  position: relative; /* ✅ para toggle lateral */
+  position: relative;
   background: linear-gradient(180deg, var(--ff-green) 0%, var(--ff-green-dark) 100%);
   color: #fff;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
@@ -169,7 +169,7 @@ a {
 
 .ff-side__toggle {
   position: absolute;
-  right: -12px;               /* ✅ sobresale */
+  right: -12px;
   top: 50%;
   transform: translateY(-50%);
   width: 24px;
