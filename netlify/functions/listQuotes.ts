@@ -7,6 +7,29 @@ function isPrivileged(role: string) {
   return r === "admin" || r === "superadmin";
 }
 
+/**
+ * Sanitiza el término para que no rompa el parser de PostgREST en .or().
+ * - Evita comas y paréntesis (delimitadores del árbol lógico)
+ * - Evita caracteres de control
+ * - Limita longitud
+ */
+function sanitizeQ(input: string) {
+  const s = String(input || "")
+    .replace(/[\u0000-\u001F\u007F]/g, " ") // control chars
+    .replace(/[(),]/g, " ") // rompe el or() logic tree
+    .replace(/\s+/g, " ")
+    .trim();
+  return s.slice(0, 60);
+}
+
+/**
+ * Escapa % y _ para que no actúen como wildcards inesperados en ILIKE.
+ * No es estrictamente necesario, pero evita búsquedas "raras" si pegan texto con %.
+ */
+function escapeLike(input: string) {
+  return String(input || "").replace(/[%_]/g, "\\$&");
+}
+
 export const handler: Handler = async (event) => {
   try {
     if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
@@ -18,12 +41,17 @@ export const handler: Handler = async (event) => {
     if (!isPrivileged(profile.role)) return text(403, "Forbidden");
 
     const pageSize = 20;
-    const page = Math.max(1, Number(event.queryStringParameters?.page || 1));
-    const dir =
-      (event.queryStringParameters?.dir || "desc").toLowerCase() === "asc" ? "asc" : "desc";
+    const pageRaw = Number(event.queryStringParameters?.page || 1);
+    const page = Number.isFinite(pageRaw) ? Math.max(1, pageRaw) : 1;
+
+    const dirRaw = String(event.queryStringParameters?.dir || "desc").toLowerCase();
+    const dir = dirRaw === "asc" ? "asc" : "desc";
 
     const status = String(event.queryStringParameters?.status || "").trim().toLowerCase();
-    const q = String(event.queryStringParameters?.q || "").trim().slice(0, 60);
+
+    // q: sanitizado + limitado
+    const q0 = sanitizeQ(event.queryStringParameters?.q || "");
+    const q = q0 ? escapeLike(q0) : "";
 
     const fromIndex = (page - 1) * pageSize;
     const toIndex = fromIndex + pageSize - 1;
@@ -33,24 +61,50 @@ export const handler: Handler = async (event) => {
     let query = sb
       .from("quotes")
       .select(
-        "id, created_at, updated_at, status, mode, currency, destination, boxes, weight_kg, margin_markup, client_id, client_snapshot, totals, clients(name, contact_email)",
+        `
+          id,
+          created_at,
+          updated_at,
+          status,
+          mode,
+          currency,
+          destination,
+          boxes,
+          weight_kg,
+          margin_markup,
+          client_id,
+          client_snapshot,
+          totals,
+          clients(name, contact_email)
+        `,
         { count: "exact" }
       );
 
     if (status) query = query.eq("status", status);
 
-    // búsqueda simple: destino o cliente snapshot (si guardas name ahí)
-    // (sin romper nada; luego podemos mejorar con full-text / trigram)
+    /**
+     * ✅ Búsqueda robusta SIN tocar joins en el OR.
+     * - destination (columna normal)
+     * - client_snapshot->>name (jsonb text)
+     * - client_snapshot->>contact_email (jsonb text)
+     *
+     * Esto evita el error:
+     * failed to parse logic tree ((destination.ilike...,clients.name.ilike...))
+     */
     if (q) {
-      // NOTA: ilike en jsonb no es directo; buscamos por destination
-      // y por clients.name (join) si existe client_id.
-      // Supabase: para join filter, usamos "clients.name" (funciona si hay foreign key).
-      query = query.or(`destination.ilike.%${q}%,clients.name.ilike.%${q}%`);
+      // Usamos \\ para que el backslash llegue bien al parser
+      // y el escape de %/_ funcione en LIKE/ILIKE.
+      const like = `%${q}%`;
+      query = query.or(
+        [
+          `destination.ilike.${like}`,
+          `client_snapshot->>name.ilike.${like}`,
+          `client_snapshot->>contact_email.ilike.${like}`,
+        ].join(",")
+      );
     }
 
-    query = query
-      .order("created_at", { ascending: dir === "asc" })
-      .range(fromIndex, toIndex);
+    query = query.order("created_at", { ascending: dir === "asc" }).range(fromIndex, toIndex);
 
     const { data, count, error } = await query;
     if (error) return text(500, error.message);
@@ -67,6 +121,7 @@ export const handler: Handler = async (event) => {
       weight_kg: r.weight_kg,
       margin_markup: r.margin_markup,
       client_id: r.client_id,
+      // prioridad: join si existe, si no snapshot
       client_name: r.clients?.name ?? r.client_snapshot?.name ?? null,
       client_email: r.clients?.contact_email ?? r.client_snapshot?.contact_email ?? null,
       total: r.totals?.total ?? null,
