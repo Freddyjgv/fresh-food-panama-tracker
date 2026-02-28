@@ -1,6 +1,12 @@
 // netlify/functions/renderQuotePdf.ts
 import type { Handler } from "@netlify/functions";
-import PDFDocument from "pdfkit";
+
+// IMPORTANT:
+// Use the standalone build to avoid AFM font file lookups in serverless bundlers.
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import PDFDocument from "pdfkit/js/pdfkit.standalone";
+
 import { getUserAndProfile, text, supabaseAdmin } from "./_util";
 
 function isPrivileged(role: string) {
@@ -32,30 +38,18 @@ function t(lang: "es" | "en", es: string, en: string) {
 
 type QuoteRow = any;
 
-function docToBuffer(doc: PDFKit.PDFDocument) {
+function docToBuffer(doc: any) {
   return new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = [];
-    doc.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+    doc.on("data", (c: any) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
     doc.end();
   });
 }
 
-// ✅ Opacity helper (evita crashes por fillOpacity inexistente)
-function setOpacity(doc: PDFKit.PDFDocument, value: number) {
-  const anyDoc: any = doc as any;
-  if (typeof anyDoc.opacity === "function") {
-    anyDoc.opacity(value);
-    return;
-  }
-  // fallback ultra defensivo
-  if (typeof anyDoc.fillOpacity === "function") anyDoc.fillOpacity(value);
-  if (typeof anyDoc.strokeOpacity === "function") anyDoc.strokeOpacity(value);
-}
-
 function drawHeader(
-  doc: PDFKit.PDFDocument,
+  doc: any,
   opts: {
     lang: "es" | "en";
     quoteIdShort: string;
@@ -75,15 +69,14 @@ function drawHeader(
     .text(`${t(lang, "Cotización", "Quotation")} #${quoteIdShort}`, { align: "left" })
     .text(`${t(lang, "Fecha", "Date")}: ${dateStr}`, { align: "left" });
 
+  // pill right
   const pillText = `${incoterm} · ${place}`;
   const rightX = doc.page.width - doc.page.margins.right;
   const y = doc.y - 30;
-
   doc.font("Helvetica-Bold").fontSize(10);
   const w = doc.widthOfString(pillText) + 18;
   const h = 20;
   const x = rightX - w;
-
   doc.roundedRect(x, y, w, h, 10).strokeColor("#DDD").lineWidth(1).stroke();
   doc.fillColor("#111").text(pillText, x + 9, y + 5, { width: w - 18, align: "center" });
 
@@ -92,24 +85,26 @@ function drawHeader(
   doc.moveDown(1);
 }
 
-function drawSectionTitle(doc: PDFKit.PDFDocument, title: string) {
+function drawSectionTitle(doc: any, title: string) {
   doc.moveDown(0.4);
   doc.font("Helvetica-Bold").fontSize(13).fillColor("#111").text(title);
   doc.moveDown(0.4);
 }
 
-function drawBox(doc: PDFKit.PDFDocument, opts: { x: number; y: number; w: number; h: number }) {
+function drawBox(doc: any, opts: { x: number; y: number; w: number; h: number }) {
   doc.roundedRect(opts.x, opts.y, opts.w, opts.h, 10).strokeColor("#DDD").lineWidth(1).stroke();
 }
 
-function ensureSpace(doc: PDFKit.PDFDocument, neededHeight: number) {
+function ensureSpace(doc: any, neededHeight: number) {
   const bottom = doc.page.height - doc.page.margins.bottom;
   if (doc.y + neededHeight > bottom) doc.addPage();
 }
 
-function drawKeyValueLines(doc: PDFKit.PDFDocument, lines: Array<{ k: string; v: string }>, boxWidth: number) {
+function drawKeyValueLines(doc: any, lines: Array<{ k: string; v: string }>, boxWidth: number) {
   const x = doc.page.margins.left;
+  const startY = doc.y;
   const pad = 10;
+
   const lineH = 14;
   const h = pad * 2 + lines.length * lineH;
 
@@ -126,38 +121,37 @@ function drawKeyValueLines(doc: PDFKit.PDFDocument, lines: Array<{ k: string; v:
   }
 
   doc.y = y + h + 8;
+  if (doc.y < startY) doc.y = startY + h + 8;
 }
 
-function drawTermsBox(doc: PDFKit.PDFDocument, title: string, terms: string, boxWidth: number) {
+function drawTermsBox(doc: any, title: string, terms: string, boxWidth: number) {
   drawSectionTitle(doc, title);
 
   const x = doc.page.margins.left;
   const pad = 10;
   const maxW = boxWidth - pad * 2;
 
+  ensureSpace(doc, 80);
+  const y = doc.y;
+
   doc.font("Helvetica").fontSize(10);
   const textH = doc.heightOfString(terms || "", { width: maxW, align: "left" });
   const h = Math.max(40, pad * 2 + textH);
 
   ensureSpace(doc, h + 10);
-  const y = doc.y;
+  const y2 = doc.y;
 
-  drawBox(doc, { x, y, w: boxWidth, h });
+  drawBox(doc, { x, y: y2, w: boxWidth, h });
 
-  doc.font("Helvetica").fontSize(10).fillColor("#111").text(terms || "", x + pad, y + pad, { width: maxW, align: "left" });
+  doc.font("Helvetica").fontSize(10).fillColor("#111").text(terms || "", x + pad, y2 + pad, { width: maxW, align: "left" });
 
-  doc.y = y + h + 8;
+  doc.y = y2 + h + 8;
+  if (doc.y < y) doc.y = y + h + 8;
 }
 
 function drawItemsTable(
-  doc: PDFKit.PDFDocument,
-  opts: {
-    lang: "es" | "en";
-    currency: string;
-    items: any[];
-    total: number;
-    boxWidth: number;
-  }
+  doc: any,
+  opts: { lang: "es" | "en"; currency: string; items: any[]; total: number; boxWidth: number }
 ) {
   const { lang, currency, items, total, boxWidth } = opts;
 
@@ -178,16 +172,8 @@ function drawItemsTable(
   const tableTopY = doc.y;
   ensureSpace(doc, headerH + rowH * 2 + 50);
 
-  // marco header
   doc.roundedRect(x, doc.y, boxWidth, headerH, 10).strokeColor("#DDD").lineWidth(1).stroke();
-
-  // ✅ fondo header con opacity compatible
-  const anyDoc: any = doc as any;
-  if (typeof anyDoc.save === "function") anyDoc.save();
-  setOpacity(doc, 0.04);
-  doc.rect(x, doc.y, boxWidth, headerH).fill("#000");
-  setOpacity(doc, 1);
-  if (typeof anyDoc.restore === "function") anyDoc.restore();
+  doc.rect(x, doc.y, boxWidth, headerH).fillOpacity(0.04).fill("#000").fillOpacity(1);
 
   doc.font("Helvetica-Bold").fontSize(9).fillColor("#444");
   doc.text(t(lang, "Item", "Item"), x + pad, doc.y + 7, { width: colItem - pad });
@@ -245,19 +231,26 @@ function drawItemsTable(
 }
 
 export const handler: Handler = async (event) => {
-  const reqId = (event as any)?.headers?.["x-nf-request-id"] || (event as any)?.headers?.["x-request-id"] || "";
   try {
+    // Auth
     const { user, profile } = await getUserAndProfile(event);
     if (!user || !profile) return text(401, "Unauthorized");
     if (!isPrivileged(profile.role)) return text(403, "Forbidden");
 
+    // Params
     const id = String(event.queryStringParameters?.id || "").trim();
     const variant = String(event.queryStringParameters?.variant || "2").trim() as "1" | "2";
     const lang = String(event.queryStringParameters?.lang || "es").trim().toLowerCase() as "es" | "en";
     if (!id) return text(400, "Missing id");
 
+    // Fetch quote
     const sb = supabaseAdmin();
-    const { data, error } = await sb.from("quotes").select("*, clients:clients(*)").eq("id", id).single<QuoteRow>();
+    const { data, error } = await sb
+      .from("quotes")
+      .select("*, clients:clients(*)")
+      .eq("id", id)
+      .single<QuoteRow>();
+
     if (error || !data) return text(404, error?.message || "Quote not found");
 
     const totals = data?.totals || {};
@@ -274,7 +267,8 @@ export const handler: Handler = async (event) => {
     const quoteIdShort = String(data?.id || id).slice(0, 8);
     const dateStr = new Date().toLocaleDateString(lang === "en" ? "en-US" : "es-PA");
 
-    const doc = new PDFDocument({
+    // PDF
+    const doc = new (PDFDocument as any)({
       size: "A4",
       margin: 52,
       info: {
@@ -323,6 +317,7 @@ export const handler: Handler = async (event) => {
     );
 
     const pdfBuffer = await docToBuffer(doc);
+
     const filename = `${safeFileName(clientName)}_quote_${quoteIdShort}_${variant}_${lang}.pdf`;
 
     return {
@@ -338,7 +333,6 @@ export const handler: Handler = async (event) => {
       isBase64Encoded: true,
     };
   } catch (e: any) {
-    console.error("[renderQuotePdf] ERROR", { reqId, message: e?.message, stack: e?.stack });
-    return text(500, `Server error${reqId ? ` (reqId=${reqId})` : ""}: ${e?.message || "unknown"}`);
+    return text(500, e?.message || "Server error");
   }
 };
