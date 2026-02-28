@@ -180,7 +180,11 @@ function drawItemsTable(doc: PDFKit.PDFDocument, opts: {
 
   drawBox(doc, x, tableTopY, boxWidth, headerH);
 
-  doc.rect(x, tableTopY, boxWidth, headerH).fillOpacity(0.04).fill("#000").fillOpacity(1);
+    doc.save();
+    doc.opacity(0.04);
+    doc.rect(x, tableTopY, boxWidth, headerH).fill("#000");
+    doc.opacity(1);
+    doc.restore();
 
   doc.font("Inter-Bold").fontSize(9).fillColor("#475569");
   doc.text(t(lang, "Item", "Item"), x + pad, tableTopY + 6, { width: colItem - pad });
