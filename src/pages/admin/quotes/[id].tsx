@@ -9,7 +9,6 @@ import { AdminLayout } from "../../../components/AdminLayout";
 
 type QuoteDetail = {
   id: string;
-  quote_number?: string | null; // ✅ RFQ/YYYY/0000X
   created_at: string;
   updated_at: string;
   status: "draft" | "sent" | "won" | "lost" | "archived";
@@ -21,7 +20,8 @@ type QuoteDetail = {
   margin_markup: number;
   payment_terms?: string | null;
   terms?: string | null;
-  client_snapshot?: { name?: string; contact_email?: string } | null;
+  quote_number?: string | null; // ✅ opcional (si existe en DB)
+  client_snapshot?: { name?: string; contact_email?: string; tax_id?: string } | null;
   totals?: Record<string, any>;
   costs?: Record<string, any>;
 };
@@ -246,15 +246,15 @@ export default function AdminQuoteDetailPage() {
     setTerms(backendTerms.trim() ? backendTerms : DEFAULT_TERMS_ES);
 
     const costs = json.costs || {};
-    setCFruit(n(costs.c_fruit));
-    setCOthf(n(costs.c_othf));
-    setCFreight(n(costs.c_freight));
-    setCHandling(n(costs.c_handling));
-    setCOrigin(n(costs.c_origin));
-    setCAduana(n(costs.c_aduana));
-    setCInsp(n(costs.c_insp));
-    setCItbms(n(costs.c_itbms));
-    setCOther(n(costs.c_other));
+    setCFruit(n((costs as any).c_fruit));
+    setCOthf(n((costs as any).c_othf));
+    setCFreight(n((costs as any).c_freight));
+    setCHandling(n((costs as any).c_handling));
+    setCOrigin(n((costs as any).c_origin));
+    setCAduana(n((costs as any).c_aduana));
+    setCInsp(n((costs as any).c_insp));
+    setCItbms(n((costs as any).c_itbms));
+    setCOther(n((costs as any).c_other));
 
     setLoading(false);
   }
@@ -294,9 +294,7 @@ export default function AdminQuoteDetailPage() {
 
     const profitTotal = saleTotal - costTotal;
 
-    // ✅ 2 métricas para evitar confusión:
-    // - marginOnSale = profit/sale (margen bruto)
-    // - markupOnCost = profit/cost (markup real)
+    // ✅ 2 métricas
     const marginOnSale = saleTotal > 0 ? (profitTotal / saleTotal) * 100 : 0;
     const markupOnCost = costTotal > 0 ? (profitTotal / costTotal) * 100 : 0;
 
@@ -343,7 +341,6 @@ export default function AdminQuoteDetailPage() {
       cost_total: n(computed.costTotal),
       sale_total: n(computed.saleTotal),
       profit_total: n(computed.profitTotal),
-      // ✅ guardamos ambas métricas
       margin_on_sale: n(computed.marginOnSale),
       markup_on_cost: n(computed.markupOnCost),
       items,
@@ -354,6 +351,9 @@ export default function AdminQuoteDetailPage() {
         per_kg: computed.perKg,
         weight_kg: n(weightKg),
         boxes: n(boxes),
+        // ✅ dejamos hueco para color/brix si luego lo guardas en meta
+        // color: "...",
+        // brix: "...",
       },
     };
 
@@ -364,7 +364,6 @@ export default function AdminQuoteDetailPage() {
       margin_markup: n(margin),
       mode,
       currency,
-      // compat backend:
       destination: destination,
       payment_terms: paymentTerms,
       terms,
@@ -414,23 +413,29 @@ export default function AdminQuoteDetailPage() {
     const blob = await res.blob();
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-
-    // ✅ nombre de archivo más humano: usa quote_number si existe
-    const safeCode = quoteCode.replace(/[^\w/-]+/g, "_");
-    a.download = `quote_${safeCode}_${opts.variant}_${opts.lang}${opts.report ? "_INTERNAL" : ""}.pdf`;
-
+    a.download = `quote_${data.id.slice(0, 8)}_${opts.variant}_${opts.lang}${opts.report ? "_INTERNAL" : ""}.pdf`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1500);
   }
 
-  // ✅ Código oficial visible: quote_number si existe, si no fallback
+  // ✅ Número de cotización:
+  // - Si data.quote_number existe -> úsalo.
+  // - Si no, fallback estable: RFQ/YYYY/<id-sin-guiones-5>
+  const quoteNumber = useMemo(() => {
+    if (!data?.id) return "—";
+    const created = data?.created_at ? new Date(data.created_at) : new Date();
+    const yyyy = String(created.getUTCFullYear());
+    const short = String(data.id).replace(/-/g, "").slice(0, 5);
+    return String(data.quote_number || `RFQ/${yyyy}/${short}`);
+  }, [data?.id, data?.created_at, data?.quote_number]);
+
+  // mantenemos compat con badge corto
   const quoteCode = useMemo(() => {
     if (!data?.id) return "—";
-    const qn = String(data.quote_number || "").trim();
-    return qn ? qn : `#${data.id.slice(0, 8)}`;
-  }, [data?.id, data?.quote_number]);
+    return `#${data.id.slice(0, 8)}`;
+  }, [data?.id]);
 
   if (!authOk) {
     return (
@@ -456,7 +461,7 @@ export default function AdminQuoteDetailPage() {
           </div>
           {data ? (
             <div className="topSub">
-              <span className="qnum">Número: {quoteCode}</span>
+              <span className="qnum">Número: {quoteNumber}</span>
               <span className="sep">·</span>
               Creada: {fmtDateTime(data.created_at)} <span className="sep">·</span> Actualizada: {fmtDateTime(data.updated_at)}
             </div>
@@ -501,7 +506,6 @@ export default function AdminQuoteDetailPage() {
             </div>
 
             <div className="grid2">
-              {/* ✅ Incoterm */}
               <div>
                 <label className="lbl">Incoterm</label>
                 <select className="in" value={incoterm} onChange={(e) => setIncoterm(safeIncoterm(e.target.value))}>
@@ -519,7 +523,6 @@ export default function AdminQuoteDetailPage() {
                 </select>
               </div>
 
-              {/* ✅ Place */}
               <div>
                 <label className="lbl">Place (Incoterm + Place)</label>
                 <input className="in" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="Ej: Madrid (MAD) / AMS / Puerto..." />
