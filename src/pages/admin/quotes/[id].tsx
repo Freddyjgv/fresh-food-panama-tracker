@@ -24,6 +24,9 @@ type QuoteDetail = {
   client_snapshot?: { name?: string; contact_email?: string; tax_id?: string } | null;
   totals?: Record<string, any>;
   costs?: Record<string, any>;
+  quote_year?: number | null;
+  quote_seq?: number | null;
+  quote_no?: string | null;
 };
 
 type UiLang = "es" | "en";
@@ -420,16 +423,36 @@ export default function AdminQuoteDetailPage() {
     setTimeout(() => URL.revokeObjectURL(a.href), 1500);
   }
 
-  // ✅ Número de cotización:
-  // - Si data.quote_number existe -> úsalo.
-  // - Si no, fallback estable: RFQ/YYYY/<id-sin-guiones-5>
-  const quoteNumber = useMemo(() => {
-    if (!data?.id) return "—";
-    const created = data?.created_at ? new Date(data.created_at) : new Date();
-    const yyyy = String(created.getUTCFullYear());
-    const short = String(data.id).replace(/-/g, "").slice(0, 5);
-    return String(data.quote_number || `RFQ/${yyyy}/${short}`);
-  }, [data?.id, data?.created_at, data?.quote_number]);
+ const quoteNumber = useMemo(() => {
+  if (!data?.id) return "—";
+
+  // 1) si viene desde DB, úsalo SIEMPRE
+  const qn = String(data.quote_number || "").trim();
+  if (qn) return qn;
+
+  // 2) fallback profesional: quote_year + quote_seq (NO UUID)
+  const yyyy =
+    data.quote_year ??
+    (data.created_at ? new Date(data.created_at).getUTCFullYear() : new Date().getUTCFullYear());
+
+  const seq = Number(data.quote_seq);
+  if (Number.isFinite(seq) && seq > 0) {
+    return `RFQ/${yyyy}/${String(seq).padStart(5, "0")}`;
+  }
+
+  // 3) fallback final: quote_no si existe
+  const qno = String(data.quote_no || "").trim();
+  if (qno) return qno;
+
+  return "RFQ/SIN-NUMERO";
+}, [
+  data?.id,
+  data?.quote_number,
+  data?.quote_year,
+  data?.quote_seq,
+  data?.quote_no,
+  data?.created_at,
+]);
 
   // mantenemos compat con badge corto
   const quoteCode = useMemo(() => {
