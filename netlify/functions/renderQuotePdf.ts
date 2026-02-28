@@ -39,29 +39,27 @@ function docToBuffer(doc: PDFKit.PDFDocument) {
   });
 }
 
-function drawHeader(doc: PDFKit.PDFDocument, opts: {
-  lang: "es" | "en";
-  quoteIdShort: string;
-  incoterm: string;
-  place: string;
-  dateStr: string;
-}) {
-  const { lang, quoteIdShort, incoterm, place, dateStr } = opts;
+function drawHeader(
+  doc: PDFKit.PDFDocument,
+  opts: {
+    lang: "es" | "en";
+    quoteLabel: string; // ✅ puede ser quote_no o fallback corto
+    incoterm: string;
+    place: string;
+    dateStr: string;
+  }
+) {
+  const { lang, quoteLabel, incoterm, place, dateStr } = opts;
 
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(16)
-    .fillColor("#111")
-    .text("Fresh Food Panamá", 0, 0, { align: "left" });
+  doc.font("Helvetica-Bold").fontSize(16).fillColor("#111").text("Fresh Food Panamá", 0, 0, { align: "left" });
 
   doc
     .font("Helvetica")
     .fontSize(10)
     .fillColor("#555")
-    .text(`${t(lang, "Cotización", "Quotation")} #${quoteIdShort}`, { align: "left" })
+    .text(`${t(lang, "Cotización", "Quotation")} ${quoteLabel}`, { align: "left" })
     .text(`${t(lang, "Fecha", "Date")}: ${dateStr}`, { align: "left" });
 
-  // “pill” simple a la derecha
   const pillText = `${incoterm} · ${place}`;
   const rightX = doc.page.width - doc.page.margins.right;
   const y = doc.y - 30;
@@ -89,9 +87,7 @@ function drawBox(doc: PDFKit.PDFDocument, opts: { x: number; y: number; w: numbe
 
 function ensureSpace(doc: PDFKit.PDFDocument, neededHeight: number) {
   const bottom = doc.page.height - doc.page.margins.bottom;
-  if (doc.y + neededHeight > bottom) {
-    doc.addPage();
-  }
+  if (doc.y + neededHeight > bottom) doc.addPage();
 }
 
 function drawKeyValueLines(doc: PDFKit.PDFDocument, lines: Array<{ k: string; v: string }>, boxWidth: number) {
@@ -99,7 +95,6 @@ function drawKeyValueLines(doc: PDFKit.PDFDocument, lines: Array<{ k: string; v:
   const startY = doc.y;
   const pad = 10;
 
-  // calcula alto
   const lineH = 14;
   const h = pad * 2 + lines.length * lineH;
 
@@ -126,11 +121,9 @@ function drawTermsBox(doc: PDFKit.PDFDocument, title: string, terms: string, box
   const pad = 10;
   const maxW = boxWidth - pad * 2;
 
-  // “Medimos” altura aproximada escribiendo en modo calc.
   ensureSpace(doc, 80);
   const y = doc.y;
 
-  // altura dinámica: usamos heightOfString
   doc.font("Helvetica").fontSize(10);
   const textH = doc.heightOfString(terms || "", { width: maxW, align: "left" });
   const h = Math.max(40, pad * 2 + textH);
@@ -140,23 +133,13 @@ function drawTermsBox(doc: PDFKit.PDFDocument, title: string, terms: string, box
 
   drawBox(doc, { x, y: y2, w: boxWidth, h });
 
-  doc
-    .font("Helvetica")
-    .fontSize(10)
-    .fillColor("#111")
-    .text(terms || "", x + pad, y2 + pad, { width: maxW, align: "left" });
+  doc.font("Helvetica").fontSize(10).fillColor("#111").text(terms || "", x + pad, y2 + pad, { width: maxW, align: "left" });
 
   doc.y = y2 + h + 8;
   if (doc.y < y) doc.y = y + h + 8;
 }
 
-function drawItemsTable(doc: PDFKit.PDFDocument, opts: {
-  lang: "es" | "en";
-  currency: string;
-  items: any[];
-  total: number;
-  boxWidth: number;
-}) {
+function drawItemsTable(doc: PDFKit.PDFDocument, opts: { lang: "es" | "en"; currency: string; items: any[]; total: number; boxWidth: number }) {
   const { lang, currency, items, total, boxWidth } = opts;
 
   drawSectionTitle(doc, t(lang, "Detalle", "Details"));
@@ -165,7 +148,6 @@ function drawItemsTable(doc: PDFKit.PDFDocument, opts: {
   const rightX = x + boxWidth;
   const pad = 10;
 
-  // Column widths
   const colItem = Math.floor(boxWidth * 0.46);
   const colQty = Math.floor(boxWidth * 0.18);
   const colUP = Math.floor(boxWidth * 0.18);
@@ -177,8 +159,6 @@ function drawItemsTable(doc: PDFKit.PDFDocument, opts: {
   const tableTopY = doc.y;
   ensureSpace(doc, headerH + rowH * 2 + 50);
 
-  // outer box height will be dynamic; dibujamos marco por página (simple)
-  // header background (muy suave)
   doc.roundedRect(x, doc.y, boxWidth, headerH, 10).strokeColor("#DDD").lineWidth(1).stroke();
   doc.rect(x, doc.y, boxWidth, headerH).fillOpacity(0.04).fill("#000").fillOpacity(1);
 
@@ -204,15 +184,11 @@ function drawItemsTable(doc: PDFKit.PDFDocument, opts: {
       const up = Number(it?.unit_price || 0);
       const rowTotal = Number(it?.total || qty * up);
 
-      // row separator
       doc.strokeColor("#EEE").moveTo(x, doc.y).lineTo(rightX, doc.y).stroke();
 
       doc.font("Helvetica").fontSize(10).fillColor("#111");
       doc.text(name, x + pad, doc.y + 6, { width: colItem - pad });
-
-      doc.font("Helvetica").fontSize(10).fillColor("#111");
       doc.text(qty.toLocaleString("en-US"), x + colItem, doc.y + 6, { width: colQty - pad, align: "right" });
-
       doc.text(money(up, currency), x + colItem + colQty, doc.y + 6, { width: colUP - pad, align: "right" });
 
       doc.font("Helvetica-Bold").text(money(rowTotal, currency), x + colItem + colQty + colUP, doc.y + 6, {
@@ -224,10 +200,8 @@ function drawItemsTable(doc: PDFKit.PDFDocument, opts: {
     }
   }
 
-  // bottom separator
   doc.strokeColor("#EEE").moveTo(x, doc.y).lineTo(rightX, doc.y).stroke();
 
-  // Total line
   ensureSpace(doc, 40);
   doc.moveDown(0.6);
   doc.font("Helvetica-Bold").fontSize(13).fillColor("#111");
@@ -235,7 +209,6 @@ function drawItemsTable(doc: PDFKit.PDFDocument, opts: {
 
   doc.moveDown(0.8);
 
-  // Outline box (from tableTopY to current y)
   const endY = doc.y;
   const h = Math.max(60, endY - tableTopY);
   doc.roundedRect(x, tableTopY, boxWidth, h, 10).strokeColor("#DDD").lineWidth(1).stroke();
@@ -245,25 +218,17 @@ function drawItemsTable(doc: PDFKit.PDFDocument, opts: {
 
 export const handler: Handler = async (event) => {
   try {
-    // Auth
     const { user, profile } = await getUserAndProfile(event);
     if (!user || !profile) return text(401, "Unauthorized");
     if (!isPrivileged(profile.role)) return text(403, "Forbidden");
 
-    // Params
     const id = String(event.queryStringParameters?.id || "").trim();
-    const variant = (String(event.queryStringParameters?.variant || "2").trim() as "1" | "2");
-    const lang = (String(event.queryStringParameters?.lang || "es").trim().toLowerCase() as "es" | "en");
+    const variant = String(event.queryStringParameters?.variant || "2").trim() as "1" | "2";
+    const lang = String(event.queryStringParameters?.lang || "es").trim().toLowerCase() as "es" | "en";
     if (!id) return text(400, "Missing id");
 
-    // Fetch quote
     const sb = supabaseAdmin();
-    const { data, error } = await sb
-      .from("quotes")
-      .select("*, clients:clients(*)")
-      .eq("id", id)
-      .single<QuoteRow>();
-
+    const { data, error } = await sb.from("quotes").select("*, clients:clients(*)").eq("id", id).single<QuoteRow>();
     if (error || !data) return text(404, error?.message || "Quote not found");
 
     const totals = data?.totals || {};
@@ -277,25 +242,25 @@ export const handler: Handler = async (event) => {
     const clientName = String(data?.clients?.name || data?.client_snapshot?.name || "—");
     const clientEmail = String(data?.clients?.contact_email || data?.client_snapshot?.contact_email || "—");
 
+    const quoteNo = String(data?.quote_no || "").trim();
     const quoteIdShort = String(data?.id || id).slice(0, 8);
+    const quoteLabel = quoteNo ? quoteNo : `#${quoteIdShort}`;
+
     const dateStr = new Date().toLocaleDateString(lang === "en" ? "en-US" : "es-PA");
 
-    // PDF
     const doc = new PDFDocument({
       size: "A4",
-      margin: 52, // ~18mm
+      margin: 52,
       info: {
-        Title: `${t(lang, "Cotización", "Quotation")} ${quoteIdShort}`,
+        Title: `${t(lang, "Cotización", "Quotation")} ${quoteLabel}`,
         Author: "Fresh Food Panamá",
       },
     });
 
     const boxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-    // Header
-    drawHeader(doc, { lang, quoteIdShort, incoterm, place, dateStr });
+    drawHeader(doc, { lang, quoteLabel, incoterm, place, dateStr });
 
-    // Client box
     drawSectionTitle(doc, t(lang, "Cliente", "Client"));
     drawKeyValueLines(
       doc,
@@ -307,7 +272,6 @@ export const handler: Handler = async (event) => {
     );
 
     if (variant === "1") {
-      // Summary
       drawSectionTitle(doc, t(lang, "Resumen", "Summary"));
       drawKeyValueLines(
         doc,
@@ -320,29 +284,22 @@ export const handler: Handler = async (event) => {
         boxWidth
       );
     } else {
-      // Detailed items table
       drawItemsTable(doc, { lang, currency, items, total, boxWidth });
     }
 
-    // Terms
     const terms = String(data?.terms || "");
-    if (terms.trim()) {
-      drawTermsBox(doc, t(lang, "Condiciones", "Terms"), terms, boxWidth);
-    }
+    if (terms.trim()) drawTermsBox(doc, t(lang, "Condiciones", "Terms"), terms, boxWidth);
 
-    // Footer simple
     ensureSpace(doc, 40);
-    doc
-      .font("Helvetica")
-      .fontSize(9)
-      .fillColor("#777")
-      .text(t(lang, "Documento generado automáticamente.", "Automatically generated document."), {
-        align: "center",
-      });
+    doc.font("Helvetica").fontSize(9).fillColor("#777").text(t(lang, "Documento generado automáticamente.", "Automatically generated document."), {
+      align: "center",
+    });
 
     const pdfBuffer = await docToBuffer(doc);
 
-    const filename = `${safeFileName(clientName)}_quote_${quoteIdShort}_${variant}_${lang}.pdf`;
+    const base = safeFileName(clientName);
+    const qTag = safeFileName(quoteNo || quoteIdShort);
+    const filename = `${base}_${qTag}_${variant}_${lang}.pdf`;
 
     return {
       statusCode: 200,

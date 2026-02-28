@@ -23,9 +23,7 @@ export const handler: Handler = async (event) => {
     const sb = supabaseAdmin();
     const { data, error } = await sb
       .from("quotes")
-      .select(
-        "*, clients(name, contact_name, contact_email, phone, country, city)"
-      )
+      .select("*, clients(name, contact_name, contact_email, phone, country, city)")
       .eq("id", id)
       .single();
 

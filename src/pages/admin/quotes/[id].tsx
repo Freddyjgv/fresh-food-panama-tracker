@@ -37,6 +37,51 @@ const SALES_LINES = [
   { key: "inspection_quality", es: "4. Inspección y calidad", en: "4. Inspection & Quality" },
 ] as const;
 
+// ✅ Solo fallback local para cotizaciones viejas que perdieron terms.
+// No auto-guardamos: el usuario decide guardarlo con el botón “Guardar”.
+const DEFAULT_TERMS_ES = `TÉRMINOS Y CONDICIONES – EXPORTACIÓN DE PIÑA (Fresh Food Panamá)
+
+1) Alcance de la oferta
+Esta cotización es emitida por Fresh Food Panamá y está sujeta a confirmación final de disponibilidad, capacidad operativa, espacios de carga y validación de costos logísticos al momento de la confirmación.
+
+2) Validez
+La oferta tiene una validez de 48 horas (o el tiempo indicado en la propia cotización). Pasado ese período, precios y condiciones pueden variar sin previo aviso.
+
+3) Especificación del producto
+Piña fresca de exportación, calidad Premium/Extra, sujeta a especificaciones acordadas (calibre, color, Brix, tolerancias y empaque). El embarque se realiza conforme a los estándares aplicables y a los criterios de inspección definidos para exportación.
+
+4) Condiciones de pago
+Las condiciones de pago aplicables serán las indicadas en el campo “Condiciones de pago” de la cotización y/o la factura proforma. La liberación de la carga y/o documentos está sujeta al cumplimiento del pago acordado.
+
+5) Documentación y cumplimiento
+Fresh Food Panamá gestionará la documentación comercial y/o de exportación aplicable según el modo de transporte y el país de destino. Cualquier requisito adicional (permisos especiales, certificaciones, registros, etiquetado o traducciones) deberá ser informado por el cliente antes de confirmar la operación.
+
+6) Incoterm, Place y destino
+La operación se rige por el Incoterm y el “Place” indicados en la cotización. El cliente es responsable de entender el alcance del Incoterm seleccionado y de cualquier costo/gestión fuera del alcance de Fresh Food Panamá según dicho Incoterm.
+
+7) Entrega, tiempos y variaciones logísticas
+Fechas y tiempos son estimados y pueden variar por disponibilidad de aerolínea/naviera, congestión, inspecciones, clima, seguridad, cambios operativos o autoridades. Dichas variaciones no constituyen incumplimiento.
+
+8) Transferencia de riesgo
+El riesgo se transfiere conforme al Incoterm acordado. Una vez transferido el riesgo, cualquier pérdida, merma o daño posterior será responsabilidad del comprador, salvo que se establezca lo contrario por escrito.
+
+9) Reclamos y control de calidad (CLÁUSULA CRÍTICA)
+NO se aceptarán reclamos posteriores a 3 días calendario de la llegada de la carga al aeropuerto/puerto de destino (arribo), sin excepción.
+Cualquier reclamo debe:
+- Notificarse por escrito dentro de ese plazo,
+- Incluir evidencia fotográfica/video y reporte de recepción/inspección,
+- Mantener la carga segregada y disponible para verificación.
+Reclamos fuera del plazo indicado serán rechazados automáticamente.
+
+10) Limitación de responsabilidad
+La responsabilidad máxima de Fresh Food Panamá, si aplica, se limitará al valor de la mercancía efectivamente facturado y comprobado para el lote afectado, sin incluir pérdidas indirectas (lucro cesante, penalidades, devoluciones de terceros, etc.).
+
+11) Fuerza mayor
+Fresh Food Panamá no será responsable por incumplimientos derivados de eventos fuera de su control (autoridades, cierres, huelgas, clima, seguridad, fallas de terceros, restricciones sanitarias, etc.).
+
+12) Aceptación
+La confirmación por escrito del cliente (correo/WhatsApp/PO) implica aceptación total de esta cotización, sus términos y el Incoterm/Place seleccionado.`;
+
 function fmtDateTime(iso?: string | null) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -55,7 +100,7 @@ function lineLabel(key: string, lang: UiLang) {
 function safeIncoterm(v: any): Incoterm {
   const s = String(v || "").toUpperCase();
   const allowed: Incoterm[] = ["CIP", "CPT", "DAP", "DDP", "FCA", "FOB", "CIF"];
-  return (allowed.includes(s as Incoterm) ? (s as Incoterm) : "CIP");
+  return allowed.includes(s as Incoterm) ? (s as Incoterm) : "CIP";
 }
 
 function incotermHelp(incoterm: Incoterm, lang: UiLang) {
@@ -194,7 +239,10 @@ export default function AdminQuoteDetailPage() {
     setPlace(metaPlace);
 
     setPaymentTerms(String(json.payment_terms || ""));
-    setTerms(String(json.terms || ""));
+
+    // ✅ Terms: si vienen vacíos, prefill local (NO auto-save)
+    const backendTerms = String(json.terms || "");
+    setTerms(backendTerms.trim() ? backendTerms : DEFAULT_TERMS_ES);
 
     const costs = json.costs || {};
     setCFruit(n(costs.c_fruit));
@@ -372,6 +420,13 @@ export default function AdminQuoteDetailPage() {
     setTimeout(() => URL.revokeObjectURL(a.href), 1500);
   }
 
+  // ✅ “Número de cotización” (estable, sin DB extra): short id.
+  const quoteNumber = useMemo(() => {
+    if (!data?.id) return "—";
+    return `Q-${data.id.slice(0, 8).toUpperCase()}`;
+  }, [data?.id]);
+
+  // mantenemos compat con lo que ya tenías en UI (badge)
   const quoteCode = useMemo(() => {
     if (!data?.id) return "—";
     return `#${data.id.slice(0, 8)}`;
@@ -401,7 +456,9 @@ export default function AdminQuoteDetailPage() {
           </div>
           {data ? (
             <div className="topSub">
-              Creada: {fmtDateTime(data.created_at)} · Actualizada: {fmtDateTime(data.updated_at)}
+              <span className="qnum">Número: {quoteNumber}</span>
+              <span className="sep">·</span>
+              Creada: {fmtDateTime(data.created_at)} <span className="sep">·</span> Actualizada: {fmtDateTime(data.updated_at)}
             </div>
           ) : null}
         </div>
@@ -603,9 +660,7 @@ export default function AdminQuoteDetailPage() {
                     <td style={{ textAlign: "left", fontWeight: 900 }}>{lineLabel(r.key, uiLang)}</td>
                     <td style={{ textAlign: "right" }}>{money(r.cost)}</td>
                     <td style={{ textAlign: "right", fontWeight: 950 }}>{money(r.sale)}</td>
-                    <td style={{ textAlign: "right", fontWeight: 950, color: "var(--ff-green-dark)" }}>
-                      +{money(r.sale - r.cost)}
-                    </td>
+                    <td style={{ textAlign: "right", fontWeight: 950, color: "var(--ff-green-dark)" }}>+{money(r.sale - r.cost)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -630,7 +685,8 @@ export default function AdminQuoteDetailPage() {
               <div className="kpi">
                 <div className="kpiLbl">Unidades</div>
                 <div className="kpiVal">
-                  {money(computed.perBox)} / caja &nbsp;&nbsp;·&nbsp;&nbsp; {money(computed.perKg)} / kg &nbsp;&nbsp;·&nbsp;&nbsp; {n(weightKg).toLocaleString("en-US")} kg
+                  {money(computed.perBox)} / caja &nbsp;&nbsp;·&nbsp;&nbsp; {money(computed.perKg)} / kg &nbsp;&nbsp;·&nbsp;&nbsp;{" "}
+                  {n(weightKg).toLocaleString("en-US")} kg
                 </div>
               </div>
             </div>
@@ -697,83 +753,363 @@ export default function AdminQuoteDetailPage() {
       </div>
 
       <style jsx>{`
-        .layout { display: grid; grid-template-columns: 1fr; gap: 12px; }
-        @media (min-width: 1100px) { .layout { grid-template-columns: 1.05fr 0.95fr; gap: 12px; } }
-        .col { display: grid; gap: 12px; align-content: start; }
+        .layout {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 12px;
+        }
+        @media (min-width: 1100px) {
+          .layout {
+            grid-template-columns: 1.05fr 0.95fr;
+            gap: 12px;
+          }
+        }
+        .col {
+          display: grid;
+          gap: 12px;
+          align-content: start;
+        }
 
-        .topBar { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; margin-bottom: 12px; }
-        .topMeta { min-width: 0; }
-        .topTitle { font-weight: 950; font-size: 15px; letter-spacing: -0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .code { color: var(--ff-green-dark); }
-        .sub { color: var(--ff-muted); font-weight: 800; font-size: 13px; }
-        .topSub { margin-top: 2px; font-size: 12px; color: var(--ff-muted); }
-        .topActions { display: inline-flex; gap: 8px; align-items: center; }
+        .topBar {
+          display: grid;
+          grid-template-columns: auto 1fr auto;
+          gap: 10px;
+          align-items: center;
+          margin-bottom: 12px;
+        }
+        .topMeta {
+          min-width: 0;
+        }
+        .topTitle {
+          font-weight: 950;
+          font-size: 15px;
+          letter-spacing: -0.2px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .code {
+          color: var(--ff-green-dark);
+        }
+        .sub {
+          color: var(--ff-muted);
+          font-weight: 800;
+          font-size: 13px;
+        }
+        .topSub {
+          margin-top: 2px;
+          font-size: 12px;
+          color: var(--ff-muted);
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          align-items: center;
+        }
+        .qnum {
+          font-weight: 950;
+          color: var(--ff-text);
+        }
+        .sep {
+          opacity: 0.6;
+        }
+        .topActions {
+          display: inline-flex;
+          gap: 8px;
+          align-items: center;
+        }
 
-        .card { border: 1px solid var(--ff-border); background: var(--ff-surface); border-radius: var(--ff-radius); padding: 12px; }
-        .softGreen { border-color: rgba(31, 122, 58, 0.18); background: rgba(31, 122, 58, 0.06); }
-        .cardHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-        .cardSubHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
-        .h { font-weight: 950; font-size: 14px; letter-spacing: -0.2px; }
-        .h2 { font-weight: 950; font-size: 13px; letter-spacing: -0.2px; }
-        .muted { font-size: 12px; color: var(--ff-muted); }
-        .divider { height: 1px; background: rgba(15,23,42,.08); margin: 12px 0; }
+        .card {
+          border: 1px solid var(--ff-border);
+          background: var(--ff-surface);
+          border-radius: var(--ff-radius);
+          padding: 12px;
+        }
+        .softGreen {
+          border-color: rgba(31, 122, 58, 0.18);
+          background: rgba(31, 122, 58, 0.06);
+        }
+        .cardHead {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+        .cardSubHead {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-bottom: 8px;
+        }
+        .h {
+          font-weight: 950;
+          font-size: 14px;
+          letter-spacing: -0.2px;
+        }
+        .h2 {
+          font-weight: 950;
+          font-size: 13px;
+          letter-spacing: -0.2px;
+        }
+        .muted {
+          font-size: 12px;
+          color: var(--ff-muted);
+        }
+        .divider {
+          height: 1px;
+          background: rgba(15, 23, 42, 0.08);
+          margin: 12px 0;
+        }
 
-        .grid2 { display: grid; gap: 10px; grid-template-columns: 1fr; }
-        @media (min-width: 900px) { .grid2 { grid-template-columns: 1fr 1fr; } }
-        .lbl { display:block; font-size: 12px; font-weight: 900; color: var(--ff-muted); margin-bottom: 6px; }
-        .in { width: 100%; height: 38px; border: 1px solid var(--ff-border); border-radius: 10px; padding: 0 10px; font-size: 13px; outline: none; background: #fff; }
-        .in.warn { border-color: rgba(209,119,17,.35); box-shadow: 0 0 0 4px rgba(209,119,17,.08); }
-        .help { margin-top: 6px; font-size: 12px; color: var(--ff-muted); }
+        .grid2 {
+          display: grid;
+          gap: 10px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 900px) {
+          .grid2 {
+            grid-template-columns: 1fr 1fr;
+          }
+        }
+        .lbl {
+          display: block;
+          font-size: 12px;
+          font-weight: 900;
+          color: var(--ff-muted);
+          margin-bottom: 6px;
+        }
+        .in {
+          width: 100%;
+          height: 38px;
+          border: 1px solid var(--ff-border);
+          border-radius: 10px;
+          padding: 0 10px;
+          font-size: 13px;
+          outline: none;
+          background: #fff;
+        }
+        .in.warn {
+          border-color: rgba(209, 119, 17, 0.35);
+          box-shadow: 0 0 0 4px rgba(209, 119, 17, 0.08);
+        }
+        .help {
+          margin-top: 6px;
+          font-size: 12px;
+          color: var(--ff-muted);
+        }
 
-        .ta { width: 100%; border: 1px solid var(--ff-border); border-radius: 10px; padding: 10px; font-size: 13px; outline: none; background: #fff; }
+        .ta {
+          width: 100%;
+          border: 1px solid var(--ff-border);
+          border-radius: 10px;
+          padding: 10px;
+          font-size: 13px;
+          outline: none;
+          background: #fff;
+          white-space: pre-wrap;
+        }
 
         .btnPrimary {
-          display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
           border: 1px solid rgba(31, 122, 58, 0.35);
-          background: var(--ff-green); color: #fff;
-          border-radius: 10px; height: 36px; padding: 0 12px;
-          font-weight: 950; font-size: 12px; cursor: pointer; white-space: nowrap;
+          background: var(--ff-green);
+          color: #fff;
+          border-radius: 10px;
+          height: 36px;
+          padding: 0 12px;
+          font-weight: 950;
+          font-size: 12px;
+          cursor: pointer;
+          white-space: nowrap;
         }
-        .btnPrimary:disabled { opacity: 0.6; cursor: not-allowed; }
-
-        .btnGhost, .btnGhostSmall {
-          display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-          border: 1px solid var(--ff-border); background: #fff; color: var(--ff-text);
-          border-radius: 10px; font-weight: 900; cursor: pointer; text-decoration: none; white-space: nowrap;
+        .btnPrimary:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
-        .btnGhost { height: 36px; padding: 0 12px; font-size: 12px; }
-        .btnGhostSmall { height: 34px; padding: 0 10px; font-size: 12px; }
-        .btnGhost:hover, .btnGhostSmall:hover { background: rgba(15,23,42,.03); }
 
-        .segBtn { height: 36px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--ff-border); background: #fff; font-weight: 950; font-size: 12px; cursor: pointer; }
+        .btnGhost,
+        .btnGhostSmall {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          color: var(--ff-text);
+          border-radius: 10px;
+          font-weight: 900;
+          cursor: pointer;
+          text-decoration: none;
+          white-space: nowrap;
+        }
+        .btnGhost {
+          height: 36px;
+          padding: 0 12px;
+          font-size: 12px;
+        }
+        .btnGhostSmall {
+          height: 34px;
+          padding: 0 10px;
+          font-size: 12px;
+        }
+        .btnGhost:hover,
+        .btnGhostSmall:hover {
+          background: rgba(15, 23, 42, 0.03);
+        }
 
-        .segRow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .seg { height: 38px; border-radius: 12px; border: 1px solid var(--ff-border); background: #fff; font-weight: 950; font-size: 12px; cursor: pointer; }
-        .seg.on { border-color: rgba(31,122,58,.28); background: rgba(31,122,58,.10); color: var(--ff-green-dark); }
+        .segBtn {
+          height: 36px;
+          padding: 0 10px;
+          border-radius: 10px;
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          font-weight: 950;
+          font-size: 12px;
+          cursor: pointer;
+        }
 
-        .segGroup { display: inline-flex; gap: 8px; align-items: center; }
-        .segMini { height: 34px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--ff-border); background: #fff; font-weight: 950; font-size: 12px; cursor: pointer; white-space: nowrap; }
-        .segMini.on { border-color: rgba(31,122,58,.28); background: rgba(31,122,58,.10); color: var(--ff-green-dark); }
+        .segRow {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+        .seg {
+          height: 38px;
+          border-radius: 12px;
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          font-weight: 950;
+          font-size: 12px;
+          cursor: pointer;
+        }
+        .seg.on {
+          border-color: rgba(31, 122, 58, 0.28);
+          background: rgba(31, 122, 58, 0.1);
+          color: var(--ff-green-dark);
+        }
 
-        .tbl { width: 100%; border-collapse: collapse; }
-        .tbl th { font-size: 12px; color: var(--ff-muted); padding: 10px 8px; border-bottom: 1px solid rgba(15,23,42,.08); }
-        .tbl td { padding: 10px 8px; border-bottom: 1px solid rgba(15,23,42,.08); font-size: 13px; }
-        .tot td { background: rgba(15,23,42,.03); font-weight: 950; }
+        .segGroup {
+          display: inline-flex;
+          gap: 8px;
+          align-items: center;
+        }
+        .segMini {
+          height: 34px;
+          padding: 0 12px;
+          border-radius: 12px;
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          font-weight: 950;
+          font-size: 12px;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .segMini.on {
+          border-color: rgba(31, 122, 58, 0.28);
+          background: rgba(31, 122, 58, 0.1);
+          color: var(--ff-green-dark);
+        }
 
-        .kpis { margin-top: 12px; display: grid; gap: 10px; grid-template-columns: 1fr; }
-        @media (min-width: 900px) { .kpis { grid-template-columns: 0.8fr 1.2fr; } }
-        .kpi { border: 1px solid rgba(15,23,42,.08); background: rgba(255,255,255,.75); border-radius: 12px; padding: 10px; }
-        .kpiLbl { font-size: 12px; color: var(--ff-muted); font-weight: 900; }
-        .kpiVal { margin-top: 2px; font-size: 13px; font-weight: 950; }
+        .tbl {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        .tbl th {
+          font-size: 12px;
+          color: var(--ff-muted);
+          padding: 10px 8px;
+          border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        }
+        .tbl td {
+          padding: 10px 8px;
+          border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+          font-size: 13px;
+        }
+        .tot td {
+          background: rgba(15, 23, 42, 0.03);
+          font-weight: 950;
+        }
 
-        .pdfRow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-        .pdfTotal { margin-top: 12px; border-radius: 12px; padding: 10px; border: 1px solid rgba(15,23,42,.10); background: rgba(255,255,255,.65); }
-        .pdfTotalLbl { font-size: 12px; color: var(--ff-muted); font-weight: 900; }
-        .pdfTotalVal { margin-top: 4px; font-size: 22px; font-weight: 950; color: var(--ff-green-dark); }
-        .pdfMeta { margin-top: 6px; font-size: 12px; color: var(--ff-muted); font-weight: 800; }
+        .kpis {
+          margin-top: 12px;
+          display: grid;
+          gap: 10px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 900px) {
+          .kpis {
+            grid-template-columns: 0.8fr 1.2fr;
+          }
+        }
+        .kpi {
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          background: rgba(255, 255, 255, 0.75);
+          border-radius: 12px;
+          padding: 10px;
+        }
+        .kpiLbl {
+          font-size: 12px;
+          color: var(--ff-muted);
+          font-weight: 900;
+        }
+        .kpiVal {
+          margin-top: 2px;
+          font-size: 13px;
+          font-weight: 950;
+        }
 
-        .msgWarn { border: 1px solid rgba(209,119,17,.35); background: rgba(209,119,17,.08); padding: 10px; border-radius: 12px; font-size: 12px; font-weight: 900; margin-bottom: 12px; }
-        .msgOk { border: 1px solid rgba(31,122,58,.30); background: rgba(31,122,58,.08); border-radius: 12px; padding: 10px; font-weight: 950; font-size: 12px; margin-bottom: 12px; }
+        .pdfRow {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .pdfTotal {
+          margin-top: 12px;
+          border-radius: 12px;
+          padding: 10px;
+          border: 1px solid rgba(15, 23, 42, 0.1);
+          background: rgba(255, 255, 255, 0.65);
+        }
+        .pdfTotalLbl {
+          font-size: 12px;
+          color: var(--ff-muted);
+          font-weight: 900;
+        }
+        .pdfTotalVal {
+          margin-top: 4px;
+          font-size: 22px;
+          font-weight: 950;
+          color: var(--ff-green-dark);
+        }
+        .pdfMeta {
+          margin-top: 6px;
+          font-size: 12px;
+          color: var(--ff-muted);
+          font-weight: 800;
+        }
+
+        .msgWarn {
+          border: 1px solid rgba(209, 119, 17, 0.35);
+          background: rgba(209, 119, 17, 0.08);
+          padding: 10px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 900;
+          margin-bottom: 12px;
+        }
+        .msgOk {
+          border: 1px solid rgba(31, 122, 58, 0.3);
+          background: rgba(31, 122, 58, 0.08);
+          border-radius: 12px;
+          padding: 10px;
+          font-weight: 950;
+          font-size: 12px;
+          margin-bottom: 12px;
+        }
       `}</style>
     </AdminLayout>
   );
