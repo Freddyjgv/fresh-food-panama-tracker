@@ -1,7 +1,7 @@
 // netlify/functions/renderQuotePdf.ts
 import type { Handler } from "@netlify/functions";
 import PDFDocument from "pdfkit";
-import { getUserAndProfile, text, supabaseAdmin } from "./_util";
+import { getUserAndProfile, json, text, supabaseAdmin } from "./_util";
 
 function isPrivileged(role: string) {
   const r = String(role || "").trim().toLowerCase();
@@ -20,7 +20,10 @@ function safeFileName(name: string) {
 function money(n: number, currency: string) {
   const sym = currency === "EUR" ? "€" : "$";
   const v = Number.isFinite(n) ? n : 0;
-  return `${sym} ${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${sym} ${v.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 function t(lang: "es" | "en", es: string, en: string) {
@@ -41,15 +44,9 @@ function docToBuffer(doc: PDFKit.PDFDocument) {
 
 function drawHeader(
   doc: PDFKit.PDFDocument,
-  opts: {
-    lang: "es" | "en";
-    quoteLabel: string; // ✅ puede ser quote_no o fallback corto
-    incoterm: string;
-    place: string;
-    dateStr: string;
-  }
+  opts: { lang: "es" | "en"; quoteIdShort: string; incoterm: string; place: string; dateStr: string }
 ) {
-  const { lang, quoteLabel, incoterm, place, dateStr } = opts;
+  const { lang, quoteIdShort, incoterm, place, dateStr } = opts;
 
   doc.font("Helvetica-Bold").fontSize(16).fillColor("#111").text("Fresh Food Panamá", 0, 0, { align: "left" });
 
@@ -57,7 +54,7 @@ function drawHeader(
     .font("Helvetica")
     .fontSize(10)
     .fillColor("#555")
-    .text(`${t(lang, "Cotización", "Quotation")} ${quoteLabel}`, { align: "left" })
+    .text(`${t(lang, "Cotización", "Quotation")} #${quoteIdShort}`, { align: "left" })
     .text(`${t(lang, "Fecha", "Date")}: ${dateStr}`, { align: "left" });
 
   const pillText = `${incoterm} · ${place}`;
@@ -90,11 +87,13 @@ function ensureSpace(doc: PDFKit.PDFDocument, neededHeight: number) {
   if (doc.y + neededHeight > bottom) doc.addPage();
 }
 
-function drawKeyValueLines(doc: PDFKit.PDFDocument, lines: Array<{ k: string; v: string }>, boxWidth: number) {
+function drawKeyValueLines(
+  doc: PDFKit.PDFDocument,
+  lines: Array<{ k: string; v: string }>,
+  boxWidth: number
+) {
   const x = doc.page.margins.left;
-  const startY = doc.y;
   const pad = 10;
-
   const lineH = 14;
   const h = pad * 2 + lines.length * lineH;
 
@@ -111,7 +110,6 @@ function drawKeyValueLines(doc: PDFKit.PDFDocument, lines: Array<{ k: string; v:
   }
 
   doc.y = y + h + 8;
-  if (doc.y < startY) doc.y = startY + h + 8;
 }
 
 function drawTermsBox(doc: PDFKit.PDFDocument, title: string, terms: string, boxWidth: number) {
@@ -121,22 +119,21 @@ function drawTermsBox(doc: PDFKit.PDFDocument, title: string, terms: string, box
   const pad = 10;
   const maxW = boxWidth - pad * 2;
 
-  ensureSpace(doc, 80);
-  const y = doc.y;
-
   doc.font("Helvetica").fontSize(10);
   const textH = doc.heightOfString(terms || "", { width: maxW, align: "left" });
   const h = Math.max(40, pad * 2 + textH);
 
   ensureSpace(doc, h + 10);
-  const y2 = doc.y;
+  const y = doc.y;
 
-  drawBox(doc, { x, y: y2, w: boxWidth, h });
+  drawBox(doc, { x, y, w: boxWidth, h });
 
-  doc.font("Helvetica").fontSize(10).fillColor("#111").text(terms || "", x + pad, y2 + pad, { width: maxW, align: "left" });
+  doc.font("Helvetica").fontSize(10).fillColor("#111").text(terms || "", x + pad, y + pad, {
+    width: maxW,
+    align: "left",
+  });
 
-  doc.y = y2 + h + 8;
-  if (doc.y < y) doc.y = y + h + 8;
+  doc.y = y + h + 8;
 }
 
 function drawItemsTable(doc: PDFKit.PDFDocument, opts: { lang: "es" | "en"; currency: string; items: any[]; total: number; boxWidth: number }) {
@@ -190,7 +187,6 @@ function drawItemsTable(doc: PDFKit.PDFDocument, opts: { lang: "es" | "en"; curr
       doc.text(name, x + pad, doc.y + 6, { width: colItem - pad });
       doc.text(qty.toLocaleString("en-US"), x + colItem, doc.y + 6, { width: colQty - pad, align: "right" });
       doc.text(money(up, currency), x + colItem + colQty, doc.y + 6, { width: colUP - pad, align: "right" });
-
       doc.font("Helvetica-Bold").text(money(rowTotal, currency), x + colItem + colQty + colUP, doc.y + 6, {
         width: colTot - pad,
         align: "right",
@@ -205,7 +201,10 @@ function drawItemsTable(doc: PDFKit.PDFDocument, opts: { lang: "es" | "en"; curr
   ensureSpace(doc, 40);
   doc.moveDown(0.6);
   doc.font("Helvetica-Bold").fontSize(13).fillColor("#111");
-  doc.text(`${t(lang, "Total", "Total")}: ${money(Number(total || 0), currency)}`, x, doc.y, { width: boxWidth, align: "right" });
+  doc.text(`${t(lang, "Total", "Total")}: ${money(Number(total || 0), currency)}`, x, doc.y, {
+    width: boxWidth,
+    align: "right",
+  });
 
   doc.moveDown(0.8);
 
@@ -216,20 +215,80 @@ function drawItemsTable(doc: PDFKit.PDFDocument, opts: { lang: "es" | "en"; curr
   doc.y = endY + 4;
 }
 
+function corsHeaders(extra?: Record<string, string>) {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "authorization, content-type",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Cache-Control": "no-store",
+    ...(extra || {}),
+  };
+}
+
 export const handler: Handler = async (event) => {
   try {
-    const { user, profile } = await getUserAndProfile(event);
-    if (!user || !profile) return text(401, "Unauthorized");
-    if (!isPrivileged(profile.role)) return text(403, "Forbidden");
+    // ✅ Preflight
+    if (event.httpMethod === "OPTIONS") {
+      return {
+        statusCode: 200,
+        headers: corsHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ ok: true }),
+      };
+    }
 
+    // ✅ Method
+    if (event.httpMethod !== "GET") {
+      return {
+        statusCode: 405,
+        headers: corsHeaders({ "Content-Type": "text/plain" }),
+        body: "Method not allowed",
+      };
+    }
+
+    // Auth
+    const { user, profile } = await getUserAndProfile(event);
+    if (!user || !profile) {
+      return {
+        statusCode: 401,
+        headers: corsHeaders({ "Content-Type": "text/plain" }),
+        body: "Unauthorized",
+      };
+    }
+    if (!isPrivileged(profile.role)) {
+      return {
+        statusCode: 403,
+        headers: corsHeaders({ "Content-Type": "text/plain" }),
+        body: "Forbidden",
+      };
+    }
+
+    // Params
     const id = String(event.queryStringParameters?.id || "").trim();
     const variant = String(event.queryStringParameters?.variant || "2").trim() as "1" | "2";
     const lang = String(event.queryStringParameters?.lang || "es").trim().toLowerCase() as "es" | "en";
-    if (!id) return text(400, "Missing id");
+    if (!id) {
+      return {
+        statusCode: 400,
+        headers: corsHeaders({ "Content-Type": "text/plain" }),
+        body: "Missing id",
+      };
+    }
 
+    // Fetch quote
     const sb = supabaseAdmin();
-    const { data, error } = await sb.from("quotes").select("*, clients:clients(*)").eq("id", id).single<QuoteRow>();
-    if (error || !data) return text(404, error?.message || "Quote not found");
+    const { data, error } = await sb
+      .from("quotes")
+      .select("*, clients:clients(*)")
+      .eq("id", id)
+      .single<QuoteRow>();
+
+    if (error || !data) {
+      return {
+        statusCode: 404,
+        headers: corsHeaders({ "Content-Type": "text/plain" }),
+        body: error?.message || "Quote not found",
+      };
+    }
 
     const totals = data?.totals || {};
     const meta = totals?.meta || {};
@@ -242,24 +301,22 @@ export const handler: Handler = async (event) => {
     const clientName = String(data?.clients?.name || data?.client_snapshot?.name || "—");
     const clientEmail = String(data?.clients?.contact_email || data?.client_snapshot?.contact_email || "—");
 
-    const quoteNo = String(data?.quote_no || "").trim();
     const quoteIdShort = String(data?.id || id).slice(0, 8);
-    const quoteLabel = quoteNo ? quoteNo : `#${quoteIdShort}`;
-
     const dateStr = new Date().toLocaleDateString(lang === "en" ? "en-US" : "es-PA");
 
+    // PDF
     const doc = new PDFDocument({
       size: "A4",
       margin: 52,
       info: {
-        Title: `${t(lang, "Cotización", "Quotation")} ${quoteLabel}`,
+        Title: `${t(lang, "Cotización", "Quotation")} ${quoteIdShort}`,
         Author: "Fresh Food Panamá",
       },
     });
 
     const boxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-    drawHeader(doc, { lang, quoteLabel, incoterm, place, dateStr });
+    drawHeader(doc, { lang, quoteIdShort, incoterm, place, dateStr });
 
     drawSectionTitle(doc, t(lang, "Cliente", "Client"));
     drawKeyValueLines(
@@ -291,29 +348,29 @@ export const handler: Handler = async (event) => {
     if (terms.trim()) drawTermsBox(doc, t(lang, "Condiciones", "Terms"), terms, boxWidth);
 
     ensureSpace(doc, 40);
-    doc.font("Helvetica").fontSize(9).fillColor("#777").text(t(lang, "Documento generado automáticamente.", "Automatically generated document."), {
-      align: "center",
-    });
+    doc.font("Helvetica").fontSize(9).fillColor("#777").text(
+      t(lang, "Documento generado automáticamente.", "Automatically generated document."),
+      { align: "center" }
+    );
 
     const pdfBuffer = await docToBuffer(doc);
-
-    const base = safeFileName(clientName);
-    const qTag = safeFileName(quoteNo || quoteIdShort);
-    const filename = `${base}_${qTag}_${variant}_${lang}.pdf`;
+    const filename = `${safeFileName(clientName)}_quote_${quoteIdShort}_${variant}_${lang}.pdf`;
 
     return {
       statusCode: 200,
-      headers: {
+      headers: corsHeaders({
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
-        "Cache-Control": "no-store",
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "authorization, content-type",
-      },
+      }),
       body: pdfBuffer.toString("base64"),
       isBase64Encoded: true,
     };
   } catch (e: any) {
-    return text(500, e?.message || "Server error");
+    // ✅ Siempre con CORS para que el browser vea el error
+    return {
+      statusCode: 500,
+      headers: corsHeaders({ "Content-Type": "text/plain" }),
+      body: e?.message || "Server error",
+    };
   }
 };
