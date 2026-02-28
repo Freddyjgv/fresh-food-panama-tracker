@@ -36,7 +36,10 @@
 
   /* Layout */
   --ff-header-h: 60px;
+
+  /* Sidebar widths */
   --ff-sidebar-w: 220px;
+  --ff-sidebar-w-collapsed: 64px;
 }
 
 /* -------------------------------
@@ -80,6 +83,10 @@ a {
     "side main";
 }
 
+.ff-app.is-collapsed {
+  grid-template-columns: var(--ff-sidebar-w-collapsed) minmax(0, 1fr);
+}
+
 /* -------------------------------
    Header (TOP)
 -------------------------------- */
@@ -107,7 +114,7 @@ a {
 }
 
 .ff-top__logo {
-  height: 44px; /* ✅ tamaño correcto */
+  height: 44px;
   width: auto;
   max-width: 220px;
   object-fit: contain;
@@ -149,11 +156,8 @@ a {
 -------------------------------- */
 .ff-side {
   grid-area: side;
-  background: linear-gradient(
-    180deg,
-    var(--ff-green) 0%,
-    var(--ff-green-dark) 100%
-  );
+  position: relative; /* ✅ para toggle lateral */
+  background: linear-gradient(180deg, var(--ff-green) 0%, var(--ff-green-dark) 100%);
   color: #fff;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   overflow: auto;
@@ -161,6 +165,30 @@ a {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.ff-side__toggle {
+  position: absolute;
+  right: -12px;               /* ✅ sobresale */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  background: #ffffff;
+  color: rgba(15, 23, 42, 0.85);
+  font-weight: 950;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.12);
+  display: grid;
+  place-items: center;
+  z-index: 20;
+}
+
+.ff-side__toggle:hover {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 14px 34px rgba(2, 6, 23, 0.16);
 }
 
 .ff-side__nav {
@@ -189,6 +217,37 @@ a {
   color: #fff;
 }
 
+.ff-side__ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.ff-side__lbl {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ✅ Collapsed behavior: icons only */
+.ff-app.is-collapsed .ff-side__nav {
+  padding: 10px 8px;
+}
+
+.ff-app.is-collapsed .ff-side__item {
+  justify-content: center;
+  gap: 0;
+  padding: 10px 8px;
+}
+
+.ff-app.is-collapsed .ff-side__lbl {
+  display: none;
+}
+
 .ff-side__foot {
   margin-top: auto;
   padding: 10px 12px 14px;
@@ -211,6 +270,14 @@ a {
   box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.2);
 }
 
+/* ✅ Collapsed foot: keep dot only */
+.ff-app.is-collapsed .ff-side__footBadge {
+  justify-content: center;
+}
+.ff-app.is-collapsed .ff-side__footText {
+  display: none;
+}
+
 /* -------------------------------
    Main content
 -------------------------------- */
@@ -225,7 +292,7 @@ a {
   width: 100%;
   min-width: 0;
   max-width: 1280px;
-  margin: 0 auto; /* Admin */
+  margin: 0 auto;
 }
 
 /* Cliente: ancho completo */

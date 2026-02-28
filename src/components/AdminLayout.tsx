@@ -14,8 +14,8 @@ import {
   FileText,
 } from "lucide-react";
 
-
 const LOGO_SRC = "/brand/freshfood-logo.svg";
+const SIDEBAR_STORE_KEY = "ff.sidebarCollapsed.v1";
 
 type Me = { email: string | null; role: string | null };
 
@@ -45,15 +45,18 @@ export function AdminLayout({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
+  // ✅ Sidebar collapse
+  const [sideCollapsed, setSideCollapsed] = useState(false);
+
   const nav = useMemo(
-  () => [
-    { href: "/admin", label: lang === "es" ? "Dashboard" : "Dashboard", icon: LayoutGrid },
-    { href: "/admin/shipments", label: lang === "es" ? "Embarques" : "Shipments", icon: Package },
-    { href: "/admin/quotes", label: lang === "es" ? "Cotizaciones" : "Quotes", icon: FileText },
-    { href: "/admin/users", label: lang === "es" ? "Clientes" : "Clients", icon: Users },
-  ],
-  [lang]
-);
+    () => [
+      { href: "/admin", label: lang === "es" ? "Dashboard" : "Dashboard", icon: LayoutGrid },
+      { href: "/admin/shipments", label: lang === "es" ? "Embarques" : "Shipments", icon: Package },
+      { href: "/admin/quotes", label: lang === "es" ? "Cotizaciones" : "Quotes", icon: FileText },
+      { href: "/admin/users", label: lang === "es" ? "Clientes" : "Clients", icon: Users },
+    ],
+    [lang]
+  );
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -63,6 +66,28 @@ export function AdminLayout({
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
+
+  // ✅ Load sidebar state once
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SIDEBAR_STORE_KEY);
+      if (raw === "1") setSideCollapsed(true);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  function toggleSidebar() {
+    setSideCollapsed((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(SIDEBAR_STORE_KEY, next ? "1" : "0");
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     (async () => {
@@ -87,17 +112,12 @@ export function AdminLayout({
   const activePath = router.pathname;
 
   return (
-    <div className="ff-app">
+    <div className={`ff-app ${sideCollapsed ? "is-collapsed" : ""}`}>
       {/* HEADER (BLANCO, ARRIBA) */}
       <header className="ff-top">
         <div className="ff-top__inner">
           <div className="ff-top__left">
-            <img
-              src={LOGO_SRC}
-              alt="Fresh Food Panamá"
-              className="ff-top__logo"
-              draggable={false}
-            />
+            <img src={LOGO_SRC} alt="Fresh Food Panamá" className="ff-top__logo" draggable={false} />
 
             <div className="ff-top__titleWrap">
               {title ? <h1 className="ff-top__title">{title}</h1> : null}
@@ -117,15 +137,9 @@ export function AdminLayout({
             </button>
 
             <div className="ff-user" ref={menuRef}>
-              <button
-                type="button"
-                className="ff-user__btn"
-                onClick={() => setMenuOpen((v) => !v)}
-              >
+              <button type="button" className="ff-user__btn" onClick={() => setMenuOpen((v) => !v)}>
                 <UserCircle2 size={16} />
-                <span className="ff-user__email">
-                  {me.email ?? (lang === "es" ? "Usuario" : "User")}
-                </span>
+                <span className="ff-user__email">{me.email ?? (lang === "es" ? "Usuario" : "User")}</span>
                 <ChevronDown size={14} />
               </button>
 
@@ -165,32 +179,46 @@ export function AdminLayout({
 
       {/* SIDEBAR (DEBAJO DEL HEADER) */}
       <aside className="ff-side">
+        {/* ✅ Lateral toggle (a mitad del sidebar) */}
+        <button
+          type="button"
+          className="ff-side__toggle"
+          onClick={toggleSidebar}
+          aria-label={sideCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={sideCollapsed ? (lang === "es" ? "Expandir" : "Expand") : (lang === "es" ? "Contraer" : "Collapse")}
+        >
+          {sideCollapsed ? ">" : "<"}
+        </button>
+
         <nav className="ff-side__nav">
           {nav.map((n) => {
             const Icon = n.icon;
-            const active =
-              activePath === n.href ||
-              (n.href !== "/admin" && activePath.startsWith(n.href));
+            const active = activePath === n.href || (n.href !== "/admin" && activePath.startsWith(n.href));
+
+            // ✅ Tooltip siempre (en collapsed es crítico)
+            const tip = n.label;
 
             return (
               <Link
                 key={n.href}
                 href={n.href}
                 className={`ff-side__item ${active ? "is-active" : ""}`}
+                title={tip}
+                aria-label={tip}
               >
-                <Icon size={16} />
-                <span>{n.label}</span>
+                <span className="ff-side__ico" aria-hidden="true">
+                  <Icon size={16} />
+                </span>
+                <span className="ff-side__lbl">{n.label}</span>
               </Link>
             );
           })}
         </nav>
 
         <div className="ff-side__foot">
-          <div className="ff-side__footBadge">
+          <div className="ff-side__footBadge" title={lang === "es" ? "Conectado" : "Connected"}>
             <span className="ff-dot" />
-            <span className="ff-side__footText">
-              {lang === "es" ? "Conectado" : "Connected"}
-            </span>
+            <span className="ff-side__footText">{lang === "es" ? "Conectado" : "Connected"}</span>
           </div>
         </div>
       </aside>
