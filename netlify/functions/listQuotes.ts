@@ -19,65 +19,41 @@ export const handler: Handler = async (event) => {
 
     const pageSize = 20;
     const page = Math.max(1, Number(event.queryStringParameters?.page || 1));
-    const dir = (event.queryStringParameters?.dir || "desc").toLowerCase() === "asc" ? "asc" : "desc";
+    const dir =
+      (event.queryStringParameters?.dir || "desc").toLowerCase() === "asc" ? "asc" : "desc";
 
     const status = String(event.queryStringParameters?.status || "").trim().toLowerCase();
-    const qRaw = String(event.queryStringParameters?.q || "").trim();
-    const q = qRaw.slice(0, 60);
+    const q = String(event.queryStringParameters?.q || "").trim().slice(0, 60);
 
     const fromIndex = (page - 1) * pageSize;
     const toIndex = fromIndex + pageSize - 1;
 
     const sb = supabaseAdmin();
 
-    // 1) Si hay q, buscamos posibles clientes match (sin joins raros en OR)
-    let clientIds: string[] = [];
-    if (q) {
-      const { data: cData } = await sb
-        .from("clients")
-        .select("id")
-        .or(`name.ilike.%${q}%,contact_email.ilike.%${q}%`)
-        .limit(50);
-
-      clientIds = (cData || []).map((x: any) => String(x.id)).filter(Boolean);
-    }
-
-    // 2) Query principal quotes
     let query = sb
       .from("quotes")
       .select(
-        "id, quote_no, created_at, updated_at, status, mode, currency, destination, boxes, weight_kg, margin_markup, client_id, client_snapshot, totals, clients(name, contact_email)",
+        "id, quote_number, created_at, updated_at, status, mode, currency, destination, boxes, weight_kg, margin_markup, client_id, client_snapshot, totals, clients(name, contact_email)",
         { count: "exact" }
       );
 
     if (status) query = query.eq("status", status);
 
-    // 3) Filtro robusto con OR solo en quotes (mismo recurso)
+    // búsqueda simple: destino o cliente (join)
     if (q) {
-      const parts: string[] = [];
-      parts.push(`destination.ilike.%${q}%`);
-      // snapshots (si existen)
-      parts.push(`client_snapshot->>name.ilike.%${q}%`);
-      parts.push(`client_snapshot->>contact_email.ilike.%${q}%`);
-      parts.push(`quote_no.ilike.%${q}%`); // ✅ buscar por número también
-
-      if (clientIds.length) {
-        // PostgREST IN syntax dentro de or():
-        // client_id.in.(uuid1,uuid2)
-        parts.push(`client_id.in.(${clientIds.join(",")})`);
-      }
-
-      query = query.or(parts.join(","));
+      query = query.or(`destination.ilike.%${q}%,clients.name.ilike.%${q}%`);
     }
 
-    query = query.order("created_at", { ascending: dir === "asc" }).range(fromIndex, toIndex);
+    query = query
+      .order("created_at", { ascending: dir === "asc" })
+      .range(fromIndex, toIndex);
 
     const { data, count, error } = await query;
     if (error) return text(500, error.message);
 
     const items = (data || []).map((r: any) => ({
       id: r.id,
-      quote_no: r.quote_no ?? null,
+      quote_number: r.quote_number ?? null,
       created_at: r.created_at,
       updated_at: r.updated_at,
       status: r.status,

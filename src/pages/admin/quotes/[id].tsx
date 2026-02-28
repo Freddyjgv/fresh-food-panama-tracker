@@ -9,6 +9,7 @@ import { AdminLayout } from "../../../components/AdminLayout";
 
 type QuoteDetail = {
   id: string;
+  quote_number?: string | null; // ✅ RFQ/YYYY/0000X
   created_at: string;
   updated_at: string;
   status: "draft" | "sent" | "won" | "lost" | "archived";
@@ -413,24 +414,23 @@ export default function AdminQuoteDetailPage() {
     const blob = await res.blob();
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `quote_${data.id.slice(0, 8)}_${opts.variant}_${opts.lang}${opts.report ? "_INTERNAL" : ""}.pdf`;
+
+    // ✅ nombre de archivo más humano: usa quote_number si existe
+    const safeCode = quoteCode.replace(/[^\w/-]+/g, "_");
+    a.download = `quote_${safeCode}_${opts.variant}_${opts.lang}${opts.report ? "_INTERNAL" : ""}.pdf`;
+
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1500);
   }
 
-  // ✅ “Número de cotización” (estable, sin DB extra): short id.
-  const quoteNumber = useMemo(() => {
-    if (!data?.id) return "—";
-    return `Q-${data.id.slice(0, 8).toUpperCase()}`;
-  }, [data?.id]);
-
-  // mantenemos compat con lo que ya tenías en UI (badge)
+  // ✅ Código oficial visible: quote_number si existe, si no fallback
   const quoteCode = useMemo(() => {
     if (!data?.id) return "—";
-    return `#${data.id.slice(0, 8)}`;
-  }, [data?.id]);
+    const qn = String(data.quote_number || "").trim();
+    return qn ? qn : `#${data.id.slice(0, 8)}`;
+  }, [data?.id, data?.quote_number]);
 
   if (!authOk) {
     return (
@@ -456,7 +456,7 @@ export default function AdminQuoteDetailPage() {
           </div>
           {data ? (
             <div className="topSub">
-              <span className="qnum">Número: {quoteNumber}</span>
+              <span className="qnum">Número: {quoteCode}</span>
               <span className="sep">·</span>
               Creada: {fmtDateTime(data.created_at)} <span className="sep">·</span> Actualizada: {fmtDateTime(data.updated_at)}
             </div>
