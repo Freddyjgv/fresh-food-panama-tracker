@@ -1,10 +1,10 @@
 // netlify/functions/renderQuotePdf.ts
 import type { Handler } from "@netlify/functions";
 
-// IMPORTANT: standalone build avoids AFM font lookups
+// IMPORTANT: standalone build avoids AFM font lookups (Helvetica.afm) in serverless
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
-import PDFDocument from "pdfkit/js/pdfkit";
+import PDFDocument from "pdfkit/js/pdfkit.standalone";
 
 import fs from "fs";
 import path from "path";
@@ -190,15 +190,14 @@ function drawItemsTable(doc: any, opts: { lang: "es" | "en"; currency: string; i
 }
 
 /**
- * LEE assets como Buffer para evitar:
- * - pdfkit intentando fs interno ("fs2.readFileSync")
- * - rutas que no existen en /var/task
+ * Lee assets como Buffer para evitar fs2.readFileSync dentro de pdfkit.
  */
 function readAssetBuffer(absPath: string): Buffer | null {
   try {
     if (!absPath) return null;
     if (!fs.existsSync(absPath)) return null;
-    return fs.readFileSync(absPath);
+    const buf = fs.readFileSync(absPath);
+    return Buffer.isBuffer(buf) && buf.length > 0 ? buf : null;
   } catch (e: any) {
     console.error("[renderQuotePdf] readAssetBuffer error", absPath, e?.message);
     return null;
@@ -213,7 +212,7 @@ function drawWatermark(doc: any, wmBuf: Buffer | null) {
   const y = (doc.page.height - w) / 2;
 
   doc.save();
-  doc.opacity(0.08); // un poco más visible
+  doc.opacity(0.08);
   try {
     doc.image(wmBuf, x, y, { width: w });
   } catch (e: any) {
@@ -359,7 +358,7 @@ export const handler: Handler = async (event) => {
       },
     });
 
-    // ✅ Registrar fuentes via Buffer
+    // ✅ Registrar fuentes via Buffer + setear base font ANTES de cualquier text()
     doc.registerFont("Inter", interRegularBuf);
     doc.registerFont("Inter-Bold", interBoldBuf);
     doc.font("Inter");
@@ -401,7 +400,6 @@ export const handler: Handler = async (event) => {
 
     drawTermsBox(doc, t(lang, "Términos y condiciones", "Terms & Conditions"), String(data?.terms || ""), boxWidth);
 
-    // Footer on each page
     const addFooter = () => drawFooter(doc, lang);
     addFooter();
     doc.on("pageAdded", addFooter);
