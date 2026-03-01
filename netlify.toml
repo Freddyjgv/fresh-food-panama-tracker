@@ -6,9 +6,9 @@
   node_bundler = "esbuild"
 
 [functions."renderQuotePdf"]
-  external_node_modules = ["puppeteer-core", "@sparticuz/chromium"]
-  included_files = ["node_modules/@sparticuz/chromium/**, public/brand/**",
-  "node_modules/pdfkit/js/data/**, public/brand/**", "node_modules/pdfkit/js/data/**"]
+  included_files = [
+    "public/brand/**"
+  ]
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
