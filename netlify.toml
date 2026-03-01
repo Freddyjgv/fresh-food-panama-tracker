@@ -7,7 +7,7 @@
 
 [functions."renderQuotePdf"]
   included_files = [
-    "public/brand/**"
+    "netlify/functions/assets/**"
   ]
 
 [[plugins]]
