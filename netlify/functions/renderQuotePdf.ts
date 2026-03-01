@@ -1,6 +1,6 @@
 // netlify/functions/renderQuotePdf.ts
 import type { Handler } from "@netlify/functions";
-import PDFDocumentImport from "pdfkit/js/pdfkit.standalone";
+import PDFDocument from "pdfkit/js/pdfkit.standalone";
 import fs from "fs";
 import path from "path";
 import { getUserAndProfile, text, supabaseAdmin, json } from "./_util";
@@ -22,10 +22,7 @@ function safeFileName(name: string) {
 function money(n: number, currency: string) {
   const sym = currency === "EUR" ? "€" : "$";
   const v = Number.isFinite(n) ? n : 0;
-  return `${sym} ${v.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return `${sym} ${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function t(lang: "es" | "en", es: string, en: string) {
@@ -49,8 +46,65 @@ function ensureSpace(doc: any, neededHeight: number) {
   if (doc.y + neededHeight > bottom) doc.addPage();
 }
 
-function drawWatermark(doc: any, wmPathAbs: string) {
-  if (!fs.existsSync(wmPathAbs)) return;
+/**
+ * Diagnóstico: lista contenido de un directorio si existe (solo 1 nivel).
+ */
+function safeListDir(label: string, absDir: string) {
+  try {
+    if (!fs.existsSync(absDir)) {
+      console.log(`[renderQuotePdf] ls ${label}:`, absDir, "=> (missing)");
+      return;
+    }
+    const items = fs.readdirSync(absDir);
+    console.log(`[renderQuotePdf] ls ${label}:`, absDir, "=>", items.slice(0, 50));
+  } catch (e: any) {
+    console.log(`[renderQuotePdf] ls ${label} ERROR:`, absDir, e?.message);
+  }
+}
+
+/**
+ * Busca un asset en múltiples raíces/rutas "probables" dentro del bundle de Netlify.
+ * Devuelve { abs, tried }.
+ */
+function findAsset(rel: string, extraCandidates: string[] = []) {
+  const tried: string[] = [];
+
+  // Raíces típicas en Netlify Functions
+  const roots = [
+    process.cwd(), // /var/task (en prod)
+    __dirname, // /var/task/netlify/functions
+    path.join(__dirname, ".."), // /var/task/netlify
+    path.join(__dirname, "..", ".."), // /var/task
+    "/var/task",
+    "/var/task/netlify/functions",
+  ];
+
+  // Intentos: rel tal cual + algunas variantes comunes
+  const rels = [
+    rel,
+    // si included_files termina copiando dentro de netlify/functions/...
+    path.join("netlify", "functions", rel),
+    // si termina copiando dentro de "functions/..."
+    path.join("functions", rel),
+    // por si quedó como "public/..." relativo a __dirname
+    path.join("..", rel),
+    path.join("..", "..", rel),
+    ...extraCandidates,
+  ];
+
+  for (const root of roots) {
+    for (const r of rels) {
+      const abs = path.resolve(root, r);
+      tried.push(abs);
+      if (fs.existsSync(abs)) return { abs, tried };
+    }
+  }
+
+  return { abs: "", tried };
+}
+
+function drawWatermark(doc: any, wmAbs: string) {
+  if (!wmAbs || !fs.existsSync(wmAbs)) return;
 
   const w = 420;
   const x = (doc.page.width - w) / 2;
@@ -59,9 +113,9 @@ function drawWatermark(doc: any, wmPathAbs: string) {
   doc.save();
   doc.opacity(0.05);
   try {
-    doc.image(wmPathAbs, x, y, { width: w });
-  } catch {
-    // ignore image errors
+    doc.image(wmAbs, x, y, { width: w });
+  } catch (e: any) {
+    console.log("[renderQuotePdf] watermark image() error:", e?.message);
   }
   doc.opacity(1);
   doc.restore();
@@ -79,27 +133,24 @@ function drawFooter(doc: any) {
   doc.restore();
 }
 
-function drawHeader(
-  doc: any,
-  opts: {
-    lang: "es" | "en";
-    quoteNumber: string;
-    incoterm: string;
-    place: string;
-    dateStr: string;
-    logoAbs: string;
-  }
-) {
+function drawHeader(doc: any, opts: {
+  lang: "es" | "en";
+  quoteNumber: string;
+  incoterm: string;
+  place: string;
+  dateStr: string;
+  logoAbs: string;
+}) {
   const { lang, quoteNumber, incoterm, place, dateStr, logoAbs } = opts;
 
   const x = doc.page.margins.left;
   const topY = doc.y;
 
-  if (fs.existsSync(logoAbs)) {
+  if (logoAbs && fs.existsSync(logoAbs)) {
     try {
       doc.image(logoAbs, x, topY, { width: 110 });
-    } catch {
-      // ignore image errors
+    } catch (e: any) {
+      console.log("[renderQuotePdf] logo image() error:", e?.message);
     }
   }
 
@@ -156,10 +207,13 @@ function drawKeyValueLines(doc: any, lines: Array<{ k: string; v: string }>, box
   doc.y = y + h + 8;
 }
 
-function drawItemsTable(
-  doc: any,
-  opts: { lang: "es" | "en"; currency: string; items: any[]; total: number; boxWidth: number }
-) {
+function drawItemsTable(doc: any, opts: {
+  lang: "es" | "en";
+  currency: string;
+  items: any[];
+  total: number;
+  boxWidth: number;
+}) {
   const { lang, currency, items, total, boxWidth } = opts;
   const x = doc.page.margins.left;
   const rightX = x + boxWidth;
@@ -267,64 +321,35 @@ function drawTermsBox(doc: any, title: string, terms: string, boxWidth: number) 
   doc.y = y + h + 8;
 }
 
-/**
- * Resolve an asset path robustly in Netlify Functions bundles.
- * We try multiple candidate roots because cwd / __dirname can differ between local/dev/prod.
- */
-function resolveAsset(...parts: string[]) {
-  const candidates: string[] = [];
-
-  // Common roots
-  candidates.push(path.join(process.cwd(), ...parts));
-  candidates.push(path.join(process.cwd(), ".next", ...parts)); // sometimes
-  candidates.push(path.join(__dirname, ...parts)); // if bundle preserves structure
-  candidates.push(path.join(__dirname, "..", ...parts));
-  candidates.push(path.join(__dirname, "..", "..", ...parts));
-  candidates.push(path.join(__dirname, "..", "..", "..", ...parts));
-
-  // De-dup
-  const unique = Array.from(new Set(candidates.map((p) => path.normalize(p))));
-
-  for (const p of unique) {
-    try {
-      if (fs.existsSync(p)) return p;
-    } catch {
-      // ignore
-    }
-  }
-  // return first candidate for better debugging
-  return unique[0];
-}
-
-function pickPdfCtor() {
-  const anyMod: any = PDFDocumentImport as any;
-  // netlify/esbuild sometimes wraps default export
-  const ctor = anyMod?.default ?? anyMod;
-  return ctor;
-}
-
 export const handler: Handler = async (event) => {
-  const reqId =
-    (event.headers["x-nf-request-id"] as string) ||
-    (event.headers["x-nf-requestid"] as string) ||
-    (event.headers["x-request-id"] as string) ||
-    "";
-
+  const reqId = event.headers["x-nf-request-id"] || "";
   try {
     if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
 
-    // Auth
+    console.log("[renderQuotePdf] reqId:", reqId);
+    console.log("[renderQuotePdf] cwd:", process.cwd());
+    console.log("[renderQuotePdf] __dirname:", __dirname);
+    console.log("[renderQuotePdf] PDFDocumentImport typeof:", typeof PDFDocument);
+    console.log("[renderQuotePdf] PDFDocumentImport keys:", Object.keys(PDFDocument as any));
+
+    // lista dirs clave para ver dónde están realmente las cosas
+    safeListDir("root(/var/task)", "/var/task");
+    safeListDir("__dirname", __dirname);
+    safeListDir("public", path.join(process.cwd(), "public"));
+    safeListDir("public/brand", path.join(process.cwd(), "public", "brand"));
+    safeListDir("__dirname/../public", path.join(__dirname, "..", "public"));
+    safeListDir("__dirname/../public/brand", path.join(__dirname, "..", "public", "brand"));
+    safeListDir("__dirname/../../public/brand", path.join(__dirname, "..", "..", "public", "brand"));
+
     const { user, profile } = await getUserAndProfile(event);
     if (!user || !profile) return text(401, "Unauthorized");
     if (!isPrivileged(profile.role)) return text(403, "Forbidden");
 
-    // Params
     const id = String(event.queryStringParameters?.id || "").trim();
     const variant = (String(event.queryStringParameters?.variant || "2").trim() as "1" | "2");
     const lang = (String(event.queryStringParameters?.lang || "es").trim().toLowerCase() as "es" | "en");
     if (!id) return text(400, "Missing id");
 
-    // Fetch quote
     const sb = supabaseAdmin();
     const { data, error } = await sb
       .from("quotes")
@@ -352,36 +377,33 @@ export const handler: Handler = async (event) => {
 
     const dateStr = new Date(data?.created_at || Date.now()).toLocaleDateString(lang === "en" ? "en-US" : "es-PA");
 
-    // Assets (resolve robustly)
-    const logoAbsPath = resolveAsset("public", "brand", "freshfood_logo.png");
-    const watermarkAbsPath = resolveAsset("public", "brand", "FFPWM.png");
-    const interRegularAbs = resolveAsset("public", "brand", "Inter-Regular.ttf");
-    const interBoldAbs = resolveAsset("public", "brand", "Inter-Bold.ttf");
+    // Busca assets (diagnóstico real)
+    const logo = findAsset(path.join("public", "brand", "freshfood_logo.png"));
+    const wm = findAsset(path.join("public", "brand", "FFPWM.png"));
+    const interRegular = findAsset(path.join("public", "brand", "Inter-Regular.ttf"));
+    const interBold = findAsset(path.join("public", "brand", "Inter-Bold.ttf"));
 
-    // ===== DIAGNOSTIC LOGS (these are what you need) =====
-    console.log("[renderQuotePdf] reqId:", reqId);
-    console.log("[renderQuotePdf] cwd:", process.cwd());
-    console.log("[renderQuotePdf] __dirname:", __dirname);
+    console.log("[renderQuotePdf] asset logo found:", !!logo.abs, "=>", logo.abs || "(none)");
+    console.log("[renderQuotePdf] asset wm found:", !!wm.abs, "=>", wm.abs || "(none)");
+    console.log("[renderQuotePdf] asset interRegular found:", !!interRegular.abs, "=>", interRegular.abs || "(none)");
+    console.log("[renderQuotePdf] asset interBold found:", !!interBold.abs, "=>", interBold.abs || "(none)");
 
-    const modAny: any = PDFDocumentImport as any;
-    console.log("[renderQuotePdf] PDFDocumentImport typeof:", typeof PDFDocumentImport);
-    console.log("[renderQuotePdf] PDFDocumentImport keys:", modAny ? Object.keys(modAny) : []);
-    console.log("[renderQuotePdf] ctor typeof:", typeof (modAny?.default ?? modAny));
-
-    console.log("[renderQuotePdf] asset logo:", logoAbsPath, "exists:", fs.existsSync(logoAbsPath));
-    console.log("[renderQuotePdf] asset wm:", watermarkAbsPath, "exists:", fs.existsSync(watermarkAbsPath));
-    console.log("[renderQuotePdf] asset interRegular:", interRegularAbs, "exists:", fs.existsSync(interRegularAbs));
-    console.log("[renderQuotePdf] asset interBold:", interBoldAbs, "exists:", fs.existsSync(interBoldAbs));
-    // ================================================
-
-    // PDF ctor (robust)
-    const DocCtor: any = pickPdfCtor();
-    if (typeof DocCtor !== "function") {
-      console.error("[renderQuotePdf] PDF ctor is not a function");
-      return text(500, `PDF ctor is not a function (reqId=${reqId || "n/a"})`);
+    // Si faltan fonts, corta y devuelve rutas probadas (esto te da el diagnóstico definitivo)
+    if (!interRegular.abs || !interBold.abs) {
+      const payload = {
+        error: "Missing font assets in function bundle",
+        tried: {
+          interRegular: interRegular.tried.slice(0, 60),
+          interBold: interBold.tried.slice(0, 60),
+        },
+        hint:
+          "Netlify no está empaquetando public/brand. Revisa netlify.toml included_files o mueve assets dentro de netlify/functions/assets y apunta a __dirname.",
+      };
+      console.log("[renderQuotePdf] FATAL fonts missing", payload);
+      return json(500, payload);
     }
 
-    const doc = new DocCtor({
+    const doc = new (PDFDocument as any)({
       size: "A4",
       margin: 42,
       info: {
@@ -390,31 +412,23 @@ export const handler: Handler = async (event) => {
       },
     });
 
-    console.log("[renderQuotePdf] doc.registerFont typeof:", typeof (doc as any).registerFont);
+    console.log("[renderQuotePdf] doc.registerFont typeof:", typeof doc.registerFont);
 
-    // Fonts: wrap to see exact failure
-    try {
-      if (!fs.existsSync(interRegularAbs) || !fs.existsSync(interBoldAbs)) {
-        return text(500, `Missing Inter font files (reqId=${reqId || "n/a"})`);
-      }
-      doc.registerFont("Inter", interRegularAbs);
-      doc.registerFont("Inter-Bold", interBoldAbs);
-      doc.font("Inter");
-    } catch (e: any) {
-      console.error("[renderQuotePdf] registerFont failed", { message: e?.message, stack: e?.stack });
-      return text(500, `registerFont failed: ${e?.message || "unknown"} (reqId=${reqId || "n/a"})`);
-    }
+    // Register fonts
+    doc.registerFont("Inter", interRegular.abs);
+    doc.registerFont("Inter-Bold", interBold.abs);
+    doc.font("Inter");
 
     const boxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-    // Watermark (safe)
-    drawWatermark(doc, watermarkAbsPath);
-    doc.on("pageAdded", () => drawWatermark(doc, watermarkAbsPath));
+    // Watermark on every page (si existe)
+    if (wm.abs) drawWatermark(doc, wm.abs);
+    doc.on("pageAdded", () => {
+      if (wm.abs) drawWatermark(doc, wm.abs);
+    });
 
-    // Header
-    drawHeader(doc, { lang, quoteNumber, incoterm, place, dateStr, logoAbs: logoAbsPath });
+    drawHeader(doc, { lang, quoteNumber, incoterm, place, dateStr, logoAbs: logo.abs || "" });
 
-    // Client
     drawSectionTitle(doc, t(lang, "Cliente", "Client"));
     drawKeyValueLines(
       doc,
@@ -441,7 +455,6 @@ export const handler: Handler = async (event) => {
       drawItemsTable(doc, { lang, currency, items, total, boxWidth });
     }
 
-    // Terms
     const terms = String(data?.terms || "");
     drawTermsBox(doc, t(lang, "Términos y condiciones", "Terms & Conditions"), terms, boxWidth);
 
@@ -467,11 +480,7 @@ export const handler: Handler = async (event) => {
       isBase64Encoded: true,
     };
   } catch (e: any) {
-    console.error("[renderQuotePdf] FATAL", {
-      reqId,
-      message: e?.message,
-      stack: e?.stack,
-    });
-    return text(500, `${e?.message || "Server error"} (reqId=${reqId || "n/a"})`);
+    console.error("[renderQuotePdf] FATAL", { reqId, message: e?.message, stack: e?.stack });
+    return text(500, e?.message || "Server error");
   }
 };
