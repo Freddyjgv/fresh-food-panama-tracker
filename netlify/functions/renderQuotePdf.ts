@@ -1,5 +1,6 @@
 // netlify/functions/renderQuotePdf.ts
 import type { Handler } from "@netlify/functions";
+import { Buffer as PolyBuffer } from "buffer";
 
 // IMPORTANT: standalone build avoids AFM font lookups (Helvetica.afm) in serverless
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -196,8 +197,13 @@ function readAssetBuffer(absPath: string): Buffer | null {
   try {
     if (!absPath) return null;
     if (!fs.existsSync(absPath)) return null;
-    const buf = fs.readFileSync(absPath);
-    return Buffer.isBuffer(buf) && buf.length > 0 ? buf : null;
+
+    // IMPORTANT: pdfkit.standalone usa Buffer del paquete "buffer"
+    // Si pasas Node Buffer, a veces no lo reconoce y cae en fs2.readFileSync.
+    const nodeBuf = fs.readFileSync(absPath);
+    const polyBuf = PolyBuffer.from(nodeBuf);
+
+    return polyBuf.length > 0 ? (polyBuf as any) : null;
   } catch (e: any) {
     console.error("[renderQuotePdf] readAssetBuffer error", absPath, e?.message);
     return null;
