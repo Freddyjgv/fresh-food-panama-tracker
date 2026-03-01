@@ -1,7 +1,12 @@
 // netlify/functions/renderQuotePdf.ts
 import type { Handler } from "@netlify/functions";
+
+// IMPORTANT: standalone build avoids AFM font lookups
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
 import PDFDocument from "pdfkit/js/pdfkit.standalone";
-import * as fs from "fs";
+
+import fs from "fs";
 import path from "path";
 import { getUserAndProfile, text, supabaseAdmin, json } from "./_util";
 
@@ -49,57 +54,6 @@ function ensureSpace(doc: any, neededHeight: number) {
   if (doc.y + neededHeight > bottom) doc.addPage();
 }
 
-/**
- * CRÍTICO: pdfkit.standalone NO debe recibir rutas, solo Buffers.
- * Esto evita el error fs2.readFileSync definitivamente.
- */
-function readIfExists(absPath: string): Buffer | null {
-  try {
-    if (!fs.existsSync(absPath)) return null;
-    const b = fs.readFileSync(absPath);
-    return Buffer.isBuffer(b) ? b : Buffer.from(b as any);
-  } catch {
-    return null;
-  }
-}
-
-function findAssetBuffer(candidates: string[]) {
-  for (const p of candidates) {
-    const buf = readIfExists(p);
-    if (buf) return { path: p, buf };
-  }
-  return { path: null as string | null, buf: null as Buffer | null };
-}
-
-function drawWatermark(doc: any, wmBuf: Buffer | null) {
-  if (!wmBuf) return;
-
-  const w = 420;
-  const x = (doc.page.width - w) / 2;
-  const y = (doc.page.height - w) / 2;
-
-  doc.save();
-  doc.opacity(0.06);
-  try {
-    doc.image(wmBuf, x, y, { width: w });
-  } catch {
-    // ignore
-  }
-  doc.opacity(1);
-  doc.restore();
-}
-
-function drawFooter(doc: any) {
-  const footer = `FRESH FOOD PANAMA, C.A. · RUC: 2684372-1-845616 DV 30 · Calle 55, PH SFC 26, Obarrio, Ciudad de Panamá, Panama`;
-  doc.save();
-  doc.font("Inter").fontSize(8).fillColor("#64748b");
-  doc.text(footer, doc.page.margins.left, doc.page.height - doc.page.margins.bottom + 10, {
-    width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
-    align: "center",
-  });
-  doc.restore();
-}
-
 function drawSectionTitle(doc: any, title: string) {
   doc.font("Inter-Bold").fontSize(12).fillColor("#0f172a").text(title);
   doc.moveDown(0.35);
@@ -127,60 +81,34 @@ function drawKeyValueLines(doc: any, lines: Array<{ k: string; v: string }>, box
     ty += lineH;
   }
 
-  doc.y = y + h + 10;
+  doc.y = y + h + 8;
 }
 
-function drawHeader(doc: any, opts: {
-  lang: "es" | "en";
-  quoteNumber: string;
-  incoterm: string;
-  place: string;
-  dateStr: string;
-  logoBuf: Buffer | null;
-}) {
-  const { lang, quoteNumber, incoterm, place, dateStr, logoBuf } = opts;
+function drawTermsBox(doc: any, title: string, terms: string, boxWidth: number) {
+  if (!String(terms || "").trim()) return;
+
+  drawSectionTitle(doc, title);
 
   const x = doc.page.margins.left;
-  const rightX = doc.page.width - doc.page.margins.right;
-  const topY = doc.y;
+  const pad = 10;
+  const maxW = boxWidth - pad * 2;
 
-  if (logoBuf) {
-    try {
-      doc.image(logoBuf, x, topY, { width: 110 });
-    } catch {
-      // ignore
-    }
-  }
+  doc.font("Inter").fontSize(10);
+  const textH = doc.heightOfString(terms || "", { width: maxW, align: "left" });
+  const h = Math.max(40, pad * 2 + textH);
 
-  doc.font("Inter-Bold").fontSize(16).fillColor("#0f172a");
-  doc.text("Fresh Food Panamá", x + 120, topY + 2);
+  ensureSpace(doc, h + 10);
+  const y = doc.y;
 
-  doc.font("Inter").fontSize(10).fillColor("#475569");
-  doc.text(`${t(lang, "Cotización", "Quotation")} ${quoteNumber}`, x + 120, topY + 22);
-  doc.text(`${t(lang, "Fecha", "Date")}: ${dateStr}`, x + 120, topY + 36);
+  drawBox(doc, x, y, boxWidth, h);
 
-  const pillText = `${incoterm} · ${place}`;
-  doc.font("Inter-Bold").fontSize(9).fillColor("#0f172a");
-  const w = doc.widthOfString(pillText) + 18;
-  const h = 18;
-  const px = rightX - w;
-  const py = topY + 10;
+  doc.font("Inter").fontSize(10).fillColor("#0f172a");
+  doc.text(terms || "", x + pad, y + pad, { width: maxW, align: "left" });
 
-  doc.roundedRect(px, py, w, h, 9).strokeColor("#e5e7eb").lineWidth(1).stroke();
-  doc.text(pillText, px + 9, py + 5, { width: w - 18, align: "center" });
-
-  doc.moveDown(2.2);
-  doc.strokeColor("#eef2f7").moveTo(x, doc.y).lineTo(rightX, doc.y).stroke();
-  doc.moveDown(0.8);
+  doc.y = y + h + 8;
 }
 
-function drawItemsTable(doc: any, opts: {
-  lang: "es" | "en";
-  currency: string;
-  items: any[];
-  total: number;
-  boxWidth: number;
-}) {
+function drawItemsTable(doc: any, opts: { lang: "es" | "en"; currency: string; items: any[]; total: number; boxWidth: number }) {
   const { lang, currency, items, total, boxWidth } = opts;
   const x = doc.page.margins.left;
   const rightX = x + boxWidth;
@@ -196,13 +124,13 @@ function drawItemsTable(doc: any, opts: {
   const headerH = 20;
   const rowH = 18;
 
-  ensureSpace(doc, headerH + rowH * 2 + 50);
+  ensureSpace(doc, headerH + rowH * 2 + 40);
   const tableTopY = doc.y;
 
   drawBox(doc, x, tableTopY, boxWidth, headerH);
 
   doc.save();
-  doc.opacity(0.04);
+  doc.opacity(0.06);
   doc.rect(x, tableTopY, boxWidth, headerH).fill("#000");
   doc.opacity(1);
   doc.restore();
@@ -216,7 +144,6 @@ function drawItemsTable(doc: any, opts: {
   doc.y = tableTopY + headerH;
 
   const safeItems = Array.isArray(items) ? items : [];
-
   if (!safeItems.length) {
     doc.font("Inter").fontSize(10).fillColor("#64748b");
     doc.text(t(lang, "Sin items", "No items"), x + pad, doc.y + 6);
@@ -262,33 +189,99 @@ function drawItemsTable(doc: any, opts: {
   doc.y = endY + 4;
 }
 
-function drawTermsBox(doc: any, title: string, terms: string, boxWidth: number) {
-  if (!String(terms || "").trim()) return;
+/**
+ * LEE assets como Buffer para evitar:
+ * - pdfkit intentando fs interno ("fs2.readFileSync")
+ * - rutas que no existen en /var/task
+ */
+function readAssetBuffer(absPath: string): Buffer | null {
+  try {
+    if (!absPath) return null;
+    if (!fs.existsSync(absPath)) return null;
+    return fs.readFileSync(absPath);
+  } catch (e: any) {
+    console.error("[renderQuotePdf] readAssetBuffer error", absPath, e?.message);
+    return null;
+  }
+}
 
-  drawSectionTitle(doc, title);
+function drawWatermark(doc: any, wmBuf: Buffer | null) {
+  if (!wmBuf) return;
+
+  const w = 420;
+  const x = (doc.page.width - w) / 2;
+  const y = (doc.page.height - w) / 2;
+
+  doc.save();
+  doc.opacity(0.08); // un poco más visible
+  try {
+    doc.image(wmBuf, x, y, { width: w });
+  } catch (e: any) {
+    console.error("[renderQuotePdf] watermark image failed", e?.message);
+  }
+  doc.opacity(1);
+  doc.restore();
+}
+
+function drawFooter(doc: any, lang: "es" | "en") {
+  const footer = `FRESH FOOD PANAMA, C.A. · RUC: 2684372-1-845616 DV 30 · Calle 55, PH SFC 26, Obarrio, Ciudad de Panamá, Panama`;
+  doc.save();
+  doc.font("Inter").fontSize(8).fillColor("#6b7280");
+  doc.text(footer, doc.page.margins.left, doc.page.height - doc.page.margins.bottom + 10, {
+    width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
+    align: "center",
+  });
+  doc.restore();
+}
+
+function drawHeader(doc: any, opts: {
+  lang: "es" | "en";
+  quoteNumber: string;
+  incoterm: string;
+  place: string;
+  dateStr: string;
+  logoBuf: Buffer | null;
+}) {
+  const { lang, quoteNumber, incoterm, place, dateStr, logoBuf } = opts;
 
   const x = doc.page.margins.left;
-  const pad = 10;
-  const maxW = boxWidth - pad * 2;
+  const topY = doc.y;
 
-  doc.font("Inter").fontSize(10);
-  const textH = doc.heightOfString(terms || "", { width: maxW, align: "left" });
-  const h = Math.max(40, pad * 2 + textH);
+  if (logoBuf) {
+    try {
+      doc.image(logoBuf, x, topY, { width: 110 });
+    } catch (e: any) {
+      console.error("[renderQuotePdf] logo image failed", e?.message);
+    }
+  } else {
+    console.warn("[renderQuotePdf] logoBuf missing -> no logo rendered");
+  }
 
-  ensureSpace(doc, h + 10);
-  const y = doc.y;
+  doc.font("Inter-Bold").fontSize(16).fillColor("#0f172a");
+  doc.text("Fresh Food Panamá", x + 120, topY + 2);
 
-  drawBox(doc, x, y, boxWidth, h);
+  doc.font("Inter").fontSize(10).fillColor("#475569");
+  doc.text(`${t(lang, "Cotización", "Quotation")} ${quoteNumber}`, x + 120, topY + 22);
+  doc.text(`${t(lang, "Fecha", "Date")}: ${dateStr}`, x + 120, topY + 36);
 
-  doc.font("Inter").fontSize(10).fillColor("#0f172a");
-  doc.text(terms || "", x + pad, y + pad, { width: maxW, align: "left" });
+  const pillText = `${incoterm} · ${place}`;
+  doc.font("Inter-Bold").fontSize(9).fillColor("#0f172a");
+  const w = doc.widthOfString(pillText) + 18;
+  const h = 18;
+  const rightX = doc.page.width - doc.page.margins.right;
+  const px = rightX - w;
+  const py = topY + 10;
 
-  doc.y = y + h + 10;
+  doc.roundedRect(px, py, w, h, 9).strokeColor("#e5e7eb").lineWidth(1).stroke();
+  doc.text(pillText, px + 9, py + 5, { width: w - 18, align: "center" });
+
+  doc.moveDown(2.2);
+  doc.strokeColor("#eef2f7").moveTo(x, doc.y).lineTo(rightX, doc.y).stroke();
+  doc.moveDown(0.8);
 }
 
 export const handler: Handler = async (event) => {
-  const reqId = String(event.headers["x-nf-request-id"] || event.headers["X-Nf-Request-Id"] || "");
-
+  const reqId = event.headers["x-nf-request-id"] || event.headers["x-request-id"] || "n/a";
   try {
     if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
 
@@ -297,8 +290,8 @@ export const handler: Handler = async (event) => {
     if (!isPrivileged(profile.role)) return text(403, "Forbidden");
 
     const id = String(event.queryStringParameters?.id || "").trim();
-    const variant = (String(event.queryStringParameters?.variant || "2").trim() as "1" | "2");
-    const lang = (String(event.queryStringParameters?.lang || "es").trim().toLowerCase() as "es" | "en");
+    const variant = String(event.queryStringParameters?.variant || "2").trim() as "1" | "2";
+    const lang = String(event.queryStringParameters?.lang || "es").trim().toLowerCase() as "es" | "en";
     if (!id) return text(400, "Missing id");
 
     const sb = supabaseAdmin();
@@ -323,31 +316,38 @@ export const handler: Handler = async (event) => {
 
     const quoteNumber = String(
       data?.quote_number ||
-        `RFQ/${new Date(data?.created_at || Date.now()).getFullYear()}/${String(data?.id || id).slice(0, 5)}`
+      `RFQ/${new Date(data?.created_at || Date.now()).getFullYear()}/${String(data?.id || id).slice(0, 5)}`
     );
 
     const dateStr = new Date(data?.created_at || Date.now()).toLocaleDateString(lang === "en" ? "en-US" : "es-PA");
 
-    // ✅ Blindado: assets junto a la función
+    // ✅ Bundle assets dentro de netlify/functions/assets/brand
     const brandDir = path.join(__dirname, "assets", "brand");
 
-    const logo = findAssetBuffer([path.join(brandDir, "freshfood_logo.png")]);
-    const wm = findAssetBuffer([path.join(brandDir, "FFPWM.png")]);
-    const interRegular = findAssetBuffer([path.join(brandDir, "Inter-Regular.ttf")]);
-    const interBold = findAssetBuffer([path.join(brandDir, "Inter-Bold.ttf")]);
+    const logoPath = path.join(brandDir, "freshfood_logo_pdf.png");
+    const wmPath = path.join(brandDir, "FFPWM_pdf.png");
+    const interRegularPath = path.join(brandDir, "Inter-Regular.ttf");
+    const interBoldPath = path.join(brandDir, "Inter-Bold.ttf");
 
     console.log("[renderQuotePdf] reqId:", reqId);
     console.log("[renderQuotePdf] __dirname:", __dirname);
     console.log("[renderQuotePdf] brandDir:", brandDir);
-    console.log("[renderQuotePdf] assets:", {
-      logo: { found: !!logo.buf, path: logo.path },
-      wm: { found: !!wm.buf, path: wm.path },
-      interRegular: { found: !!interRegular.buf, path: interRegular.path },
-      interBold: { found: !!interBold.buf, path: interBold.path },
+    console.log("[renderQuotePdf] asset exists:", {
+      logo: fs.existsSync(logoPath),
+      wm: fs.existsSync(wmPath),
+      interRegular: fs.existsSync(interRegularPath),
+      interBold: fs.existsSync(interBoldPath),
     });
 
-    if (!interRegular.buf || !interBold.buf) {
-      return text(500, "Missing Inter font buffers (assets not bundled).");
+    // ✅ Leer como Buffers (evita fs2.readFileSync)
+    const logoBuf = readAssetBuffer(logoPath);
+    const wmBuf = readAssetBuffer(wmPath);
+    const interRegularBuf = readAssetBuffer(interRegularPath);
+    const interBoldBuf = readAssetBuffer(interBoldPath);
+
+    if (!interRegularBuf || !interBoldBuf) {
+      console.error("[renderQuotePdf] fonts missing in bundle", { interRegularPath, interBoldPath });
+      return text(500, "Missing Inter font assets in function bundle");
     }
 
     const doc = new (PDFDocument as any)({
@@ -359,17 +359,19 @@ export const handler: Handler = async (event) => {
       },
     });
 
-    // ✅ Fonts via Buffer: evita fs2.readFileSync
-    doc.registerFont("Inter", interRegular.buf);
-    doc.registerFont("Inter-Bold", interBold.buf);
+    // ✅ Registrar fuentes via Buffer
+    doc.registerFont("Inter", interRegularBuf);
+    doc.registerFont("Inter-Bold", interBoldBuf);
     doc.font("Inter");
 
     const boxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-    drawWatermark(doc, wm.buf);
-    doc.on("pageAdded", () => drawWatermark(doc, wm.buf));
+    // Watermark en cada página (via Buffer)
+    drawWatermark(doc, wmBuf);
+    doc.on("pageAdded", () => drawWatermark(doc, wmBuf));
 
-    drawHeader(doc, { lang, quoteNumber, incoterm, place, dateStr, logoBuf: logo.buf });
+    // Header (logo via Buffer)
+    drawHeader(doc, { lang, quoteNumber, incoterm, place, dateStr, logoBuf });
 
     drawSectionTitle(doc, t(lang, "Cliente", "Client"));
     drawKeyValueLines(
@@ -399,7 +401,8 @@ export const handler: Handler = async (event) => {
 
     drawTermsBox(doc, t(lang, "Términos y condiciones", "Terms & Conditions"), String(data?.terms || ""), boxWidth);
 
-    const addFooter = () => drawFooter(doc);
+    // Footer on each page
+    const addFooter = () => drawFooter(doc, lang);
     addFooter();
     doc.on("pageAdded", addFooter);
 
