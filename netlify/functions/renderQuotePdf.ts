@@ -249,7 +249,7 @@ export const handler: Handler = async (event) => {
     const dateStr = new Date(data?.created_at).toLocaleDateString(lang === "en" ? "en-US" : "es-PA");
 
     // Lógica de Assets con Buffers
-    const brandDir = path.join(__dirname, "assets", "brand");
+    const brandDir = path.resolve("netlify/functions/assets/brand");
     const logoBuf = readBuf(path.join(brandDir, "freshfood_logo_pdf.png"));
     const wmBuf = readBuf(path.join(brandDir, "FFPWM_pdf.png"));
     const interRegularBuf = readBuf(path.join(brandDir, "Inter-Regular.ttf"));
@@ -260,10 +260,12 @@ export const handler: Handler = async (event) => {
     }
 
     const doc = new PDFDocument({
-      size: "A4",
-      margin: 42,
-      bufferPages: true, // Útil para layouts complejos
-    });
+  size: "A4",
+  margin: 42,
+  bufferPages: true,
+  // ESTO ES CLAVE: Evita que PDFKit intente cargar fuentes estándar del sistema
+  font: undefined 
+});
 
     // ✅ REGISTRO CRÍTICO: Registramos con Buffer para evitar lecturas de disco posteriores
     doc.registerFont("Inter", interRegularBuf);
