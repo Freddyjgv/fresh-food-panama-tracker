@@ -396,6 +396,10 @@ export const handler: Handler = async (event) => {
       isBase64Encoded: true,
     };
   } catch (e: any) {
-    return text(500, e?.message || "Server error");
+  console.error("[renderQuotePdf] FATAL", {
+    message: e?.message,
+    stack: e?.stack,
+  });
+  return text(500, e?.message || "Server error");
+}
   }
-};
