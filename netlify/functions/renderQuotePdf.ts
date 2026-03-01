@@ -50,7 +50,8 @@ function ensureSpace(doc: any, neededHeight: number) {
 }
 
 /**
- * CRÍTICO: pdfkit.standalone NO debe recibir rutas, solo Buffers, para evitar fs2.readFileSync.
+ * CRÍTICO: pdfkit.standalone NO debe recibir rutas, solo Buffers.
+ * Esto evita el error fs2.readFileSync definitivamente.
  */
 function readIfExists(absPath: string): Buffer | null {
   try {
@@ -62,11 +63,6 @@ function readIfExists(absPath: string): Buffer | null {
   }
 }
 
-/**
- * Busca assets en rutas típicas. Primera que exista gana.
- * Si Netlify no incluye /public, puedes mover assets a netlify/functions/assets
- * y añadir esa ruta aquí (recomendado).
- */
 function findAssetBuffer(candidates: string[]) {
   for (const p of candidates) {
     const buf = readIfExists(p);
@@ -93,7 +89,7 @@ function drawWatermark(doc: any, wmBuf: Buffer | null) {
   doc.restore();
 }
 
-function drawFooter(doc: any, lang: "es" | "en") {
+function drawFooter(doc: any) {
   const footer = `FRESH FOOD PANAMA, C.A. · RUC: 2684372-1-845616 DV 30 · Calle 55, PH SFC 26, Obarrio, Ciudad de Panamá, Panama`;
   doc.save();
   doc.font("Inter").fontSize(8).fillColor("#64748b");
@@ -134,24 +130,20 @@ function drawKeyValueLines(doc: any, lines: Array<{ k: string; v: string }>, box
   doc.y = y + h + 10;
 }
 
-function drawHeader(
-  doc: any,
-  opts: {
-    lang: "es" | "en";
-    quoteNumber: string;
-    incoterm: string;
-    place: string;
-    dateStr: string;
-    logoBuf: Buffer | null;
-  }
-) {
+function drawHeader(doc: any, opts: {
+  lang: "es" | "en";
+  quoteNumber: string;
+  incoterm: string;
+  place: string;
+  dateStr: string;
+  logoBuf: Buffer | null;
+}) {
   const { lang, quoteNumber, incoterm, place, dateStr, logoBuf } = opts;
 
   const x = doc.page.margins.left;
   const rightX = doc.page.width - doc.page.margins.right;
   const topY = doc.y;
 
-  // Logo
   if (logoBuf) {
     try {
       doc.image(logoBuf, x, topY, { width: 110 });
@@ -160,7 +152,6 @@ function drawHeader(
     }
   }
 
-  // Title
   doc.font("Inter-Bold").fontSize(16).fillColor("#0f172a");
   doc.text("Fresh Food Panamá", x + 120, topY + 2);
 
@@ -168,7 +159,6 @@ function drawHeader(
   doc.text(`${t(lang, "Cotización", "Quotation")} ${quoteNumber}`, x + 120, topY + 22);
   doc.text(`${t(lang, "Fecha", "Date")}: ${dateStr}`, x + 120, topY + 36);
 
-  // Incoterm pill (derecha)
   const pillText = `${incoterm} · ${place}`;
   doc.font("Inter-Bold").fontSize(9).fillColor("#0f172a");
   const w = doc.widthOfString(pillText) + 18;
@@ -179,13 +169,18 @@ function drawHeader(
   doc.roundedRect(px, py, w, h, 9).strokeColor("#e5e7eb").lineWidth(1).stroke();
   doc.text(pillText, px + 9, py + 5, { width: w - 18, align: "center" });
 
-  // Divider
   doc.moveDown(2.2);
   doc.strokeColor("#eef2f7").moveTo(x, doc.y).lineTo(rightX, doc.y).stroke();
   doc.moveDown(0.8);
 }
 
-function drawItemsTable(doc: any, opts: { lang: "es" | "en"; currency: string; items: any[]; total: number; boxWidth: number }) {
+function drawItemsTable(doc: any, opts: {
+  lang: "es" | "en";
+  currency: string;
+  items: any[];
+  total: number;
+  boxWidth: number;
+}) {
   const { lang, currency, items, total, boxWidth } = opts;
   const x = doc.page.margins.left;
   const rightX = x + boxWidth;
@@ -333,21 +328,17 @@ export const handler: Handler = async (event) => {
 
     const dateStr = new Date(data?.created_at || Date.now()).toLocaleDateString(lang === "en" ? "en-US" : "es-PA");
 
-    // --- ASSETS (Buffer-only) ---
-    const brandDir = path.join(process.cwd(), "public", "brand");
-
-    // Alternativa PRO si Netlify no empaqueta /public:
-    // const brandDir = path.join(__dirname, "assets"); // netlify/functions/assets/**
-    // y metes ahí los archivos.
+    // ✅ Blindado: assets junto a la función
+    const brandDir = path.join(__dirname, "assets", "brand");
 
     const logo = findAssetBuffer([path.join(brandDir, "freshfood_logo.png")]);
     const wm = findAssetBuffer([path.join(brandDir, "FFPWM.png")]);
     const interRegular = findAssetBuffer([path.join(brandDir, "Inter-Regular.ttf")]);
     const interBold = findAssetBuffer([path.join(brandDir, "Inter-Bold.ttf")]);
 
-    // Logs mínimos útiles (diagnóstico)
     console.log("[renderQuotePdf] reqId:", reqId);
-    console.log("[renderQuotePdf] cwd:", process.cwd());
+    console.log("[renderQuotePdf] __dirname:", __dirname);
+    console.log("[renderQuotePdf] brandDir:", brandDir);
     console.log("[renderQuotePdf] assets:", {
       logo: { found: !!logo.buf, path: logo.path },
       wm: { found: !!wm.buf, path: wm.path },
@@ -356,7 +347,7 @@ export const handler: Handler = async (event) => {
     });
 
     if (!interRegular.buf || !interBold.buf) {
-      return text(500, "Missing Inter font buffers (ensure assets are bundled).");
+      return text(500, "Missing Inter font buffers (assets not bundled).");
     }
 
     const doc = new (PDFDocument as any)({
@@ -368,21 +359,18 @@ export const handler: Handler = async (event) => {
       },
     });
 
-    // Fonts via Buffer (NUNCA rutas)
+    // ✅ Fonts via Buffer: evita fs2.readFileSync
     doc.registerFont("Inter", interRegular.buf);
     doc.registerFont("Inter-Bold", interBold.buf);
     doc.font("Inter");
 
     const boxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-    // Watermark each page
     drawWatermark(doc, wm.buf);
     doc.on("pageAdded", () => drawWatermark(doc, wm.buf));
 
-    // Header
     drawHeader(doc, { lang, quoteNumber, incoterm, place, dateStr, logoBuf: logo.buf });
 
-    // Client box
     drawSectionTitle(doc, t(lang, "Cliente", "Client"));
     drawKeyValueLines(
       doc,
@@ -409,11 +397,9 @@ export const handler: Handler = async (event) => {
       drawItemsTable(doc, { lang, currency, items, total, boxWidth });
     }
 
-    // Terms
     drawTermsBox(doc, t(lang, "Términos y condiciones", "Terms & Conditions"), String(data?.terms || ""), boxWidth);
 
-    // Footer on each page
-    const addFooter = () => drawFooter(doc, lang);
+    const addFooter = () => drawFooter(doc);
     addFooter();
     doc.on("pageAdded", addFooter);
 
