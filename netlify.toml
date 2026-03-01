@@ -7,8 +7,12 @@
 
 [functions."renderQuotePdf"]
   included_files = [
-    "netlify/functions/assets/**"
+    "netlify/functions/assets/brand/**",
+    "node_modules/pdfkit/js/data/**"
   ]
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+
+  
