@@ -5,7 +5,7 @@ import { Buffer as PolyBuffer } from "buffer";
 // IMPORTANT: standalone build avoids AFM font lookups (Helvetica.afm) in serverless
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
-import PDFDocument from "pdfkit/js/pdfkit.standalone";
+import PDFDocument from "pdfkit";
 
 import fs from "fs";
 import path from "path";
