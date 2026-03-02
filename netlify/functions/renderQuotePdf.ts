@@ -1,9 +1,10 @@
-// netlify/functions/renderQuotePdf.ts
 import type { Handler } from "@netlify/functions";
 import PDFDocument from "pdfkit/js/pdfkit.standalone";
 import * as fs from "fs";
 import path from "path";
 import { getUserAndProfile, text, supabaseAdmin, json } from "./_util";
+
+// --- HELPERS DE APOYO ---
 
 function isPrivileged(role: string) {
   const r = String(role || "").trim().toLowerCase();
@@ -49,29 +50,46 @@ function ensureSpace(doc: any, neededHeight: number) {
   if (doc.y + neededHeight > bottom) doc.addPage();
 }
 
-function readIfExists(absPath: string): Buffer | null {
+/**
+ * Función mejorada para leer archivos en Netlify.
+ * Busca en la raíz del proyecto y en la ruta de ejecución de la función.
+ */
+function readIfExists(fileName: string): Buffer | null {
   try {
-    if (!fs.existsSync(absPath)) return null;
-    const b = fs.readFileSync(absPath);
-    return Buffer.isBuffer(b) ? b : Buffer.from(b as any);
-  } catch {
+    // En Netlify, process.cwd() suele ser la raíz del repo. 
+    // Los included_files se copian respetando su ruta desde la raíz.
+    const pathsToTry = [
+      path.join(process.cwd(), "public", "brand", fileName),
+      path.join(__dirname, "public", "brand", fileName), // fallback si esbuild lo mueve cerca
+      path.join(__dirname, "..", "..", "public", "brand", fileName) // fallback estructural
+    ];
+
+    for (const p of pathsToTry) {
+      if (fs.existsSync(p)) {
+        const b = fs.readFileSync(p);
+        return Buffer.isBuffer(b) ? b : Buffer.from(b as any);
+      }
+    }
+    return null;
+  } catch (err) {
+    console.error(`Error leyendo asset ${fileName}:`, err);
     return null;
   }
 }
 
+// --- FUNCIONES DE DIBUJO ---
+
 function drawWatermark(doc: any, wmBuf: Buffer | null) {
   if (!wmBuf) return;
-
   const w = 420;
   const x = (doc.page.width - w) / 2;
   const y = (doc.page.height - w) / 2;
-
   doc.save();
   doc.opacity(0.05);
   try {
     doc.image(wmBuf, x, y, { width: w });
-  } catch {
-    // ignore
+  } catch (e) {
+    console.error("Error renderizando watermark:", e);
   }
   doc.opacity(1);
   doc.restore();
@@ -80,7 +98,9 @@ function drawWatermark(doc: any, wmBuf: Buffer | null) {
 function drawFooter(doc: any, lang: "es" | "en") {
   const footer = `FRESH FOOD PANAMA, C.A. · RUC: 2684372-1-845616 DV 30 · Calle 55, PH SFC 26, Obarrio, Ciudad de Panamá, Panama`;
   doc.save();
-  doc.font("Inter").fontSize(8).fillColor("#6b7280");
+  // Fallback si la fuente no cargó
+  try { doc.font("Inter"); } catch { doc.font("Helvetica"); }
+  doc.fontSize(8).fillColor("#6b7280");
   doc.text(footer, doc.page.margins.left, doc.page.height - doc.page.margins.bottom + 10, {
     width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
     align: "center",
@@ -88,39 +108,31 @@ function drawFooter(doc: any, lang: "es" | "en") {
   doc.restore();
 }
 
-function drawHeader(
-  doc: any,
-  opts: {
-    lang: "es" | "en";
-    quoteNumber: string;
-    incoterm: string;
-    place: string;
-    dateStr: string;
-    logoBuf: Buffer | null;
-  }
-) {
+function drawHeader(doc: any, opts: { lang: "es" | "en"; quoteNumber: string; incoterm: string; place: string; dateStr: string; logoBuf: Buffer | null; }) {
   const { lang, quoteNumber, incoterm, place, dateStr, logoBuf } = opts;
-
   const x = doc.page.margins.left;
   const topY = doc.y;
 
   if (logoBuf) {
     try {
       doc.image(logoBuf, x, topY, { width: 110 });
-    } catch {
-      // ignore
+    } catch (e) {
+      console.error("Error renderizando logo:", e);
     }
   }
 
-  doc.font("Inter-Bold").fontSize(16).fillColor("#0f172a");
+  try { doc.font("Inter-Bold"); } catch { doc.font("Helvetica-Bold"); }
+  doc.fontSize(16).fillColor("#0f172a");
   doc.text("Fresh Food Panamá", x + 120, topY + 2);
 
-  doc.font("Inter").fontSize(10).fillColor("#475569");
+  try { doc.font("Inter"); } catch { doc.font("Helvetica"); }
+  doc.fontSize(10).fillColor("#475569");
   doc.text(`${t(lang, "Cotización", "Quotation")} ${quoteNumber}`, x + 120, topY + 22);
   doc.text(`${t(lang, "Fecha", "Date")}: ${dateStr}`, x + 120, topY + 36);
 
   const pillText = `${incoterm} · ${place}`;
-  doc.font("Inter-Bold").fontSize(9).fillColor("#0f172a");
+  try { doc.font("Inter-Bold"); } catch { doc.font("Helvetica-Bold"); }
+  doc.fontSize(9).fillColor("#0f172a");
   const w = doc.widthOfString(pillText) + 18;
   const h = 18;
   const rightX = doc.page.width - doc.page.margins.right;
@@ -136,7 +148,8 @@ function drawHeader(
 }
 
 function drawSectionTitle(doc: any, title: string) {
-  doc.font("Inter-Bold").fontSize(12).fillColor("#0f172a").text(title);
+  try { doc.font("Inter-Bold"); } catch { doc.font("Helvetica-Bold"); }
+  doc.fontSize(12).fillColor("#0f172a").text(title);
   doc.moveDown(0.35);
 }
 
@@ -149,19 +162,17 @@ function drawKeyValueLines(doc: any, lines: Array<{ k: string; v: string }>, box
   const pad = 10;
   const lineH = 14;
   const h = pad * 2 + lines.length * lineH;
-
   ensureSpace(doc, h + 10);
   const y = doc.y;
-
   drawBox(doc, x, y, boxWidth, h);
-
   let ty = y + pad;
   for (const line of lines) {
-    doc.font("Inter").fontSize(10).fillColor("#64748b").text(`${line.k}: `, x + pad, ty, { continued: true });
-    doc.font("Inter-Bold").fontSize(10).fillColor("#0f172a").text(line.v || "—");
+    try { doc.font("Inter"); } catch { doc.font("Helvetica"); }
+    doc.fontSize(10).fillColor("#64748b").text(`${line.k}: `, x + pad, ty, { continued: true });
+    try { doc.font("Inter-Bold"); } catch { doc.font("Helvetica-Bold"); }
+    doc.fontSize(10).fillColor("#0f172a").text(line.v || "—");
     ty += lineH;
   }
-
   doc.y = y + h + 8;
 }
 
@@ -170,112 +181,82 @@ function drawItemsTable(doc: any, opts: { lang: "es" | "en"; currency: string; i
   const x = doc.page.margins.left;
   const rightX = x + boxWidth;
   const pad = 10;
-
   drawSectionTitle(doc, t(lang, "Detalle", "Details"));
-
   const colItem = Math.floor(boxWidth * 0.46);
   const colQty = Math.floor(boxWidth * 0.18);
   const colUP = Math.floor(boxWidth * 0.18);
   const colTot = boxWidth - colItem - colQty - colUP;
-
   const headerH = 20;
   const rowH = 18;
-
   ensureSpace(doc, headerH + rowH * 2 + 40);
   const tableTopY = doc.y;
-
   drawBox(doc, x, tableTopY, boxWidth, headerH);
-
-  doc.save();
-  doc.opacity(0.04);
-  doc.rect(x, tableTopY, boxWidth, headerH).fill("#000");
-  doc.opacity(1);
-  doc.restore();
-
-  doc.font("Inter-Bold").fontSize(9).fillColor("#475569");
+  doc.save().opacity(0.04).rect(x, tableTopY, boxWidth, headerH).fill("#000").restore();
+  try { doc.font("Inter-Bold"); } catch { doc.font("Helvetica-Bold"); }
+  doc.fontSize(9).fillColor("#475569");
   doc.text(t(lang, "Item", "Item"), x + pad, tableTopY + 6, { width: colItem - pad });
   doc.text(t(lang, "Cantidad (cajas)", "Qty (boxes)"), x + colItem, tableTopY + 6, { width: colQty - pad, align: "right" });
   doc.text(t(lang, "Precio unit.", "Unit price"), x + colItem + colQty, tableTopY + 6, { width: colUP - pad, align: "right" });
   doc.text(t(lang, "Total", "Total"), x + colItem + colQty + colUP, tableTopY + 6, { width: colTot - pad, align: "right" });
-
   doc.y = tableTopY + headerH;
-
   const safeItems = Array.isArray(items) ? items : [];
   if (!safeItems.length) {
-    doc.font("Inter").fontSize(10).fillColor("#64748b");
-    doc.text(t(lang, "Sin items", "No items"), x + pad, doc.y + 6);
+    try { doc.font("Inter"); } catch { doc.font("Helvetica"); }
+    doc.fontSize(10).fillColor("#64748b").text(t(lang, "Sin items", "No items"), x + pad, doc.y + 6);
     doc.y += rowH;
   } else {
     for (const it of safeItems) {
       ensureSpace(doc, rowH + 30);
-
       const name = String(it?.name || "");
       const qty = Number(it?.qty || 0);
       const up = Number(it?.unit_price || 0);
       const rowTotal = Number(it?.total || qty * up);
-
       doc.strokeColor("#eef2f7").moveTo(x, doc.y).lineTo(rightX, doc.y).stroke();
-
-      doc.font("Inter").fontSize(10).fillColor("#0f172a");
-      doc.text(name, x + pad, doc.y + 5, { width: colItem - pad });
-
+      try { doc.font("Inter"); } catch { doc.font("Helvetica"); }
+      doc.fontSize(10).fillColor("#0f172a").text(name, x + pad, doc.y + 5, { width: colItem - pad });
       doc.text(qty.toLocaleString("en-US"), x + colItem, doc.y + 5, { width: colQty - pad, align: "right" });
       doc.text(money(up, currency), x + colItem + colQty, doc.y + 5, { width: colUP - pad, align: "right" });
-
-      doc.font("Inter-Bold").text(money(rowTotal, currency), x + colItem + colQty + colUP, doc.y + 5, {
-        width: colTot - pad,
-        align: "right",
-      });
-
+      try { doc.font("Inter-Bold"); } catch { doc.font("Helvetica-Bold"); }
+      doc.text(money(rowTotal, currency), x + colItem + colQty + colUP, doc.y + 5, { width: colTot - pad, align: "right" });
       doc.y += rowH;
     }
   }
-
   doc.strokeColor("#eef2f7").moveTo(x, doc.y).lineTo(rightX, doc.y).stroke();
   doc.moveDown(0.6);
-
-  doc.font("Inter-Bold").fontSize(12).fillColor("#0f172a");
+  try { doc.font("Inter-Bold"); } catch { doc.font("Helvetica-Bold"); }
+  doc.fontSize(12).fillColor("#0f172a");
   doc.text(`${t(lang, "Total", "Total")}: ${money(Number(total || 0), currency)}`, x, doc.y, { width: boxWidth, align: "right" });
-
   doc.moveDown(0.4);
-
   const endY = doc.y + 4;
   const h = Math.max(60, endY - tableTopY);
   doc.roundedRect(x, tableTopY, boxWidth, h, 10).strokeColor("#e5e7eb").lineWidth(1).stroke();
-
   doc.y = endY + 4;
 }
 
 function drawTermsBox(doc: any, title: string, terms: string, boxWidth: number) {
   if (!String(terms || "").trim()) return;
-
   drawSectionTitle(doc, title);
-
   const x = doc.page.margins.left;
   const pad = 10;
   const maxW = boxWidth - pad * 2;
-
-  doc.font("Inter").fontSize(10);
+  try { doc.font("Inter"); } catch { doc.font("Helvetica"); }
+  doc.fontSize(10);
   const textH = doc.heightOfString(terms || "", { width: maxW, align: "left" });
   const h = Math.max(40, pad * 2 + textH);
-
   ensureSpace(doc, h + 10);
   const y = doc.y;
-
   drawBox(doc, x, y, boxWidth, h);
-
-  doc.font("Inter").fontSize(10).fillColor("#0f172a");
-  doc.text(terms || "", x + pad, y + pad, { width: maxW, align: "left" });
-
+  doc.fillColor("#0f172a").text(terms || "", x + pad, y + pad, { width: maxW, align: "left" });
   doc.y = y + h + 8;
 }
+
+// --- HANDLER PRINCIPAL ---
 
 export const handler: Handler = async (event) => {
   const reqId = (event.headers["x-nf-request-id"] || event.headers["X-Nf-Request-Id"] || "").toString();
 
   try {
     if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
-
     const { user, profile } = await getUserAndProfile(event);
     if (!user || !profile) return text(401, "Unauthorized");
     if (!isPrivileged(profile.role)) return text(403, "Forbidden");
@@ -286,12 +267,7 @@ export const handler: Handler = async (event) => {
     if (!id) return text(400, "Missing id");
 
     const sb = supabaseAdmin();
-    const { data, error } = await sb
-      .from("quotes")
-      .select("*, clients:clients(*)")
-      .eq("id", id)
-      .single<QuoteRow>();
-
+    const { data, error } = await sb.from("quotes").select("*, clients:clients(*)").eq("id", id).single<QuoteRow>();
     if (error || !data) return text(404, error?.message || "Quote not found");
 
     const totals = data?.totals || {};
@@ -301,43 +277,20 @@ export const handler: Handler = async (event) => {
     const currency = String(data?.currency || "USD");
     const total = Number(totals?.total || 0);
     const items = Array.isArray(totals?.items) ? totals.items : [];
-
     const clientName = String(data?.clients?.name || data?.client_snapshot?.name || "—");
     const clientEmail = String(data?.clients?.contact_email || data?.client_snapshot?.contact_email || "—");
-    const quoteNumber = String(
-      data?.quote_number ||
-        `RFQ/${new Date(data?.created_at || Date.now()).getFullYear()}/${String(data?.id || id).slice(0, 5)}`
-    );
-
+    const quoteNumber = String(data?.quote_number || `RFQ/${new Date(data?.created_at || Date.now()).getFullYear()}/${String(data?.id || id).slice(0, 5)}`);
     const dateStr = new Date(data?.created_at || Date.now()).toLocaleDateString(lang === "en" ? "en-US" : "es-PA");
 
-    // ---- Assets (leemos a Buffer para NO usar fs interno de pdfkit.standalone) ----
-    const brandDir = path.join(process.cwd(), "public", "brand");
-    const logoAbsPath = path.join(brandDir, "freshfood_logo.png");
-    const watermarkAbsPath = path.join(brandDir, "FFPWM.png");
-    const interRegularAbs = path.join(brandDir, "Inter-Regular.ttf");
-    const interBoldAbs = path.join(brandDir, "Inter-Bold.ttf");
+    // CARGA DE ASSETS CON FALLBACK DE RUTA
+    const logoBuf = readIfExists("freshfood_logo.png");
+    const wmBuf = readIfExists("FFPWM.png");
+    const interRegularBuf = readIfExists("Inter-Regular.ttf");
+    const interBoldBuf = readIfExists("Inter-Bold.ttf");
 
-    const logoBuf = readIfExists(logoAbsPath);
-    const wmBuf = readIfExists(watermarkAbsPath);
-    const interRegularBuf = readIfExists(interRegularAbs);
-    const interBoldBuf = readIfExists(interBoldAbs);
+    console.log(`[renderQuotePdf] Req: ${reqId} | Assets: logo=${!!logoBuf}, wm=${!!wmBuf}, fonts=${!!interRegularBuf}`);
 
-    console.log("[renderQuotePdf] reqId:", reqId);
-    console.log("[renderQuotePdf] process.cwd():", process.cwd());
-    console.log("[renderQuotePdf] fs.readFileSync typeof:", typeof (fs as any).readFileSync);
-    console.log("[renderQuotePdf] assets exist:", {
-      logo: !!logoBuf,
-      wm: !!wmBuf,
-      interRegular: !!interRegularBuf,
-      interBold: !!interBoldBuf,
-    });
-
-    if (!interRegularBuf || !interBoldBuf) {
-      return text(500, "Missing Inter font buffers (public/brand/** not bundled).");
-    }
-
-    // PDF
+    // CONFIGURACIÓN PDF
     const doc = new (PDFDocument as any)({
       size: "A4",
       margin: 42,
@@ -347,58 +300,49 @@ export const handler: Handler = async (event) => {
       },
     });
 
-    // Register fonts via Buffer (CRÍTICO)
-    doc.registerFont("Inter", interRegularBuf);
-    doc.registerFont("Inter-Bold", interBoldBuf);
-    doc.font("Inter");
+    // REGISTRO DE FUENTES (Crítico)
+    if (interRegularBuf && interBoldBuf) {
+        doc.registerFont("Inter", interRegularBuf);
+        doc.registerFont("Inter-Bold", interBoldBuf);
+        doc.font("Inter");
+    } else {
+        console.warn("Usando fuentes estándar por falta de assets TTF");
+        doc.font("Helvetica");
+    }
 
     const boxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-    // Watermark each page
-    drawWatermark(doc, wmBuf);
-    doc.on("pageAdded", () => drawWatermark(doc, wmBuf));
+    // Elementos persistentes por página
+    const setupPage = () => {
+        drawWatermark(doc, wmBuf);
+        drawFooter(doc, lang);
+    };
 
-    // Header
+    doc.on("pageAdded", setupPage);
+    setupPage(); // Primera página
+
+    // Renderizado de contenido
     drawHeader(doc, { lang, quoteNumber, incoterm, place, dateStr, logoBuf });
 
-    // Client
     drawSectionTitle(doc, t(lang, "Cliente", "Client"));
-    drawKeyValueLines(
-      doc,
-      [
-        { k: t(lang, "Nombre", "Name"), v: clientName },
-        { k: t(lang, "Email", "Email"), v: clientEmail },
-      ],
-      boxWidth
-    );
+    drawKeyValueLines(doc, [{ k: t(lang, "Nombre", "Name"), v: clientName }, { k: t(lang, "Email", "Email"), v: clientEmail }], boxWidth);
 
     if (variant === "1") {
       drawSectionTitle(doc, t(lang, "Resumen", "Summary"));
-      drawKeyValueLines(
-        doc,
-        [
-          { k: t(lang, "Moneda", "Currency"), v: currency },
-          { k: t(lang, "Modo", "Mode"), v: String(data?.mode || "—") },
-          { k: t(lang, "Destino/Place", "Destination/Place"), v: String(place || "—") },
-          { k: t(lang, "Total", "Total"), v: money(total, currency) },
-        ],
-        boxWidth
-      );
+      drawKeyValueLines(doc, [
+        { k: t(lang, "Moneda", "Currency"), v: currency },
+        { k: t(lang, "Modo", "Mode"), v: String(data?.mode || "—") },
+        { k: t(lang, "Destino/Place", "Destination/Place"), v: String(place || "—") },
+        { k: t(lang, "Total", "Total"), v: money(total, currency) },
+      ], boxWidth);
     } else {
       drawItemsTable(doc, { lang, currency, items, total, boxWidth });
     }
 
-    // Terms
-    const terms = String(data?.terms || "");
-    drawTermsBox(doc, t(lang, "Términos y condiciones", "Terms & Conditions"), terms, boxWidth);
-
-    // Footer each page
-    const addFooter = () => drawFooter(doc, lang);
-    addFooter();
-    doc.on("pageAdded", addFooter);
+    drawTermsBox(doc, t(lang, "Términos y condiciones", "Terms & Conditions"), String(data?.terms || ""), boxWidth);
 
     const pdfBuffer = await docToBuffer(doc);
-    const filename = `${safeFileName(clientName)}_${safeFileName(quoteNumber)}_${variant}_${lang}.pdf`;
+    const filename = `${safeFileName(clientName)}_${safeFileName(quoteNumber)}.pdf`;
 
     return {
       statusCode: 200,
@@ -407,17 +351,12 @@ export const handler: Handler = async (event) => {
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "no-store",
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "authorization, content-type",
       },
       body: pdfBuffer.toString("base64"),
       isBase64Encoded: true,
     };
   } catch (e: any) {
-    console.error("[renderQuotePdf] FATAL", {
-      reqId,
-      message: e?.message,
-      stack: e?.stack,
-    });
+    console.error("[renderQuotePdf] FATAL", { reqId, message: e?.message });
     return text(500, e?.message || "Server error");
   }
 };
