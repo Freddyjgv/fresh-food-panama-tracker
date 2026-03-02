@@ -4,13 +4,10 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  # Incluimos los assets para todas las funciones de forma global o específica
-  included_files = ["netlify/functions/assets/**"]
 
 [functions."renderQuotePdf"]
-  # Mantenemos la inclusión específica para asegurar que lleguen al contenedor
   included_files = [
-    "netlify/functions/assets/brand/**"
+    "public/brand/**"
   ]
 
 [[plugins]]
