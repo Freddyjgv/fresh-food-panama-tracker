@@ -65,13 +65,21 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
     }
   }, [isOpen, defaultIncoterm]);
 
-  useEffect(() => {
-    if (formData.product_id) {
-      const matches = allVarieties.filter(v => v.product_id === formData.product_id);
-      setFilteredVarieties(matches);
+  // REEMPLAZA el useEffect de filtrado de variedades por este:
+useEffect(() => {
+  if (formData.product_id) {
+    const matches = allVarieties.filter(v => v.product_id === formData.product_id);
+    setFilteredVarieties(matches);
+    
+    // 🛡️ GUARD CLAUSE: Solo resetear si variedad_id NO está vacío.
+    // Esto detiene el bucle infinito.
+    if (formData.variety_id !== '') {
       setFormData(prev => ({ ...prev, variety_id: '' }));
     }
-  }, [formData.product_id, allVarieties]);
+  } else {
+    setFilteredVarieties([]);
+  }
+}, [formData.product_id, allVarieties, formData.variety_id]); // Añadimos variety_id a la dependencia
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
