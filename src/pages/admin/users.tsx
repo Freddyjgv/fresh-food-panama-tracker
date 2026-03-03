@@ -8,7 +8,6 @@ import {
   Globe, Phone, MapPin, FileText, ShieldCheck, ExternalLink, Info
 } from "lucide-react";
 
-// Lista pro de países comunes (puedes ampliarla)
 const COUNTRIES = [
   { code: 'PA', name: 'Panamá', dial: '+507', flag: '🇵🇦' },
   { code: 'US', name: 'USA', dial: '+1', flag: '🇺🇸' },
@@ -24,12 +23,10 @@ export default function AdminUsersPage() {
   const [tab, setTab] = useState<"clients" | "users">("clients");
   const [showCreateForm, setShowCreateForm] = useState(false);
   
-  // Estados de carga
   const [clients, setClients] = useState<any[]>([]);
   const [clientsLoading, setClientsLoading] = useState(true);
   const [clientsBusy, setClientsBusy] = useState(false);
 
-  // --- ESTADO DEL FORMULARIO PRO ---
   const [form, setForm] = useState({
     name: "",
     legal_name: "",
@@ -43,7 +40,6 @@ export default function AdminUsersPage() {
     billing_address: "",
     shipping_address: "",
     internal_notes: "",
-    // Lógica de usuario
     create_user_access: false,
     client_invite: true,
     password: ""
@@ -80,11 +76,9 @@ export default function AdminUsersPage() {
     setClientMsg(null);
 
     const { data: { session } } = await supabase.auth.getSession();
-    
-    // El payload ahora es completo según tu DB
     const payload = {
       ...form,
-      user_email: form.contact_email, // El email de contacto es el login
+      user_email: form.contact_email,
       invite: form.client_invite,
     };
 
@@ -99,13 +93,22 @@ export default function AdminUsersPage() {
       const err = await res.text();
       setClientMsg({ text: err, type: 'error' });
     } else {
-      setClientMsg({ text: "✅ ¡Cliente registrado con éxito!", type: 'success' });
-      // Reset y cerrar tras éxito
+      setClientMsg({ text: "✅ ¡Cliente registrado!", type: 'success' });
       setTimeout(() => {
         setShowCreateForm(false);
         loadClients(false);
       }, 1500);
     }
+  }
+
+  if (clientsLoading) {
+    return (
+      <AdminLayout title="...">
+        <div style={{ display: 'flex', gap: 10, padding: 20 }}>
+          <Loader2 className="spin" /> <span>Cargando directorio...</span>
+        </div>
+      </AdminLayout>
+    );
   }
 
   return (
@@ -123,61 +126,62 @@ export default function AdminUsersPage() {
       </div>
 
       <div className="ff-main-grid">
-        {/* TABLA DE CLIENTES */}
         <div className="ff-card-clean">
           <div className="table-header">
             <h3>{clients.length} Clientes registrados</h3>
-            <button onClick={() => loadClients()} className="btn-icon"><RefreshCcw size={16} className={clientsBusy ? 'spin' : ''}/></button>
+            <button onClick={() => loadClients()} className="btn-icon">
+              <RefreshCcw size={16} className={clientsBusy ? 'spin' : ''}/>
+            </button>
           </div>
-          <table className="pro-table">
-            <thead>
-              <tr>
-                <th>Cliente / Empresa</th>
-                <th>Contacto</th>
-                <th>Ubicación</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clients.map(c => (
-                <tr key={c.id}>
-                  <td>
-                    <div className="td-client">
-                      <div className="avatar">{c.name[0]}</div>
-                      <div>
-                        <div className="name">{c.name}</div>
-                        <div className="legal">{c.legal_name || 'Sin razón social'}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="td-contact">
-                      <span><Mail size={12}/> {c.contact_email}</span>
-                      <span><Phone size={12}/> {c.phone || '-'}</span>
-                    </div>
-                  </td>
-                  <td className="td-muted">{c.city}, {c.country}</td>
-                  <td><span className="badge-active">{c.status || 'active'}</span></td>
-                  <td><button className="btn-ghost"><ExternalLink size={14}/></button></td>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="pro-table">
+              <thead>
+                <tr>
+                  <th>Cliente / Empresa</th>
+                  <th>Contacto</th>
+                  <th>Ubicación</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {clients.map(c => (
+                  <tr key={c.id}>
+                    <td>
+                      <div className="td-client">
+                        <div className="avatar">{c.name ? c.name[0].toUpperCase() : '?'}</div>
+                        <div>
+                          <div className="name">{c.name}</div>
+                          <div className="legal">{c.legal_name || 'Sin razón social'}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="td-contact">
+                        <span><Mail size={12}/> {c.contact_email}</span>
+                        <span><Phone size={12}/> {c.phone || '-'}</span>
+                      </div>
+                    </td>
+                    <td className="td-muted">{c.city || 'N/A'}, {c.country}</td>
+                    <td><span className="badge-active">{c.status || 'active'}</span></td>
+                    <td><button className="btn-ghost"><ExternalLink size={14}/></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      {/* --- DRAWER FORMULARIO (PANEL LATERAL) --- */}
       {showCreateForm && (
         <div className="drawer-overlay" onClick={() => setShowCreateForm(false)}>
           <div className="drawer-content" onClick={e => e.stopPropagation()}>
             <div className="drawer-header">
               <h2>Crear Nuevo Cliente</h2>
-              <button onClick={() => setShowCreateForm(false)}><X/></button>
+              <button className="btn-close" onClick={() => setShowCreateForm(false)}><X/></button>
             </div>
 
             <form onSubmit={onCreateClient} className="drawer-form">
-              {/* Sección 1: Empresa */}
               <section>
                 <div className="section-title"><Building2 size={16}/> Información de Empresa</div>
                 <div className="input-row">
@@ -190,7 +194,7 @@ export default function AdminUsersPage() {
                     <input value={form.legal_name} onChange={e => setForm({...form, legal_name: e.target.value})} placeholder="Ej: Fresh Food S.A." />
                   </div>
                 </div>
-                <div className="input-row">
+                <div className="input-row" style={{ marginTop: 15 }}>
                   <div className="field">
                     <label>Tax ID / RUC</label>
                     <input value={form.tax_id} onChange={e => setForm({...form, tax_id: e.target.value})} placeholder="000-000-000" />
@@ -202,17 +206,16 @@ export default function AdminUsersPage() {
                 </div>
               </section>
 
-              {/* Sección 2: Contacto y Ubicación */}
               <section>
                 <div className="section-title"><MapPin size={16}/> Contacto y Ubicación</div>
                 <div className="field">
-                  <label>Email de Contacto * (Para facturas y login)</label>
-                  <input required type="email" value={form.contact_email} onChange={e => setForm({...form, contact_email: e.target.value})} placeholder="cliente@email.com" />
+                  <label>Email de Contacto *</label>
+                  <input required type="email" value={form.contact_email} onChange={e => setForm({...form, contact_email: e.target.value})} />
                 </div>
-                <div className="input-row">
+                <div className="input-row" style={{ marginTop: 15 }}>
                   <div className="field">
                     <label>Teléfono</label>
-                    <input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} placeholder="+507 6000-0000" />
+                    <input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
                   </div>
                   <div className="field">
                     <label>País</label>
@@ -221,31 +224,27 @@ export default function AdminUsersPage() {
                     </select>
                   </div>
                 </div>
-                <div className="field">
+                <div className="field" style={{ marginTop: 15 }}>
                   <label>Dirección de Facturación</label>
                   <textarea rows={2} value={form.billing_address} onChange={e => setForm({...form, billing_address: e.target.value})} />
                 </div>
               </section>
 
-              {/* Sección 3: Acceso al Portal (Opcional) */}
               <section className="access-section">
                 <div className="ff-switch-row">
                   <div>
                     <div className="section-title" style={{margin:0}}><ShieldCheck size={16}/> Acceso al Portal</div>
-                    <p className="subx">Permite al cliente ver sus cotizaciones y embarques</p>
+                    <p className="subx">Permite al cliente ver sus cotizaciones</p>
                   </div>
                   <input type="checkbox" className="switch" checked={form.create_user_access} onChange={e => setForm({...form, create_user_access: e.target.checked})} />
                 </div>
 
                 {form.create_user_access && (
-                  <div className="access-details animated-fade">
+                  <div className="access-details">
                     <label className="checkbox-label">
                       <input type="checkbox" checked={form.client_invite} onChange={e => setForm({...form, client_invite: e.target.checked})} />
-                      <span>Enviar invitación por email (recomendado)</span>
+                      <span>Enviar invitación por email</span>
                     </label>
-                    {!form.client_invite && (
-                      <input type="password" placeholder="Definir contraseña temporal" className="mt-2" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
-                    )}
                   </div>
                 )}
               </section>
@@ -265,14 +264,38 @@ export default function AdminUsersPage() {
       <style jsx>{`
         .ff-header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
         .ff-tabs-modern { background: #e2e8f0; padding: 4px; border-radius: 10px; display: flex; gap: 4px; }
-        .ff-tabs-modern button { border: none; padding: 8px 16px; border-radius: 7px; font-weight: 600; cursor: pointer; color: #64748b; background: transparent; transition: 0.2s; }
-        .ff-tabs-modern button.active { background: white; color: #1f7a3a; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-
-        .btn-primary-pro { background: #1f7a3a; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; display: flex; align-items: center; gap: 8px; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(31, 122, 58, 0.2); }
-
-        .ff-card-clean { background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .ff-tabs-modern button { border: none; padding: 8px 16px; border-radius: 7px; font-weight: 600; cursor: pointer; color: #64748b; background: transparent; }
+        .ff-tabs-modern button.active { background: white; color: #1f7a3a; }
+        .btn-primary-pro { background: #1f7a3a; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        .ff-card-clean { background: white; border-radius: 16px; border: 1px solid #e2e8f0; }
         .table-header { padding: 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
-        .table-header h3 { font-size: 16px; font-weight: 800; color: #1e293b; }
-
         .pro-table { width: 100%; border-collapse: collapse; }
-        .pro-table th { background: #f8fafc; text-align: left; padding: 14px 20px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #647
+        .pro-table th { background: #f8fafc; text-align: left; padding: 14px 20px; font-size: 11px; color: #64748b; }
+        .pro-table td { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        .td-client { display: flex; align-items: center; gap: 12px; }
+        .avatar { width: 36px; height: 36px; background: #dcfce7; color: #166534; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 800; }
+        .name { font-weight: 700; color: #1e293b; }
+        .legal { font-size: 12px; color: #64748b; }
+        .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; display: flex; justify-content: flex-end; }
+        .drawer-content { width: 450px; background: white; height: 100%; display: flex; flex-direction: column; }
+        .drawer-header { padding: 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+        .drawer-form { padding: 24px; overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 25px; }
+        .section-title { font-size: 12px; font-weight: 800; color: #1f7a3a; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .field { display: flex; flex-direction: column; gap: 5px; }
+        .field label { font-size: 11px; font-weight: 700; color: #475569; }
+        .field input, .field select, .field textarea { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; outline: none; }
+        .ff-switch-row { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 12px; border-radius: 10px; }
+        .switch { width: 34px; height: 18px; appearance: none; background: #cbd5e1; border-radius: 20px; position: relative; cursor: pointer; }
+        .switch:checked { background: #1f7a3a; }
+        .btn-save-full { width: 100%; background: #1f7a3a; color: white; border: none; padding: 14px; border-radius: 10px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .alert { padding: 10px; border-radius: 6px; font-size: 12px; margin-bottom: 10px; }
+        .alert.success { background: #dcfce7; color: #166534; }
+        .alert.error { background: #fee2e2; color: #991b1b; }
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .btn-close, .btn-icon, .btn-ghost { background: none; border: none; cursor: pointer; color: #64748b; }
+      `}</style>
+    </AdminLayout>
+  );
+}
