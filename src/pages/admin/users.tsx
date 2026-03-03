@@ -1,291 +1,200 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { 
-  Plus, Search, X, Loader2, Building2, Globe, Mail, 
-  UserCheck, AlertCircle, MoreVertical, Filter 
+  Plus, X, Building2, MapPin, Phone, Mail, UserPlus, 
+  ShieldCheck, User, Globe, CreditCard, Trash2, CheckCircle, AlertTriangle 
 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import { AdminLayout } from "../../components/AdminLayout";
 
-// Tipado para evitar errores de undefined
-interface Client {
-  id: string;
-  name: string;
-  legal_name?: string;
-  tax_id?: string;
-  country: string;
-  contact_email: string;
-  created_at: string;
-}
-
-export default function UsersProPage() {
-  const [clients, setClients] = useState<Client[]>([]);
+export default function AdminDirectoryPage() {
+  const [activeTab, setActiveTab] = useState<'clients' | 'staff'>('clients');
+  const [clients, setClients] = useState<any[]>([]);
+  const [staff, setStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
 
-  // Estado del Formulario
-  const [form, setForm] = useState({
-    name: "",
-    legal_name: "",
-    tax_id: "",
-    country: "Panamá",
-    contact_email: ""
+  // Formulario Maestro
+  const [f, setF] = useState({
+    name: "", legal_name: "", tax_id: "", country_origin: "Panamá",
+    payment_condition: "Prepagado", billing_address: "",
+    shipping_addresses: [{ id: Date.now(), address: "" }],
+    contacts: [{ id: Date.now(), name: "", email: "", phone: "", has_access: false, already_invited: false }]
   });
 
-  const fetchClients = async () => {
-    setLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+  const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-      const res = await fetch("/.netlify/functions/listClients", {
-        headers: { Authorization: `Bearer ${session.access_token}` }
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        setClients(data.items || []);
-      }
-    } catch (err) {
-      console.error("Error fetching clients:", err);
-    } finally {
-      setLoading(false);
-    }
+  const loadData = async () => {
+    setLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers = { Authorization: `Bearer ${session?.access_token}` };
+    
+    const [resClients, resStaff] = await Promise.all([
+      fetch("/.netlify/functions/listClientsFull", { headers }),
+      fetch("/.netlify/functions/listUsers", { headers })
+    ]);
+
+    if (resClients.ok) setClients((await resClients.json()).items || []);
+    if (resStaff.ok) setStaff((await resStaff.json()).items || []);
+    setLoading(false);
   };
 
-  useEffect(() => { fetchClients(); }, []);
+  useEffect(() => { loadData(); }, []);
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSaveClient = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validar Emails de contactos
+    const invalidEmails = f.contacts.filter(c => c.email && !validateEmail(c.email));
+    if (invalidEmails.length > 0) return alert("Uno o más correos electrónicos no tienen un formato válido.");
+
+    const contactsToInvite = f.contacts.filter(c => c.has_access && !c.already_invited);
+    if (contactsToInvite.length > 0) {
+      const confirmed = window.confirm(`¿Estás seguro que deseas otorgar acceso a la plataforma a los contactos seleccionados?`);
+      if (!confirmed) return;
+    }
+
     setIsSaving(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch("/.netlify/functions/createUser", {
+      const res = await fetch("/.netlify/functions/manageClient", {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}` 
-        },
-        body: JSON.stringify({
-          ...form,
-          user_email: form.contact_email, // Se usa el email de contacto para el login
-          invite: true
-        })
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify(f)
       });
 
       if (res.ok) {
+        alert("Ficha de cliente guardada y accesos procesados.");
         setIsDrawerOpen(false);
-        setForm({ name: "", legal_name: "", tax_id: "", country: "Panamá", contact_email: "" });
-        fetchClients();
-      } else {
-        alert("Error al crear el cliente. Verifica que el email no exista.");
+        loadData();
       }
-    } finally {
-      setIsSaving(false);
-    }
+    } finally { setIsSaving(false); }
   };
 
-  const filteredClients = useMemo(() => {
-    return clients.filter(c => 
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      c.contact_email?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [clients, searchTerm]);
-
   return (
-    <AdminLayout title="Directorio Logístico" subtitle="Gestión de clientes y accesos a plataforma.">
+    <AdminLayout title="Gestión de Directorio" subtitle="Control de Clientes, Proveedores y Staff">
       
-      {/* TOOLBAR SUPERIOR */}
+      {/* Selector de Pestañas */}
+      <div className="tabSelector">
+        <button className={activeTab === 'clients' ? 'active' : ''} onClick={() => setActiveTab('clients')}>Directorio de Clientes</button>
+        <button className={activeTab === 'staff' ? 'active' : ''} onClick={() => setActiveTab('staff')}>Usuarios Staff (Internos)</button>
+      </div>
+
       <div className="toolbar">
-        <div className="searchWrapper">
-          <Search size={16} className="searchIcon" />
-          <input 
-            type="text" 
-            placeholder="Buscar por nombre o email..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        
-        <button className="btnCreate" onClick={() => setIsDrawerOpen(true)}>
-          <Plus size={18} />
-          <span>Nuevo Cliente</span>
+        <button className="btnMain" onClick={() => setIsDrawerOpen(true)}>
+          <Plus size={18} /> {activeTab === 'clients' ? 'Nuevo Cliente' : 'Nuevo Usuario Staff'}
         </button>
       </div>
 
-      {/* TABLA DE CLIENTES */}
       <div className="tableCard">
-        <table className="proTable">
+        <table className="ff-table">
           <thead>
-            <tr>
-              <th>CLIENTE</th>
-              <th>IDENTIFICACIÓN</th>
-              <th>PAÍS</th>
-              <th>CONTACTO</th>
-              <th style={{ textAlign: 'right' }}>ACCIONES</th>
-            </tr>
+            {activeTab === 'clients' ? (
+              <tr><th>EMPRESA</th><th>PAÍS</th><th>CONDICIÓN</th><th>CONTACTOS</th><th>ACCIONES</th></tr>
+            ) : (
+              <tr><th>NOMBRE</th><th>EMAIL</th><th>ROL</th><th>ESTADO</th></tr>
+            )}
           </thead>
           <tbody>
-            {loading ? (
-              [1, 2, 3].map(i => (
-                <tr key={i} className="skeletonRow">
-                  <td colSpan={5}><div className="skeletonLine" /></td>
+            {loading ? <tr><td colSpan={5}>Cargando...</td></tr> : 
+              activeTab === 'clients' ? clients.map(c => (
+                <tr key={c.id}>
+                  <td><strong>{c.name}</strong><br/><small>{c.tax_id}</small></td>
+                  <td>{c.country_origin}</td>
+                  <td><span className="badge">{c.payment_condition}</span></td>
+                  <td>{c.contacts_count || 0}</td>
+                  <td><button className="btnEdit">Editar Ficha</button></td>
+                </tr>
+              )) : staff.map(u => (
+                <tr key={u.id}>
+                  <td>{u.full_name}</td>
+                  <td>{u.email}</td>
+                  <td><span className={`role ${u.role}`}>{u.role}</span></td>
+                  <td>{u.confirmed_at ? "✅ Activo" : "⏳ Pendiente"}</td>
                 </tr>
               ))
-            ) : filteredClients.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="emptyState">
-                  <AlertCircle size={32} />
-                  <p>No se encontraron clientes en el directorio.</p>
-                </td>
-              </tr>
-            ) : filteredClients.map(client => (
-              <tr key={client.id}>
-                <td>
-                  <div className="clientNameCell">
-                    <div className="avatar">{client.name[0]}</div>
-                    <div>
-                      <div className="mainName">{client.name}</div>
-                      <div className="subText">{client.legal_name || 'Sin razón social'}</div>
-                    </div>
-                  </div>
-                </td>
-                <td><code className="taxId">{client.tax_id || 'N/A'}</code></td>
-                <td>
-                  <span className="countryBadge">
-                    {client.country === 'España' ? '🇪🇸' : '🇵🇦'} {client.country}
-                  </span>
-                </td>
-                <td>
-                  <div className="emailLink">
-                    <Mail size={12} /> {client.contact_email}
-                  </div>
-                </td>
-                <td style={{ textAlign: 'right' }}>
-                  <button className="btnIcon"><MoreVertical size={16} /></button>
-                </td>
-              </tr>
-            ))}
+            }
           </tbody>
         </table>
       </div>
 
-      {/* DRAWER LATERAL (FORMULARIO PRO) */}
       {isDrawerOpen && (
         <>
-          <div className="drawerOverlay" onClick={() => !isSaving && setIsDrawerOpen(false)} />
+          <div className="overlay" onClick={() => setIsDrawerOpen(false)} />
           <div className="drawer">
-            <div className="drawerHeader">
-              <div>
-                <h2>Nuevo Cliente</h2>
-                <p>Registrar empresa y acceso de usuario</p>
-              </div>
-              <button className="btnClose" onClick={() => setIsDrawerOpen(false)}><X /></button>
+            <div className="dHead">
+              <h3>{activeTab === 'clients' ? 'Ficha de Cliente' : 'Invitar Staff'}</h3>
+              <X onClick={() => setIsDrawerOpen(false)} style={{cursor:'pointer'}} />
             </div>
+            
+            <form onSubmit={handleSaveClient} className="dBody">
+              {activeTab === 'clients' && (
+                <>
+                  <section className="formGroup">
+                    <label><Building2 size={14}/> IDENTIDAD COMERCIAL</label>
+                    <input required placeholder="Nombre Comercial" value={f.name} onChange={e=>setF({...f, name:e.target.value})} />
+                    <input placeholder="RUC / Tax ID" value={f.tax_id} onChange={e=>setF({...f, tax_id:e.target.value})} />
+                    <select value={f.payment_condition} onChange={e=>setF({...f, payment_condition:e.target.value})}>
+                      <option value="Prepagado">Prepagado</option>
+                      <option value="Condicion Especial">Condición Especial</option>
+                    </select>
+                  </section>
 
-            <form onSubmit={handleSave} className="drawerBody">
-              <div className="formSection">
-                <label><Building2 size={14} /> INFORMACIÓN COMERCIAL</label>
-                <input 
-                  required 
-                  placeholder="Nombre de la empresa (Ej. FreshFruit SL)"
-                  value={form.name}
-                  onChange={e => setForm({...form, name: e.target.value})}
-                />
-                <input 
-                  placeholder="Razón Social Legal"
-                  value={form.legal_name}
-                  onChange={e => setForm({...form, legal_name: e.target.value})}
-                />
-                <input 
-                  placeholder="Tax ID / NIF / RUC"
-                  value={form.tax_id}
-                  onChange={e => setForm({...form, tax_id: e.target.value})}
-                />
-              </div>
+                  <section className="formGroup">
+                    <label><MapPin size={14}/> LOGÍSTICA (Shipping/Billing)</label>
+                    <textarea placeholder="Dirección de Facturación" value={f.billing_address} onChange={e=>setF({...f, billing_address:e.target.value})} />
+                    {f.shipping_addresses.map((s, i) => (
+                      <div key={s.id} className="row">
+                        <input placeholder={`Dirección de Entrega #${i+1}`} value={s.address} onChange={e => {
+                          const news = [...f.shipping_addresses]; news[i].address = e.target.value; setF({...f, shipping_addresses: news});
+                        }} />
+                        <Trash2 size={14} onClick={() => setF({...f, shipping_addresses: f.shipping_addresses.filter(x => x.id !== s.id)})} />
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => setF({...f, shipping_addresses: [...f.shipping_addresses, {id:Date.now(), address:""}]})}>+ Añadir Dirección</button>
+                  </section>
 
-              <div className="formSection">
-                <label><Globe size={14} /> UBICACIÓN</label>
-                <select 
-                  value={form.country}
-                  onChange={e => setForm({...form, country: e.target.value})}
-                >
-                  <option value="Panamá">🇵🇦 Panamá (Origen)</option>
-                  <option value="España">🇪🇸 España (Destino)</option>
-                  <option value="Alemania">🇩🇪 Alemania (Destino)</option>
-                  <option value="Holanda">🇳🇱 Holanda (Destino)</option>
-                </select>
-              </div>
-
-              <div className="formSection">
-                <label><UserCheck size={14} /> ACCESO DE USUARIO</label>
-                <p className="fieldHint">Se enviará una invitación de acceso a este correo.</p>
-                <input 
-                  required 
-                  type="email"
-                  placeholder="correo@ejemplo.com"
-                  value={form.contact_email}
-                  onChange={e => setForm({...form, contact_email: e.target.value})}
-                />
-              </div>
-
-              <button type="submit" className="btnSubmit" disabled={isSaving}>
-                {isSaving ? <Loader2 className="spin" /> : "Crear e Invitar Cliente"}
-              </button>
+                  <section className="formGroup">
+                    <label><UserPlus size={14}/> CONTACTOS Y ACCESO PLATAFORMA (1:N)</label>
+                    {f.contacts.map((c, i) => (
+                      <div key={c.id} className="contactCard">
+                        <input required placeholder="Nombre del contacto" value={c.name} onChange={e => {
+                          const nc = [...f.contacts]; nc[i].name = e.target.value; setF({...f, contacts: nc});
+                        }} />
+                        <input required type="email" placeholder="Email (Validado)" value={c.email} onChange={e => {
+                          const nc = [...f.contacts]; nc[i].email = e.target.value; setF({...f, contacts: nc});
+                        }} />
+                        <div className="accessOption">
+                          <span>Habilitar Login de Cliente</span>
+                          <input type="checkbox" checked={c.has_access} onChange={e => {
+                            const nc = [...f.contacts]; nc[i].has_access = e.target.checked; setF({...f, contacts: nc});
+                          }} />
+                        </div>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => setF({...f, contacts: [...f.contacts, {id:Date.now(), name:"", email:"", phone:"", has_access:false, already_invited:false}]})}>+ Añadir Contacto</button>
+                  </section>
+                </>
+              )}
+              <button className="btnSave">{isSaving ? "Procesando..." : "Guardar Todo"}</button>
             </form>
           </div>
         </>
       )}
 
       <style jsx>{`
-        .toolbar { display: flex; justify-content: space-between; gap: 15px; margin-bottom: 20px; align-items: center; }
-        .searchWrapper { position: relative; flex: 1; max-width: 400px; }
-        .searchIcon { position: absolute; left: 12px; top: 10px; color: #94a3b8; }
-        .searchWrapper input { width: 100%; padding: 8px 12px 8px 35px; border-radius: 10px; border: 1px solid #e2e8f0; font-size: 14px; }
-        
-        .btnCreate { background: var(--ff-green-dark, #1f7a3a); color: white; border: none; padding: 10px 18px; border-radius: 10px; font-weight: 700; display: flex; gap: 8px; align-items: center; cursor: pointer; transition: opacity 0.2s; }
-        .btnCreate:hover { opacity: 0.9; }
-
-        .tableCard { background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-        .proTable { width: 100%; border-collapse: collapse; }
-        .proTable th { background: #f8fafc; padding: 14px 18px; text-align: left; font-size: 11px; font-weight: 800; color: #64748b; letter-spacing: 0.05em; border-bottom: 1px solid #e2e8f0; }
-        .proTable td { padding: 14px 18px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-
-        .clientNameCell { display: flex; gap: 12px; align-items: center; }
-        .avatar { width: 36px; height: 36px; background: #f0fdf4; color: #166534; border-radius: 10px; display: grid; place-items: center; font-weight: 900; }
-        .mainName { font-weight: 700; color: #1e293b; font-size: 14px; }
-        .subText { font-size: 12px; color: #64748b; }
-        
-        .taxId { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-family: monospace; }
-        .countryBadge { font-size: 13px; font-weight: 500; }
-        .emailLink { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #64748b; }
-
-        /* DRAWER CSS */
-        .drawerOverlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.3); backdrop-filter: blur(2px); z-index: 9998; }
-        .drawer { position: fixed; top: 0; right: 0; width: 420px; height: 100%; background: white; z-index: 9999; display: flex; flex-direction: column; box-shadow: -10px 0 50px rgba(0,0,0,0.1); animation: slideIn 0.3s ease-out; }
-        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
-
-        .drawerHeader { padding: 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
-        .drawerHeader h2 { margin: 0; font-size: 18px; font-weight: 800; }
-        .drawerHeader p { margin: 4px 0 0; font-size: 13px; color: #64748b; }
-        .btnClose { background: #f1f5f9; border: none; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; }
-
-        .drawerBody { padding: 24px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; }
-        .formSection { display: flex; flex-direction: column; gap: 10px; }
-        .formSection label { font-size: 11px; font-weight: 800; color: var(--ff-green-dark); display: flex; gap: 6px; align-items: center; }
-        .formSection input, .formSection select { padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; }
-        .formSection input:focus { border-color: var(--ff-green-dark); }
-        .fieldHint { font-size: 12px; color: #94a3b8; margin: -5px 0 5px; }
-
-        .btnSubmit { background: var(--ff-green-dark); color: white; border: none; padding: 16px; border-radius: 12px; font-weight: 800; cursor: pointer; margin-top: auto; }
-        .btnSubmit:disabled { opacity: 0.6; }
-
-        .emptyState { padding: 60px; text-align: center; color: #94a3b8; }
-        .emptyState p { margin-top: 10px; font-size: 14px; }
-
-        :global(.spin) { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .tabSelector { display: flex; gap: 10px; margin-bottom: 25px; border-bottom: 2px solid #e2e8f0; }
+        .tabSelector button { padding: 10px 20px; border: none; background: none; cursor: pointer; font-weight: 700; color: #64748b; }
+        .tabSelector button.active { color: var(--ff-green-dark); border-bottom: 2px solid var(--ff-green-dark); }
+        .ff-table { width: 100%; border-collapse: collapse; background: white; }
+        .ff-table th { text-align: left; padding: 12px; background: #f8fafc; font-size: 11px; color: #64748b; }
+        .ff-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+        .drawer { position: fixed; right: 0; top: 0; height: 100%; width: 480px; background: #f8fafc; z-index: 1001; box-shadow: -10px 0 30px rgba(0,0,0,0.1); overflow-y: auto; }
+        .formGroup { background: white; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .contactCard { padding: 10px; background: #f1f5f9; border-radius: 8px; margin-bottom: 10px; }
+        .accessOption { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; font-weight: 800; }
+        .btnSave { background: var(--ff-green-dark); color: white; border: none; padding: 15px; border-radius: 10px; font-weight: 800; width: 100%; cursor: pointer; }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; }
       `}</style>
     </AdminLayout>
   );
