@@ -1,166 +1,72 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { requireAdminOrRedirect } from "../../lib/requireAdmin";
 import { AdminLayout } from "../../components/AdminLayout";
-import { 
-  Plus, Loader2, X, Building2, Globe, Mail, Search, RefreshCcw, ExternalLink, Phone 
-} from "lucide-react";
+import { Plus, Loader2, X, Building2, Globe, Mail, Search, RefreshCcw, Phone } from "lucide-react";
 
-// Lista de países fuera para no recrearla en cada render
 const COUNTRIES = [
-  { code: 'PA', name: 'Panamá', flag: '🇵🇦' },
-  { code: 'ES', name: 'España', flag: '🇪🇸' },
-  { code: 'DE', name: 'Alemania', flag: '🇩🇪' },
-  { code: 'FR', name: 'Francia', flag: '🇫🇷' },
-  { code: 'IT', name: 'Italia', flag: '🇮🇹' },
-  { code: 'NL', name: 'Países Bajos', flag: '🇳🇱' },
-  { code: 'BE', name: 'Bélgica', flag: '🇧🇪' },
-  { code: 'GB', name: 'Reino Unido', flag: '🇬🇧' },
-  { code: 'US', name: 'USA', flag: '🇺🇸' },
-  { code: 'CN', name: 'China', flag: '🇨🇳' },
+  { code: 'PA', name: 'Panamá', flag: '🇵🇦' }, { code: 'ES', name: 'España', flag: '🇪🇸' },
+  { code: 'DE', name: 'Alemania', flag: '🇩🇪' }, { code: 'US', name: 'USA', flag: '🇺🇸' },
+  { code: 'CN', name: 'China', flag: '🇨🇳' }
 ];
 
 export default function AdminUsersPage() {
-  // 1. Estados de Control de Flujo (Fundamentales para la estabilidad)
-  const [isAuthorized, setIsAuthorized] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const isMounted = useRef(true);
-
-  // 2. Estados de Datos
   const [clients, setClients] = useState<any[]>([]);
-  const [clientsBusy, setClientsBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
-
-  // 3. Estados del Formulario Pro
-  const [form, setForm] = useState({
-    name: "", legal_name: "", tax_id: "", contact_email: "", 
-    country: "Panamá", phone: "", invite: true
-  });
   const [countrySearch, setCountrySearch] = useState("");
-  const [msg, setMsg] = useState<{text: string, type: 'success' | 'error'} | null>(null);
+  const [form, setForm] = useState({ name: "", legal_name: "", tax_id: "", contact_email: "", country: "Panamá", phone: "" });
 
-  // Lógica de carga ultra-segura
-  const loadData = async () => {
-    if (!isMounted.current) return;
-    setClientsBusy(true);
+  const load = async () => {
+    setBusy(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
+      const { data } = await supabase.auth.getSession();
       const res = await fetch("/.netlify/functions/listClients", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${data.session?.access_token}` }
       });
-      
       if (res.ok) {
         const json = await res.json();
-        if (isMounted.current) setClients(json.items || []);
+        setClients(json.items || []);
       }
-    } catch (e) {
-      console.error("Error cargando clientes:", e);
-    } finally {
-      if (isMounted.current) {
-        setClientsBusy(false);
-        setLoading(false);
-      }
-    }
+    } finally { setBusy(false); setLoading(false); }
   };
 
-  // Inicialización en cascada (No rompe el Layout)
-  useEffect(() => {
-    isMounted.current = true;
-    requireAdminOrRedirect().then(r => {
-      if (r.ok && isMounted.current) {
-        setIsAuthorized(true);
-        loadData();
-      }
-    });
-    return () => { isMounted.current = false; };
-  }, []);
+  useEffect(() => { requireAdminOrRedirect().then(r => { if (r.ok) load(); }); }, []);
 
-  // Filtro de países memoizado
-  const filteredCountries = useMemo(() => 
-    COUNTRIES.filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase())),
-    [countrySearch]
-  );
+  const filtered = useMemo(() => COUNTRIES.filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase())), [countrySearch]);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setClientsBusy(true);
-    setMsg(null);
-    
-    const { data: { session } } = await supabase.auth.getSession();
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault(); setBusy(true);
+    const { data } = await supabase.auth.getSession();
     try {
       const res = await fetch("/.netlify/functions/createUser", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ ...form, user_email: form.contact_email }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token}` },
+        body: JSON.stringify({ ...form, user_email: form.contact_email, invite: true }),
       });
-
-      if (!res.ok) throw new Error(await res.text());
-
-      setMsg({ text: "✅ Registrado correctamente", type: 'success' });
-      setTimeout(() => {
-        setShowDrawer(false);
-        loadData();
-      }, 1000);
-    } catch (err: any) {
-      setMsg({ text: err.message, type: 'error' });
-    } finally {
-      setClientsBusy(false);
-    }
+      if (res.ok) { setShowDrawer(false); load(); }
+    } finally { setBusy(false); }
   };
 
-  if (!isAuthorized || loading) {
-    return (
-      <AdminLayout title="...">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '50vh', gap: '10px' }}>
-          <Loader2 className="spin" /> <span>Estabilizando Directorio...</span>
-        </div>
-      </AdminLayout>
-    );
-  }
+  if (loading) return <AdminLayout title="..."><Loader2 className="spin" /></AdminLayout>;
 
   return (
-    <AdminLayout title="Clientes y Directorio">
-      <div className="header-actions">
-        <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{clients.length} Registros activos</h2>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="btn-secondary" onClick={() => loadData()} disabled={clientsBusy}>
-            <RefreshCcw size={16} className={clientsBusy ? 'spin' : ''} />
-          </button>
-          <button className="btn-primary" onClick={() => setShowDrawer(true)}>
-            <Plus size={18} /> Nuevo Cliente
-          </button>
-        </div>
+    <AdminLayout title="Directorio de Clientes">
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
+        <button className="btn-add" onClick={() => setShowDrawer(true)}><Plus size={18} /> Nuevo Cliente</button>
       </div>
 
-      <div className="table-wrapper">
-        <table className="pro-table">
-          <thead>
-            <tr>
-              <th>Empresa</th>
-              <th>Identificación</th>
-              <th>País</th>
-              <th>Contacto</th>
-              <th style={{ width: '40px' }}></th>
-            </tr>
-          </thead>
+      <div className="table-container">
+        <table>
+          <thead><tr><th>Cliente</th><th>ID Fiscal</th><th>País</th><th>Email</th></tr></thead>
           <tbody>
             {clients.map(c => (
               <tr key={c.id}>
-                <td>
-                  <div className="client-cell">
-                    <div className="avatar">{(c.name || "C")[0]}</div>
-                    <div>
-                      <div className="c-name">{c.name}</div>
-                      <div className="c-legal">{c.legal_name || 'Particular'}</div>
-                    </div>
-                  </div>
-                </td>
-                <td><code className="tax-code">{c.tax_id || '-'}</code></td>
-                <td><span className="badge-country">{c.country || 'PA'}</span></td>
-                <td className="email-cell"><Mail size={12} /> {c.contact_email}</td>
-                <td><button className="btn-icon"><ExternalLink size={14} /></button></td>
+                <td><strong>{c.name}</strong><br/><small>{c.legal_name}</small></td>
+                <td><code>{c.tax_id}</code></td>
+                <td>{c.country}</td>
+                <td>{c.contact_email}</td>
               </tr>
             ))}
           </tbody>
@@ -168,88 +74,41 @@ export default function AdminUsersPage() {
       </div>
 
       {showDrawer && (
-        <div className="drawer-overlay" onClick={() => setShowDrawer(false)}>
-          <div className="drawer-panel" onClick={e => e.stopPropagation()}>
-            <div className="drawer-header">
-              <h3>Crear Perfil Logístico</h3>
-              <X className="pointer" onClick={() => setShowDrawer(false)} />
-            </div>
-            <form onSubmit={handleCreate} className="drawer-body">
-              <div className="input-group">
-                <label><Building2 size={12}/> DATOS FISCALES</label>
-                <input required placeholder="Nombre Comercial" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
-                <input placeholder="Razón Social" value={form.legal_name} onChange={e => setForm({...form, legal_name: e.target.value})} />
-                <input placeholder="RUC / Tax ID" value={form.tax_id} onChange={e => setForm({...form, tax_id: e.target.value})} />
-              </div>
-
-              <div className="input-group">
-                <label><Globe size={12}/> UBICACIÓN EUROPA / AMÉRICA</label>
-                <div className="search-box">
-                  <Search size={14} className="s-icon" />
-                  <input placeholder="Buscar país..." value={countrySearch} onChange={e => setCountrySearch(e.target.value)} />
-                </div>
-                <select size={3} className="country-select" value={form.country} onChange={e => setForm({...form, country: e.target.value})}>
-                  {filteredCountries.map(cn => <option key={cn.code} value={cn.name}>{cn.flag} {cn.name}</option>)}
-                </select>
-              </div>
-
-              <div className="input-group">
-                <label><Mail size={12}/> CONTACTO</label>
-                <input required type="email" placeholder="Email de acceso" value={form.contact_email} onChange={e => setForm({...form, contact_email: e.target.value})} />
-                <input placeholder="Teléfono internacional" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
-              </div>
-
-              <div className="drawer-footer">
-                {msg && <div className={`alert ${msg.type}`}>{msg.text}</div>}
-                <button type="submit" className="btn-save" disabled={clientsBusy}>
-                  {clientsBusy ? <Loader2 className="spin" /> : "Registrar Cliente"}
-                </button>
-              </div>
+        <div className="overlay" onClick={() => setShowDrawer(false)}>
+          <div className="drawer" onClick={e => e.stopPropagation()}>
+            <div className="drawer-h"><h3>Nuevo Cliente</h3><X onClick={() => setShowDrawer(false)} style={{cursor:'pointer'}}/></div>
+            <form onSubmit={save} className="drawer-b">
+              <label>NOMBRE COMERCIAL</label>
+              <input required value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+              <label>RAZÓN SOCIAL</label>
+              <input value={form.legal_name} onChange={e => setForm({...form, legal_name: e.target.value})} />
+              <label>TAX ID</label>
+              <input value={form.tax_id} onChange={e => setForm({...form, tax_id: e.target.value})} />
+              <label>PAÍS</label>
+              <select value={form.country} onChange={e => setForm({...form, country: e.target.value})}>
+                {COUNTRIES.map(c => <option key={c.code} value={c.name}>{c.flag} {c.name}</option>)}
+              </select>
+              <label>EMAIL</label>
+              <input required type="email" value={form.contact_email} onChange={e => setForm({...form, contact_email: e.target.value})} />
+              <button type="submit" className="btn-save" disabled={busy}>{busy ? "Guardando..." : "Crear Cliente"}</button>
             </form>
           </div>
         </div>
       )}
 
       <style jsx>{`
-        .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-        .btn-primary { background: #1f7a3a; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-        .btn-secondary { background: white; border: 1px solid #e2e8f0; padding: 10px; border-radius: 10px; cursor: pointer; color: #64748b; }
-        
-        .table-wrapper { background: white; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; }
-        .pro-table { width: 100%; border-collapse: collapse; text-align: left; }
-        .pro-table th { background: #f8fafc; padding: 15px 20px; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #f1f5f9; }
-        .pro-table td { padding: 15px 20px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
-        
-        .client-cell { display: flex; align-items: center; gap: 12px; }
-        .avatar { width: 34px; height: 34px; background: #dcfce7; color: #166534; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; }
-        .c-name { font-weight: 700; color: #1e293b; }
-        .c-legal { font-size: 11px; color: #94a3b8; }
-        .tax-code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-family: monospace; color: #475569; }
-        .badge-country { background: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
-        
-        .drawer-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); z-index: 9999; display: flex; justify-content: flex-end; backdrop-filter: blur(4px); }
-        .drawer-panel { width: 420px; background: white; height: 100%; display: flex; flex-direction: column; box-shadow: -10px 0 30px rgba(0,0,0,0.1); animation: slideIn 0.3s ease-out; }
-        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
-        
-        .drawer-header { padding: 25px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
-        .drawer-body { padding: 25px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; flex: 1; }
-        .input-group { display: flex; flex-direction: column; gap: 8px; }
-        .input-group label { font-size: 10px; font-weight: 800; color: #1f7a3a; letter-spacing: 0.1em; }
-        .input-group input, .country-select { border: 1px solid #e2e8f0; padding: 12px; border-radius: 10px; outline: none; transition: 0.2s; }
-        .input-group input:focus { border-color: #1f7a3a; box-shadow: 0 0 0 3px rgba(31, 122, 58, 0.1); }
-        
-        .search-box { position: relative; }
-        .s-icon { position: absolute; left: 12px; top: 13px; color: #94a3b8; }
-        .search-box input { padding-left: 35px !important; width: 100%; font-size: 13px; }
-        
-        .btn-save { background: #1f7a3a; color: white; border: none; padding: 16px; border-radius: 12px; font-weight: bold; cursor: pointer; }
-        .alert { padding: 12px; border-radius: 8px; font-size: 13px; text-align: center; }
-        .alert.success { background: #dcfce7; color: #166534; }
-        .alert.error { background: #fee2e2; color: #991b1b; }
-        
-        .spin { animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .pointer { cursor: pointer; }
+        .table-container { background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #f8fafc; padding: 12px; text-align: left; font-size: 11px; color: #64748b; }
+        td { padding: 12px; border-top: 1px solid #f1f5f9; font-size: 14px; }
+        .btn-add { background: #1f7a3a; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; gap: 8px; }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 1000; display: flex; justify-content: flex-end; }
+        .drawer { width: 400px; background: white; height: 100%; display: flex; flex-direction: column; box-shadow: -5px 0 15px rgba(0,0,0,0.1); }
+        .drawer-h { padding: 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; }
+        .drawer-b { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        label { font-size: 10px; font-weight: bold; color: #1f7a3a; }
+        input, select { padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; }
+        .btn-save { background: #1f7a3a; color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; margin-top: 20px; cursor: pointer; }
       `}</style>
     </AdminLayout>
   );
