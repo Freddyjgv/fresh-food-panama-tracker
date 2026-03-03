@@ -3,8 +3,9 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { AdminLayout } from '../../../components/AdminLayout';
 import { 
-  Building2, MapPin, CreditCard, Ship, Mail, 
-  Phone, ArrowLeft, Edit3, Loader2, AlertCircle, X, Trash2
+  Building2, MapPin, Ship, Mail, 
+  Phone, ArrowLeft, Edit3, Loader2, AlertCircle, X, Trash2,
+  Calendar, Hash, ChevronRight
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -12,19 +13,16 @@ export default function ClientDetailPage() {
   const router = useRouter();
   const { id } = router.query;
   
-  // Estados de datos
   const [client, setClient] = useState<any>(null);
   const [shipments, setShipments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Estados del Drawer de Edición
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [f, setF] = useState<any>(null);
   const tokenRef = useRef<string | null>(null);
 
-  // EFECTO CRÍTICO: Esperar a que el router esté listo para capturar el ID real
   useEffect(() => {
     if (!router.isReady || !id) return;
     fetchFullClientData();
@@ -41,7 +39,7 @@ export default function ClientDetailPage() {
     setLoading(true);
     setErrorMsg(null);
     try {
-      // 1. Cargar Datos Base del Cliente (Usamos maybeSingle para evitar errores ruidosos si no existe)
+      // 1. Obtener datos del cliente
       const { data: clientData, error: cErr } = await supabase
         .from('clients')
         .select('*')
@@ -49,41 +47,34 @@ export default function ClientDetailPage() {
         .maybeSingle();
 
       if (cErr) throw new Error(`Error Supabase: ${cErr.message}`);
-      if (!clientData) throw new Error("El expediente solicitado no existe en la base de datos.");
+      if (!clientData) throw new Error("El expediente no existe.");
 
-      // 2. Cargar Direcciones (Bloque aislado: si la tabla no existe, no rompe la ficha)
-      let addrData = [];
-      try {
-        const { data: addrs } = await supabase.from('shipping_addresses').select('*').eq('client_id', id);
-        addrData = addrs || [];
-      } catch (e) { 
-        console.warn("Aviso: Tabla shipping_addresses no accesible."); 
-      }
+      // 2. Obtener Direcciones
+      const { data: addrData } = await supabase
+        .from('shipping_addresses')
+        .select('*')
+        .eq('client_id', id);
 
-      // 3. Cargar Embarques (Bloque aislado)
-      let shipData = [];
-      try {
-        const { data: ships } = await supabase.from('shipments').select('*').eq('client_id', id).order('created_at', { ascending: false });
-        shipData = ships || [];
-      } catch (e) { 
-        console.warn("Aviso: Tabla shipments no accesible."); 
-      }
+      // 3. Obtener Embarques (Aseguramos la query limpia)
+      const { data: shipData, error: sErr } = await supabase
+        .from('shipments')
+        .select('*')
+        .eq('client_id', id)
+        .order('created_at', { ascending: false });
 
-      const fullClient = { ...clientData, shipping_addresses: addrData };
-      setClient(fullClient);
-      setShipments(shipData);
+      if (sErr) console.error("Error cargando embarques:", sErr);
+
+      setClient({ ...clientData, shipping_addresses: addrData || [] });
+      setShipments(shipData || []);
       
-      // Preparar formulario para edición
       setF({
-        ...fullClient,
-        email_corp: fullClient.contact_email || "",
-        phone_corp: fullClient.phone || "",
-        country_origin: fullClient.country || "Panamá",
-        shipping_addresses: addrData.length > 0 ? addrData : [{ id: Date.now(), address: "" }]
+        ...clientData,
+        email_corp: clientData.contact_email || "",
+        phone_corp: clientData.phone || "",
+        shipping_addresses: addrData && addrData.length > 0 ? addrData : [{ id: Date.now(), address: "" }]
       });
 
     } catch (e: any) {
-      console.error("Fallo en fetchFullClientData:", e.message);
       setErrorMsg(e.message);
     } finally {
       setLoading(false);
@@ -114,7 +105,7 @@ export default function ClientDetailPage() {
         alert(err.message);
       }
     } catch (err) {
-      alert("Error de conexión al servidor");
+      alert("Error de conexión");
     } finally {
       setIsSaving(false);
     }
@@ -122,173 +113,168 @@ export default function ClientDetailPage() {
 
   if (loading) return (
     <AdminLayout title="Cargando...">
-      <div className="loading-state">
-        <Loader2 className="animate-spin" size={32} color="#1f7a3a" />
-        <p>Sincronizando expediente con Supabase...</p>
-      </div>
+      <div className="state-container"><Loader2 className="spinner" size={40} /><p>Sincronizando expediente...</p></div>
     </AdminLayout>
   );
 
   if (errorMsg || !client) return (
-    <AdminLayout title="Error de Acceso">
-      <div className="error-state">
-        <AlertCircle size={48} color="#ef4444" />
-        <h2>Expediente no disponible</h2>
-        <p className="debug-msg">Detalle: {errorMsg || "ID no encontrado o error de red"}</p>
-        <Link href="/admin/users" className="btn-error-back">Volver al listado principal</Link>
-      </div>
+    <AdminLayout title="Error">
+      <div className="state-container"><AlertCircle size={48} color="#ef4444" /><h2>No se pudo cargar el cliente</h2><p>{errorMsg}</p><Link href="/admin/users" className="btn-back-error">Volver al listado</Link></div>
     </AdminLayout>
   );
 
   return (
-    <AdminLayout title={client.name} subtitle={`Expediente: ${client.tax_id || client.id.slice(0,8)}`}>
-      
-      <div className="top-bar">
-        <Link href="/admin/users" className="btn-back">
-          <ArrowLeft size={16} /> Volver a Clientes
-        </Link>
-        <button className="btn-edit-main" onClick={() => setIsDrawerOpen(true)}>
-          <Edit3 size={16}/> Editar Información
-        </button>
-      </div>
-
-      <div className="dashboard-grid">
-        {/* COLUMNA IZQUIERDA: PERFIL */}
-        <div className="profile-card">
-          <div className="card-section">
-            <h3 className="section-h"><Building2 size={18}/> Datos Legales</h3>
-            <div className="info-item"><label>Razón Social</label><p>{client.legal_name || 'No registrada'}</p></div>
-            <div className="info-item"><label>RUC / TAX ID</label><p><strong>{client.tax_id || 'N/A'}</strong></p></div>
-          </div>
-          <div className="card-section">
-            <h3 className="section-h"><Mail size={18}/> Comunicación</h3>
-            <div className="info-item"><label>Email Corporativo</label><p>{client.contact_email}</p></div>
-            <div className="info-item"><label>Teléfono</label><p>{client.phone || 'N/A'}</p></div>
-          </div>
+    <AdminLayout title={client.name}>
+      <div className="view-container">
+        {/* BARRA SUPERIOR */}
+        <div className="top-nav">
+          <Link href="/admin/users" className="back-link"><ArrowLeft size={18} /> Volver a Clientes</Link>
+          <button className="edit-trigger" onClick={() => setIsDrawerOpen(true)}><Edit3 size={16}/> Editar Expediente</button>
         </div>
 
-        {/* COLUMNA DERECHA: OPERACIONES */}
-        <div className="ops-card">
-          <div className="card-section">
-            <h3 className="section-h"><MapPin size={18}/> Direcciones de Entrega</h3>
-            <div className="shipping-grid">
-              {client.shipping_addresses && client.shipping_addresses.length > 0 ? (
-                client.shipping_addresses.map((addr: any) => (
-                  <div key={addr.id} className="addr-pill">{addr.address}</div>
-                ))
-              ) : (
-                <p className="empty-text">No se han definido puntos de entrega.</p>
-              )}
+        <div className="dashboard-layout">
+          {/* LADO IZQUIERDO: PERFIL */}
+          <aside className="sidebar-profile">
+            <div className="avatar-box">{client.name.charAt(0)}</div>
+            <h2 className="client-title">{client.name}</h2>
+            <div className="badge">Cliente Activo</div>
+
+            <div className="info-groups">
+              <div className="info-group">
+                <label><Building2 size={14}/> Identificación</label>
+                <p><strong>RUC:</strong> {client.tax_id || 'No definido'}</p>
+                <p><strong>Razón:</strong> {client.legal_name || 'N/A'}</p>
+              </div>
+              <div className="info-group">
+                <label><Mail size={14}/> Contacto</label>
+                <p>{client.contact_email}</p>
+                <p>{client.phone || 'Sin teléfono'}</p>
+              </div>
             </div>
-          </div>
-          <div className="card-section">
-            <h3 className="section-h"><Ship size={18}/> Historial de Embarques</h3>
-            <div className="table-wrapper">
-              <table className="mini-table">
-                <thead><tr><th>Código</th><th>Status</th><th>Fecha</th></tr></thead>
-                <tbody>
-                  {shipments.length > 0 ? shipments.map(s => (
-                    <tr key={s.id}>
-                      <td><strong>{s.code}</strong></td>
-                      <td><span className="st-tag">{s.status}</span></td>
-                      <td>{new Date(s.created_at).toLocaleDateString()}</td>
+          </aside>
+
+          {/* LADO DERECHO: OPERACIONES */}
+          <main className="main-content">
+            <section className="card">
+              <header className="card-header"><MapPin size={18} color="#1f7a3a" /> <h3>Puntos de Entrega</h3></header>
+              <div className="address-grid">
+                {client.shipping_addresses?.length > 0 ? client.shipping_addresses.map((a: any) => (
+                  <div key={a.id} className="address-card">{a.address}</div>
+                )) : <p className="empty">Sin direcciones registradas.</p>}
+              </div>
+            </section>
+
+            <section className="card">
+              <header className="card-header"><Ship size={18} color="#1f7a3a" /> <h3>Historial de Embarques</h3></header>
+              <div className="table-container">
+                <table className="modern-table">
+                  <thead>
+                    <tr>
+                      <th><Hash size={14}/> Código</th>
+                      <th>Estado</th>
+                      <th><Calendar size={14}/> Fecha</th>
+                      <th></th>
                     </tr>
-                  )) : (
-                    <tr><td colSpan={3} className="empty-td">Este cliente no posee historial aún.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                  </thead>
+                  <tbody>
+                    {shipments.length > 0 ? shipments.map(s => (
+                      <tr key={s.id}>
+                        <td><span className="code-tag">{s.code}</span></td>
+                        <td><span className={`status-pill ${s.status?.toLowerCase()}`}>{s.status}</span></td>
+                        <td>{new Date(s.created_at).toLocaleDateString()}</td>
+                        <td><ChevronRight size={16} color="#cbd5e1"/></td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan={4} className="empty-row">No se encontraron embarques registrados para este ID.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </main>
         </div>
       </div>
 
-      {/* DRAWER DE EDICIÓN */}
+      {/* DRAWER EDICIÓN */}
       {isDrawerOpen && (
         <>
-          <div className="overlay" onClick={() => setIsDrawerOpen(false)} />
-          <div className="drawer">
-            <div className="d-header">
-              <h3>Modificar Registro</h3>
-              <button className="btn-close" onClick={() => setIsDrawerOpen(false)}><X size={20} /></button>
+          <div className="modal-overlay" onClick={() => setIsDrawerOpen(false)} />
+          <div className="side-drawer">
+            <div className="drawer-header">
+              <h3>Actualizar Expediente</h3>
+              <button onClick={() => setIsDrawerOpen(false)}><X size={20}/></button>
             </div>
-            <form className="d-body" onSubmit={handleSave}>
-              <div className="group">
-                <label>IDENTIDAD FISCAL</label>
-                <input required value={f.name} onChange={e=>setF({...f, name:e.target.value})} placeholder="Nombre Comercial" />
+            <form onSubmit={handleSave} className="drawer-form">
+              <div className="form-section">
+                <label>Información Comercial</label>
+                <input required value={f.name} onChange={e=>setF({...f, name:e.target.value})} placeholder="Nombre" />
                 <input value={f.legal_name} onChange={e=>setF({...f, legal_name:e.target.value})} placeholder="Razón Social" />
                 <input value={f.tax_id} onChange={e=>setF({...f, tax_id:e.target.value})} placeholder="RUC" />
               </div>
-              <div className="group">
-                <label>CONTACTO</label>
-                <input required value={f.email_corp} onChange={e=>setF({...f, email_corp:e.target.value})} placeholder="Email Principal" />
-                <input value={f.phone_corp} onChange={e=>setF({...f, phone_corp:e.target.value})} placeholder="Teléfono" />
-              </div>
-              <div className="group">
-                <label>LOGÍSTICA (DESTINOS)</label>
+              <div className="form-section">
+                <label>Direcciones</label>
                 {f.shipping_addresses.map((s: any, i: number) => (
-                  <div key={s.id} className="row-input">
+                  <div key={s.id} className="input-row">
                     <input value={s.address} onChange={e => {
                       const ns = [...f.shipping_addresses]; ns[i].address = e.target.value; setF({...f, shipping_addresses: ns});
-                    }} placeholder="Dirección completa..." />
-                    <button type="button" onClick={() => setF({...f, shipping_addresses: f.shipping_addresses.filter((x:any) => x.id !== s.id)})} className="btnDel"><Trash2 size={14}/></button>
+                    }} />
+                    <button type="button" onClick={() => setF({...f, shipping_addresses: f.shipping_addresses.filter((x:any) => x.id !== s.id)})}><Trash2 size={14}/></button>
                   </div>
                 ))}
-                <button type="button" className="btn-add" onClick={() => setF({...f, shipping_addresses: [...f.shipping_addresses, {id:Date.now(), address:""}]})}>+ Añadir Dirección</button>
+                <button type="button" className="btn-add-line" onClick={() => setF({...f, shipping_addresses: [...f.shipping_addresses, {id:Date.now(), address:""}]})}>+ Añadir</button>
               </div>
-              <button className="btnSubmit" disabled={isSaving}>{isSaving ? "Guardando cambios..." : "Actualizar Cliente"}</button>
+              <button className="btn-save" disabled={isSaving}>{isSaving ? "Guardando..." : "Guardar Cambios"}</button>
             </form>
           </div>
         </>
       )}
 
       <style jsx>{`
-        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-        .btn-back { display: flex; align-items: center; gap: 8px; color: #64748b; text-decoration: none; font-size: 14px; font-weight: 500; }
-        .btn-back:hover { color: #1f7a3a; }
-        .dashboard-grid { display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
+        .view-container { max-width: 1200px; margin: 0 auto; padding: 10px; }
+        .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .back-link { display: flex; align-items: center; gap: 8px; color: #64748b; text-decoration: none; font-weight: 500; font-size: 14px; }
+        .edit-trigger { background: #1f7a3a; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; }
         
-        .profile-card, .ops-card { background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 25px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-        .section-h { display: flex; align-items: center; gap: 10px; color: #1f7a3a; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; margin-bottom: 20px; font-weight: 800; letter-spacing: 0.5px; }
+        .dashboard-layout { display: grid; grid-template-columns: 300px 1fr; gap: 30px; }
         
-        .info-item { margin-bottom: 18px; }
-        .info-item label { font-size: 10px; color: #94a3b8; text-transform: uppercase; font-weight: 800; }
-        .info-item p { font-size: 15px; margin: 4px 0; color: #1e293b; }
+        .sidebar-profile { background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 30px; text-align: center; height: fit-content; position: sticky; top: 20px; }
+        .avatar-box { width: 70px; height: 70px; background: #f0fdf4; color: #1f7a3a; border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; font-size: 28px; font-weight: 800; border: 2px solid #dcfce7; }
+        .client-title { font-size: 18px; color: #1e293b; margin-bottom: 8px; }
+        .badge { background: #dcfce7; color: #166534; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 20px; display: inline-block; margin-bottom: 25px; }
         
-        .addr-pill { background: #f8fafc; padding: 14px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; border-left: 4px solid #1f7a3a; color: #334155; }
-        .btn-edit-main { background: #1f7a3a; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 700; transition: all 0.2s; }
-        .btn-edit-main:hover { background: #166534; transform: translateY(-1px); }
+        .info-group { text-align: left; margin-bottom: 20px; padding-top: 15px; border-top: 1px solid #f1f5f9; }
+        .info-group label { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #94a3b8; text-transform: uppercase; font-weight: 800; margin-bottom: 8px; }
+        .info-group p { font-size: 13px; color: #475569; margin: 3px 0; }
 
-        .mini-table { width: 100%; border-collapse: collapse; }
-        .mini-table th { text-align: left; padding: 10px; font-size: 11px; color: #94a3b8; border-bottom: 1px solid #f1f5f9; }
-        .mini-table td { padding: 12px 10px; font-size: 13px; border-bottom: 1px solid #f8fafc; color: #1e293b; }
-        .st-tag { background: #f1f5f9; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; color: #475569; }
-
-        .drawer { position: fixed; right: 0; top: 0; width: 450px; height: 100%; background: white; z-index: 1001; display: flex; flex-direction: column; box-shadow: -10px 0 40px rgba(0,0,0,0.15); }
-        .d-header { padding: 25px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
-        .btn-close { background: none; border: none; cursor: pointer; color: #94a3b8; padding: 5px; }
-        .d-body { padding: 25px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
-        .overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); z-index: 1000; backdrop-filter: blur(3px); }
+        .main-content { display: flex; flex-direction: column; gap: 25px; }
+        .card { background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 25px; }
+        .card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+        .card-header h3 { font-size: 15px; color: #1e293b; font-weight: 700; }
         
-        .group { background: #f8fafc; padding: 18px; border-radius: 12px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 12px; }
-        .group label { font-size: 10px; font-weight: 900; color: #1f7a3a; letter-spacing: 0.8px; }
-        input { padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
-        input:focus { border-color: #1f7a3a; outline: none; box-shadow: 0 0 0 3px rgba(31, 122, 58, 0.1); }
+        .address-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .address-card { background: #f8fafc; padding: 15px; border-radius: 10px; font-size: 13px; color: #475569; border: 1px solid #f1f5f9; }
         
-        .row-input { display: flex; gap: 8px; }
-        .btnDel { background: #fee2e2; color: #ef4444; border: none; padding: 10px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; }
-        .btnDel:hover { background: #fecaca; }
-        .btn-add { background: white; border: 1px dashed #cbd5e1; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 12px; color: #64748b; font-weight: 700; }
-        .btn-add:hover { border-color: #1f7a3a; color: #1f7a3a; }
-        .btnSubmit { background: #1f7a3a; color: white; border: none; padding: 16px; border-radius: 10px; cursor: pointer; font-weight: 800; margin-top: 10px; box-shadow: 0 4px 10px rgba(31, 122, 58, 0.2); transition: 0.2s; }
-        .btnSubmit:disabled { opacity: 0.5; cursor: not-allowed; }
+        .modern-table { width: 100%; border-collapse: collapse; }
+        .modern-table th { text-align: left; font-size: 11px; color: #94a3b8; text-transform: uppercase; padding: 12px; border-bottom: 1px solid #f1f5f9; }
+        .modern-table td { padding: 15px 12px; font-size: 13px; border-bottom: 1px solid #f8fafc; }
+        .code-tag { font-weight: 700; color: #1f7a3a; background: #f0fdf4; padding: 4px 8px; border-radius: 6px; }
+        .status-pill { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; background: #f1f5f9; color: #64748b; }
 
-        .loading-state, .error-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 50vh; text-align: center; gap: 15px; }
-        .debug-msg { color: #94a3b8; font-size: 13px; font-family: monospace; background: #f8fafc; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; }
-        .btn-error-back { background: #1f7a3a; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; margin-top: 15px; }
-        .animate-spin { animation: spin 1s linear infinite; }
+        /* Estilos Drawer y Estados */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); backdrop-filter: blur(4px); z-index: 100; }
+        .side-drawer { position: fixed; right: 0; top: 0; height: 100%; width: 400px; background: white; z-index: 101; padding: 30px; box-shadow: -10px 0 30px rgba(0,0,0,0.1); }
+        .drawer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .drawer-form { display: flex; flex-direction: column; gap: 20px; }
+        .form-section { display: flex; flex-direction: column; gap: 10px; }
+        .form-section label { font-size: 12px; font-weight: 700; color: #1f7a3a; }
+        input { padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; }
+        .input-row { display: flex; gap: 8px; }
+        .btn-save { background: #1f7a3a; color: white; border: none; padding: 15px; border-radius: 10px; font-weight: 700; cursor: pointer; margin-top: 20px; }
+        
+        .state-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; gap: 15px; }
+        .spinner { animation: spin 1s linear infinite; color: #1f7a3a; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .empty-text, .empty-td { color: #94a3b8; font-style: italic; font-size: 13px; text-align: center; padding: 20px 0; }
+        .empty, .empty-row { color: #94a3b8; font-style: italic; font-size: 13px; padding: 20px; text-align: center; }
       `}</style>
     </AdminLayout>
   );
