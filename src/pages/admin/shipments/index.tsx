@@ -4,7 +4,7 @@ import { useRouter } from "next/router";
 import {
   ArrowUpDown, Search, Plus, ChevronRight, Calendar,
   MapPin, Ship, Plane, Filter, Users, LayoutGrid, X,
-  Package, Truck, CheckCircle2, Box, Anchor
+  Package, Truck, CheckCircle2, Box, Anchor, Scale
 } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { labelStatus } from "../../../lib/shipmentFlow";
@@ -18,12 +18,19 @@ type ShipmentListItem = {
   pallets?: number | null;
 };
 
+const INITIAL_FORM = {
+  client_id: '', code: '', product_mode: 'Aérea', product_name: '',
+  product_variety: '', caliber: '', color: '', boxes: '', 
+  pallets: '', weight: '', incoterm: '', destination: '', status: 'CREATED'
+};
+
 function fmtDate(iso: string) {
   try {
     return new Date(iso).toLocaleDateString("es-PA", { day: '2-digit', month: 'short', year: 'numeric' });
   } catch { return iso; }
 }
 
+// Hitos mejorados: Espaciado corregido y colores agradables
 function StatusPill({ status }: { status: string }) {
   const label = labelStatus(status);
   const s = status.toUpperCase();
@@ -38,8 +45,8 @@ function StatusPill({ status }: { status: string }) {
 
   return (
     <span className={`status-pill ${isFinal ? 'pill-green' : isTransit ? 'pill-blue' : 'pill-gray'}`}>
-      <Icon size={12} strokeWidth={3} />
-      {label}
+      <Icon size={14} className="pill-icon" />
+      <span className="pill-text">{label}</span>
     </span>
   );
 }
@@ -47,13 +54,13 @@ function StatusPill({ status }: { status: string }) {
 export default function AdminShipments() {
   const router = useRouter();
   const [authOk, setAuthOk] = useState(false);
-  const [authChecking, setAuthChecking] = useState(true);
-  
   const [showModal, setShowModal] = useState(false);
   const [items, setItems] = useState<ShipmentListItem[]>([]);
   const [clients, setClients] = useState<{id: string, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
+  const [formData, setFormData] = useState(INITIAL_FORM);
 
+  // Filtros
   const [q, setQ] = useState("");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
   const [destination, setDestination] = useState("");
@@ -61,7 +68,7 @@ export default function AdminShipments() {
   useEffect(() => {
     (async () => {
       const r = await requireAdminOrRedirect();
-      if (r.ok) { setAuthOk(true); setAuthChecking(false); }
+      if (r.ok) setAuthOk(true);
     })();
   }, []);
 
@@ -86,9 +93,21 @@ export default function AdminShipments() {
 
   useEffect(() => { if (authOk) loadData(); }, [authOk, q, dir, destination]);
 
+  const handleCreate = async () => {
+    if (!formData.client_id) return alert("Selecciona un cliente");
+    try {
+      const { error } = await supabase.from('shipments').insert([formData]);
+      if (error) throw error;
+      setShowModal(false);
+      setFormData(INITIAL_FORM);
+      loadData();
+    } catch (err: any) { alert("Error: " + err.message); }
+  };
+
   return (
-    <AdminLayout title="Logística" subtitle="Control de carga y exportaciones.">
+    <AdminLayout title="Logística" subtitle="Gestión integral de embarques.">
       
+      {/* KPI BAR */}
       <div className="stats-bar">
         <div className="stat-chip">
           <LayoutGrid size={14} />
@@ -105,6 +124,7 @@ export default function AdminShipments() {
         </div>
       </div>
 
+      {/* FILTROS */}
       <div className="filter-area">
         <div className="search-pill">
           <Search size={16} />
@@ -120,6 +140,7 @@ export default function AdminShipments() {
         </button>
       </div>
 
+      {/* LISTADO */}
       <div className="list-stack">
         <div className="list-header">
           <span>REFERENCIA</span>
@@ -129,7 +150,7 @@ export default function AdminShipments() {
           <span style={{textAlign: 'right'}}>ESTADO</span>
         </div>
         
-        {loading ? <div className="loading-state">Actualizando...</div> : 
+        {loading ? <div className="loading-state">Actualizando listado...</div> : 
           items.map((s) => (
           <div key={s.id} className="s-row" onClick={() => router.push(`/admin/shipments/${s.id}`)}>
             <div className="s-col-info">
@@ -137,7 +158,7 @@ export default function AdminShipments() {
                 {s.product_mode === 'Aérea' ? <Plane size={14} /> : <Ship size={14} />}
               </div>
               <div className="id-txt">
-                <span className="code">{s.code}</span>
+                <span className="code">{s.code || 'S/N'}</span>
                 <span className="client">{s.client_name}</span>
               </div>
             </div>
@@ -163,34 +184,36 @@ export default function AdminShipments() {
         ))}
       </div>
 
+      {/* MODAL / POPUP COMPLETO */}
       {showModal && (
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
               <div>
-                <h3>Nuevo Embarque</h3>
-                <p>Ingresa los detalles técnicos de la carga</p>
+                <h3>Crear Embarque</h3>
+                <p>Configura los datos técnicos del nuevo envío</p>
               </div>
               <button className="close-btn" onClick={() => setShowModal(false)}><X size={20}/></button>
             </div>
             <div className="modal-body">
+              
               <div className="form-section">
-                <div className="section-title"><Users size={14}/> Información General</div>
+                <div className="section-title"><Users size={14}/> General</div>
                 <div className="form-grid">
                     <div className="f-group full">
                         <label>Cliente</label>
-                        <select className="f-input">
+                        <select className="f-input" value={formData.client_id} onChange={e => setFormData({...formData, client_id: e.target.value})}>
                             <option value="">Selecciona un cliente</option>
                             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                     </div>
                     <div className="f-group">
-                        <label>Código de Referencia</label>
-                        <input className="f-input" placeholder="Ej: FF-2024-001" />
+                        <label>Referencia</label>
+                        <input className="f-input" placeholder="Ej: FF-100" value={formData.code} onChange={e => setFormData({...formData, code: e.target.value})} />
                     </div>
                     <div className="f-group">
                         <label>Hub Logístico</label>
-                        <select className="f-input">
+                        <select className="f-input" value={formData.product_mode} onChange={e => setFormData({...formData, product_mode: e.target.value})}>
                             <option value="Aérea">Aérea</option>
                             <option value="Marítima">Marítima</option>
                         </select>
@@ -199,51 +222,51 @@ export default function AdminShipments() {
               </div>
 
               <div className="form-section">
-                <div className="section-title"><Box size={14}/> Especificaciones de Producto</div>
+                <div className="section-title"><Box size={14}/> Producto</div>
                 <div className="form-grid">
                     <div className="f-group">
                         <label>Producto</label>
-                        <input className="f-input" placeholder="Ej: Piña" />
+                        <input className="f-input" placeholder="Piña" value={formData.product_name} onChange={e => setFormData({...formData, product_name: e.target.value})} />
                     </div>
                     <div className="f-group">
                         <label>Variedad</label>
-                        <input className="f-input" placeholder="Ej: MD2" />
+                        <input className="f-input" placeholder="MD2" value={formData.product_variety} onChange={e => setFormData({...formData, product_variety: e.target.value})} />
                     </div>
                     <div className="f-group">
                         <label>Calibre / Color</label>
                         <div className="dual-input">
-                            <input className="f-input" placeholder="Cal" />
-                            <input className="f-input" placeholder="Col" />
+                            <input className="f-input" placeholder="Cal." value={formData.caliber} onChange={e => setFormData({...formData, caliber: e.target.value})} />
+                            <input className="f-input" placeholder="Col." value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} />
                         </div>
                     </div>
                     <div className="f-group">
-                        <label>Cantidad (Cajas / PLT / Peso)</label>
+                        <label>Volumen y Peso</label>
                         <div className="triple-input">
-                            <input className="f-input" placeholder="Cjs" />
-                            <input className="f-input" placeholder="Plt" />
-                            <input className="f-input" placeholder="Kg" />
+                            <input className="f-input" placeholder="Cjs" value={formData.boxes} onChange={e => setFormData({...formData, boxes: e.target.value})} />
+                            <input className="f-input" placeholder="Plt" value={formData.pallets} onChange={e => setFormData({...formData, pallets: e.target.value})} />
+                            <input className="f-input" placeholder="Kg" value={formData.weight} onChange={e => setFormData({...formData, weight: e.target.value})} />
                         </div>
                     </div>
                 </div>
               </div>
 
               <div className="form-section">
-                <div className="section-title"><Anchor size={14}/> Destino & Incoterm</div>
+                <div className="section-title"><Anchor size={14}/> Destino Final</div>
                 <div className="form-grid">
                     <div className="f-group">
                         <label>Incoterm</label>
-                        <input className="f-input" placeholder="FOB, EXW, etc." />
+                        <input className="f-input" placeholder="FOB, EXW..." value={formData.incoterm} onChange={e => setFormData({...formData, incoterm: e.target.value})} />
                     </div>
                     <div className="f-group">
                         <label>Lugar de Destino</label>
-                        <input className="f-input" placeholder="Ej: Madrid, España" />
+                        <input className="f-input" placeholder="Puerto / Ciudad" value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} />
                     </div>
                 </div>
               </div>
 
               <div className="modal-footer">
                 <button className="btn-cancel" onClick={() => setShowModal(false)}>Cancelar</button>
-                <button className="btn-save" onClick={() => setShowModal(false)}>Crear Embarque</button>
+                <button className="btn-save" onClick={handleCreate}>Crear Embarque</button>
               </div>
             </div>
           </div>
@@ -290,8 +313,22 @@ export default function AdminShipments() {
         .s-col-stat { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
         .chevron { color: #cbd5e1; }
 
-        /* Status Pills Premium */
-        .status-pill { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 10px; font-size: 11px; font-weight: 800; border: 1px solid transparent; text-transform: uppercase; }
+        /* Hitos / Status Pills Premium - Espaciado Mejorado */
+        .status-pill { 
+          display: inline-flex; 
+          align-items: center; 
+          gap: 8px; 
+          padding: 6px 14px; 
+          border-radius: 99px; 
+          font-size: 11px; 
+          font-weight: 800; 
+          border: 1px solid transparent; 
+          text-transform: uppercase;
+          letter-spacing: 0.02em;
+        }
+        .pill-icon { flex-shrink: 0; }
+        .pill-text { line-height: 1; }
+        
         .pill-green { background: #f0fdf4; color: #166534; border-color: #dcfce7; }
         .pill-blue { background: #eff6ff; color: #1e40af; border-color: #dbeafe; }
         .pill-gray { background: #f8fafc; color: #475569; border-color: #f1f5f9; }
@@ -310,8 +347,8 @@ export default function AdminShipments() {
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         .f-group.full { grid-column: span 2; }
         .f-group label { display: block; font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase; }
-        .f-input { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; font-weight: 500; transition: 0.2s; }
-        .f-input:focus { border-color: #1f7a3a; ring: 3px rgba(31,122,58,0.1); outline: none; }
+        .f-input { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; font-weight: 500; transition: 0.2s; background: #fcfcfc; }
+        .f-input:focus { border-color: #1f7a3a; outline: none; background: white; box-shadow: 0 0 0 3px rgba(31,122,58,0.1); }
         
         .dual-input { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .triple-input { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
@@ -319,13 +356,11 @@ export default function AdminShipments() {
         .modal-footer { display: flex; gap: 12px; margin-top: 32px; }
         .btn-save { flex: 2; background: #1f7a3a; color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 800; font-size: 15px; cursor: pointer; transition: 0.2s; }
         .btn-cancel { flex: 1; background: #f1f5f9; color: #475569; border: none; padding: 14px; border-radius: 12px; font-weight: 700; font-size: 15px; cursor: pointer; }
-        .btn-save:hover { background: #166534; box-shadow: 0 4px 12px rgba(31,122,58,0.2); }
+        .btn-save:hover { background: #166534; transform: translateY(-1px); }
 
         @media (max-width: 900px) {
           .s-row, .list-header { grid-template-columns: 1.5fr 1fr auto; }
           .s-col-prod, .s-col-pallets, .list-header span:nth-child(3), .list-header span:nth-child(4) { display: none; }
-          .form-grid { grid-template-columns: 1fr; }
-          .f-group.full { grid-column: auto; }
         }
       `}</style>
     </AdminLayout>
