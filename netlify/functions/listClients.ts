@@ -7,11 +7,9 @@ const supabase = createClient(
 );
 
 export const handler: Handler = async (event) => {
-  // Verificación de método
   if (event.httpMethod !== 'GET') return { statusCode: 405, body: 'Method Not Allowed' };
 
   try {
-    // Traemos los clientes con sus campos de acceso y datos fiscales
     const { data, error } = await supabase
       .from('clients')
       .select(`
@@ -32,8 +30,11 @@ export const handler: Handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: data }),
+      headers: { 
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*" 
+      },
+      body: JSON.stringify({ items: data || [] }),
     };
   } catch (error: any) {
     return {
