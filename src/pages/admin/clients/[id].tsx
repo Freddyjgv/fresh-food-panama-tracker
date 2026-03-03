@@ -5,12 +5,12 @@ import { AdminLayout } from '../../../components/AdminLayout';
 import { 
   Building2, MapPin, Ship, Mail, Phone, ArrowLeft, 
   Edit3, Loader2, Plus, FileText, 
-  Globe, Package, Clock, CheckCircle2, User, Info, FileUp, Save, X, Shield
+  Globe, Package, Clock, CheckCircle2, User, Info, FileUp, Save, X, Shield, ExternalLink
 } from 'lucide-react';
 import Link from 'next/link';
 import ShipmentDrawer from '../../../components/ShipmentDrawer';
 
-const INCOTERMS = ['EXW', 'FCA', 'FAS', 'FOB', 'CFR', 'CIF', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP'];
+const INCOTERMS = ['FOB', 'CIF', 'CIP', 'FCA', 'CFR', 'EXW', 'DDP', 'DAP'];
 
 export default function ClientDetailPage() {
   const router = useRouter();
@@ -90,22 +90,29 @@ export default function ClientDetailPage() {
 
   const saveClientData = async () => {
     try {
-      // ✅ Payload filtrado para evitar el error de stack depth (recursividad)
+      // ✅ Payload LIMPIO para evitar 'stack depth limit exceeded'
       const payload = {
-        contact_email: editData.contact_email,
-        phone: editData.phone,
-        tax_id: editData.tax_id,
-        billing_address: editData.billing_address,
-        consignee_info: editData.consignee_info,
-        notify_party: editData.notify_party,
-        default_incoterm: editData.default_incoterm
+        contact_email: editData.contact_email || '',
+        phone: editData.phone || '',
+        tax_id: editData.tax_id || '',
+        billing_address: editData.billing_address || '',
+        consignee_info: {
+            name: editData.consignee_info?.name || '',
+            address: editData.consignee_info?.address || ''
+        },
+        notify_party: {
+            name: editData.notify_party?.name || '',
+            address: editData.notify_party?.address || ''
+        },
+        default_incoterm: editData.default_incoterm || 'FOB'
       };
 
       const { error } = await supabase.from('clients').update(payload).eq('id', id);
       if (error) throw error;
 
-      setClient(editData);
+      setClient({...editData});
       setIsEditing(false);
+      alert("Cambios guardados");
     } catch (err: any) {
       alert("Error actualizando: " + err.message);
     }
@@ -195,26 +202,41 @@ export default function ClientDetailPage() {
                 </select>
               </div>
             </section>
+
+            <section className="glass-card mt-20">
+              <div className="card-label">Documentos Legales</div>
+              <div className="doc-list">
+                <div className="doc-item"><FileText size={14}/> <span>Aviso de Operación</span></div>
+                <div className="doc-item"><FileText size={14}/> <span>Pacto Social</span></div>
+                <button className="upload-btn"><FileUp size={12}/> Subir Archivo</button>
+              </div>
+            </section>
           </aside>
 
           <main className="table-column">
             <div className="table-container">
-              <div className="table-header"><h3>Historial Logístico</h3></div>
+              <div className="table-header">
+                <h3>Últimos 5 Movimientos</h3>
+                <Link href={`/admin/shipments?client=${id}`} className="view-all-link">Ver todos <ExternalLink size={12}/></Link>
+              </div>
               <table className="pro-table">
                 <thead>
                   <tr><th>Código</th><th>Producto</th><th>Estado</th><th>Fecha</th></tr>
                 </thead>
                 <tbody>
-                  {shipments.map(s => (
-                    <tr key={s.id}>
-                      <td className="bold text-green">{s.code}</td>
-                      <td>{s.product_name} <small className="text-muted">{s.product_variety}</small></td>
-                      <td><span className="status-pill">{s.status}</span></td>
-                      <td className="text-muted">{new Date(s.created_at).toLocaleDateString()}</td>
-                    </tr>
+                  {shipments.slice(0, 5).map(s => (
+                    <Link key={s.id} href={`/admin/shipments/${s.id}`} legacyBehavior>
+                        <tr className="clickable-row">
+                        <td className="bold text-green">{s.code}</td>
+                        <td>{s.product_name} <small className="text-muted">{s.product_variety}</small></td>
+                        <td><span className="status-pill">{s.status}</span></td>
+                        <td className="text-muted">{new Date(s.created_at).toLocaleDateString()}</td>
+                        </tr>
+                    </Link>
                   ))}
                 </tbody>
               </table>
+              {shipments.length === 0 && <p className="empty-state">No hay embarques registrados.</p>}
             </div>
           </main>
 
@@ -309,19 +331,25 @@ export default function ClientDetailPage() {
         .form-group label { display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 5px; }
         input, textarea, .select-custom { width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; background: ${isEditing ? '#fff' : '#f8fafc'}; }
         textarea { min-height: 80px; resize: none; }
+        .mt-20 { margin-top: 20px; }
+        .doc-list { display: flex; flex-direction: column; gap: 10px; }
+        .doc-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #475569; padding: 8px; background: #f8fafc; border-radius: 6px; }
+        .upload-btn { border: 1px dashed #cbd5e1; background: #f8fafc; color: #64748b; padding: 8px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
+        .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .view-all-link { font-size: 12px; color: #1f7a3a; font-weight: 600; display: flex; align-items: center; gap: 4px; text-decoration: none; }
+        .pro-table { width: 100%; border-collapse: collapse; }
+        .pro-table th { text-align: left; padding: 12px 15px; font-size: 11px; color: #94a3b8; text-transform: uppercase; border-bottom: 1px solid #f1f5f9; }
+        .pro-table td { padding: 15px; border-bottom: 1px solid #f8fafc; font-size: 13px; }
+        .clickable-row { cursor: pointer; transition: 0.2s; }
+        .clickable-row:hover { background: #f0fdf4; }
+        .status-pill { background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 20px; font-weight: 700; font-size: 11px; }
+        .empty-state { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
         .accordion { border-bottom: 1px solid #f1f5f9; }
         .accordion button { width: 100%; padding: 14px 0; border: none; background: none; display: flex; align-items: center; gap: 10px; font-weight: 700; color: #334155; cursor: pointer; text-align: left; font-size: 13px; }
         .acc-body { max-height: 0; overflow: hidden; transition: 0.3s; color: #64748b; font-size: 12px; }
         .accordion.active .acc-body { max-height: 250px; padding-bottom: 15px; }
         .edit-substack { display: flex; flex-direction: column; gap: 8px; }
         .view-sub strong { color: #0f172a; display: block; margin-bottom: 4px; }
-        .pro-table { width: 100%; border-collapse: collapse; }
-        .pro-table th { text-align: left; padding: 12px 15px; font-size: 11px; color: #94a3b8; text-transform: uppercase; border-bottom: 1px solid #f1f5f9; }
-        .pro-table td { padding: 15px; border-bottom: 1px solid #f8fafc; font-size: 13px; }
-        .status-pill { background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 20px; font-weight: 700; font-size: 11px; }
-        .bold { font-weight: 700; }
-        .text-green { color: #1f7a3a; }
-        .text-muted { color: #94a3b8; }
         .loader-full { height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; }
         .spin { animation: spin 1s linear infinite; color: #1f7a3a; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
