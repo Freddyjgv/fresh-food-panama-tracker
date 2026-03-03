@@ -1,36 +1,37 @@
 // netlify/functions/getQuote.ts
 import type { Handler } from "@netlify/functions";
-import { getUserAndProfile, json, text, supabaseAdmin } from "./_util";
-
-function isPrivileged(role: string) {
-  const r = String(role || "").trim().toLowerCase();
-  return r === "admin" || r === "superadmin";
-}
+import { sbAdmin, getUserAndProfile, json, text, isPrivilegedRole } from "./_util";
 
 export const handler: Handler = async (event) => {
-  try {
-    if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
-    if (event.httpMethod !== "GET") return text(405, "Method not allowed");
+  if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
+  if (event.httpMethod !== "GET") return text(405, "Method not allowed");
 
+  try {
     const { user, profile } = await getUserAndProfile(event);
+
+    // Validaciones de seguridad con tipos seguros
     if (!user) return text(401, "Unauthorized");
     if (!profile) return text(401, "Unauthorized (missing profile)");
-    if (!isPrivileged(profile.role)) return text(403, "Forbidden");
+    
+    // Usamos isPrivilegedRole de _util.ts para consistencia
+    if (!isPrivilegedRole(profile.role || "")) return text(403, "Forbidden");
 
     const id = String(event.queryStringParameters?.id || "").trim();
     if (!id) return text(400, "Missing id");
 
-    const sb = supabaseAdmin();
-    const { data, error } = await sb
+    // Realizamos la consulta con el join que ya definiste
+    const { data, error } = await sbAdmin
       .from("quotes")
       .select("*, clients(name, contact_name, contact_email, phone, country, city)")
       .eq("id", id)
-      .single();
+      .maybeSingle(); // maybeSingle es más seguro que single para evitar errores 406 si no hay datos
 
-    if (error) return text(404, error.message);
+    if (error) return text(500, error.message);
+    if (!data) return text(404, "Quote not found");
 
     return json(200, data);
   } catch (e: any) {
+    console.error("Error en getQuote:", e.message);
     return text(500, e?.message || "Server error");
   }
 };

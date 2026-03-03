@@ -1,189 +1,123 @@
 // netlify/functions/createClient.ts
 import type { Handler } from "@netlify/functions";
-import { getUserAndProfile, json, text, supabaseAdmin } from "./_util";
-
-function cleanStr(v: any) {
-  return String(v ?? "").trim();
-}
-function cleanEmail(v: any) {
-  return String(v ?? "").trim().toLowerCase();
-}
+import { sbAdmin, getUserAndProfile, json, text, isPrivilegedRole } from "./_util";
 
 type CreateMode = "invite" | "manual";
 
-async function findUserByEmail(sb: ReturnType<typeof supabaseAdmin>, email: string) {
-  // listUsers existe en supabase-js v2.48
-  // Nota: por defecto trae una página; en la práctica suele bastar.
-  const { data, error } = await sb.auth.admin.listUsers();
-  if (error) throw error;
-
-  const users = data?.users || [];
-  const u = users.find((x: any) => String(x.email || "").toLowerCase() === email);
-  return u || null;
-}
-
 export const handler: Handler = async (event) => {
+  if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
+  if (event.httpMethod !== "POST") return text(405, "Method not allowed");
+
   try {
-    if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
-    if (event.httpMethod !== "POST") return text(405, "Method not allowed");
-
-    const { user, profile } = await getUserAndProfile(event);
-    if (!user || !profile) return text(401, "Unauthorized");
-
-    const role = String(profile.role || "").trim().toLowerCase();
-    const privileged = role === "admin" || role === "superadmin";
-    if (!privileged) return text(403, "Forbidden");
+    // 1. Verificación de Seguridad
+    const { user: adminUser, profile: adminProfile } = await getUserAndProfile(event);
+    
+    if (!adminUser || !adminProfile || !isPrivilegedRole(adminProfile.role || "")) {
+      return text(403, "Forbidden: No tienes permisos de administrador");
+    }
 
     const body = JSON.parse(event.body || "{}");
 
-    // ✅ Obligatorios (según tu regla)
-    const companyName = cleanStr(body.company_name || body.name); // clients.name (required)
-    const contactName = cleanStr(body.contact_name); // UX required
-    const email = cleanEmail(body.contact_email || body.email); // clients.contact_email (required)
-    const phone = cleanStr(body.phone); // UX required
-    const country = cleanStr(body.country); // UX required
+    // 2. Extracción y Limpieza
+    const email = String(body.contact_email || body.email || "").trim().toLowerCase();
+    const companyName = String(body.company_name || body.name || "").trim();
+    const contactName = String(body.contact_name || "").trim();
+    const mode = (String(body.mode || "invite").trim().toLowerCase()) as CreateMode;
+    const password = String(body.password || "").trim();
 
-    // Opcionales
-    const legalName = cleanStr(body.legal_name);
-    const taxId = cleanStr(body.tax_id);
-    const website = cleanStr(body.website);
-    const city = cleanStr(body.city);
-    const externalRef = cleanStr(body.external_ref);
-    const status = cleanStr(body.status || "active") || "active";
-
-    const mode = String(body.mode || "invite").trim().toLowerCase() as CreateMode; // invite | manual
-    const password = cleanStr(body.password);
-
-    if (!companyName) return text(400, "Falta: nombre de la empresa (company_name)");
-    if (!contactName) return text(400, "Falta: nombre del contacto (contact_name)");
-    if (!email) return text(400, "Falta: email (contact_email)");
-    if (!phone) return text(400, "Falta: teléfono (phone)");
-    if (!country) return text(400, "Falta: país (country)");
-
-    if (!["invite", "manual"].includes(mode)) {
-      return text(400, "mode inválido. Usa 'invite' o 'manual'");
-    }
-    if (mode === "manual" && !password) {
-      return text(400, "Para mode='manual' debes enviar password");
+    if (!email || !companyName) {
+      return json(400, { error: "El email y el nombre de la empresa son obligatorios." });
     }
 
-    const sb = supabaseAdmin();
-
-    // 1) Upsert en clients por email único
-    const { data: existingClient, error: exC } = await sb
+    // 3. Operación en Tabla 'clients'
+    const { data: clientData, error: clientError } = await sbAdmin
       .from("clients")
+      .upsert({
+        name: companyName,
+        contact_email: email,
+        contact_name: contactName || null,
+        tax_id: String(body.tax_id || "").trim() || null,
+        phone: String(body.phone || "").trim() || null,
+        country: String(body.country || "").trim() || null,
+        billing_address: String(body.billing_address || "").trim() || null,
+        shipping_address: String(body.shipping_address || "").trim() || null,
+        internal_notes: String(body.internal_notes || "").trim() || null,
+        status: String(body.status || "active").trim(),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'contact_email' })
       .select("id")
-      .eq("contact_email", email)
-      .maybeSingle();
+      .single();
 
-    if (exC) return text(500, exC.message);
+    if (clientError || !clientData) {
+      throw new Error(`Error en tabla clients: ${clientError?.message || "No data"}`);
+    }
+    const clientId = clientData.id;
 
-    let clientId: string;
-
-    if (existingClient?.id) {
-      const { error: upErr } = await sb
-        .from("clients")
-        .update({
-          name: companyName,
-          contact_name: contactName || null,
-          contact_email: email,
-          phone: phone || null,
-          country: country || null,
-          legal_name: legalName || null,
-          tax_id: taxId || null,
-          website: website || null,
-          city: city || null,
-          external_ref: externalRef || null,
-          status: status || "active",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", existingClient.id);
-
-      if (upErr) return text(500, upErr.message);
-      clientId = existingClient.id;
-    } else {
-      const { data: createdClient, error: cErr } = await sb
-        .from("clients")
-        .insert({
-          name: companyName,
-          contact_name: contactName || null,
-          contact_email: email,
-          phone: phone || null,
-          country: country || null,
-          legal_name: legalName || null,
-          tax_id: taxId || null,
-          website: website || null,
-          city: city || null,
-          external_ref: externalRef || null,
-          status: status || "active",
-        })
-        .select("id")
-        .single();
-
-      if (cErr) return text(500, cErr.message);
-      clientId = createdClient.id;
+   // 4. Gestión de Identidad (Auth)
+    let authUserId: string;
+    
+    const { data: listData, error: listError } = await sbAdmin.auth.admin.listUsers();
+    
+    if (listError || !listData?.users) {
+      throw new Error(`Error listando usuarios: ${listError?.message || "Sin datos"}`);
     }
 
-    // 2) Auth user: crear si no existe (reemplazo de getUserByEmail)
-    let authUserId: string | null = null;
+    // Forzamos el tipo 'any' en u para evitar el error 'never'
+    const existingAuthUser = (listData.users as any[]).find((u: any) => 
+      u.email?.toLowerCase() === email
+    );
 
-    try {
-      const u = await findUserByEmail(sb as any, email);
-      authUserId = u?.id || null;
-    } catch (e: any) {
-      return text(500, e?.message || "Error buscando usuario por email");
-    }
+    const userMetadata = { 
+      company_name: companyName, 
+      contact_name: contactName,
+      created_by_admin: adminUser.id 
+    };
 
-    if (!authUserId) {
+    if (!existingAuthUser) {
+      // CASO A: El usuario no existe en Auth, lo creamos/invitamos
       if (mode === "manual") {
-        const { data: createdU, error: cuErr } = await sb.auth.admin.createUser({
+        const { data: newUser, error: createError } = await sbAdmin.auth.admin.createUser({
           email,
-          password,
           email_confirm: true,
-          user_metadata: { company_name: companyName, contact_name: contactName },
+          password,
+          user_metadata: userMetadata
         });
-        if (cuErr) return text(500, cuErr.message);
-        authUserId = createdU.user?.id || null;
+        if (createError || !newUser.user) throw createError || new Error("Falla al crear usuario");
+        authUserId = newUser.user.id;
       } else {
-        const { data: inv, error: invErr } = await sb.auth.admin.inviteUserByEmail(email, {
-          data: { company_name: companyName, contact_name: contactName },
+        const { data: invite, error: inviteError } = await sbAdmin.auth.admin.inviteUserByEmail(email, {
+          data: userMetadata
         });
-        if (invErr) return text(500, invErr.message);
-        authUserId = inv.user?.id || null;
+        if (inviteError || !invite.user) throw inviteError || new Error("Falla al invitar usuario");
+        authUserId = invite.user.id;
       }
     } else {
-      // si ya existe usuario y quieres setear password manualmente
+      // CASO B: El usuario ya existe
+      authUserId = existingAuthUser.id;
       if (mode === "manual" && password) {
-        const { error: upUErr } = await sb.auth.admin.updateUserById(authUserId, {
-          password,
-          user_metadata: { company_name: companyName, contact_name: contactName },
-        });
-        if (upUErr) return text(500, upUErr.message);
+        await sbAdmin.auth.admin.updateUserById(authUserId, { password });
       }
     }
 
-    if (!authUserId) return text(500, "No se pudo resolver auth user id");
-
-    // 3) Profiles (según tu esquema REAL
-    const { error: pErr } = await sb.from("profiles").upsert(
-      {
+    // 5. Vinculación Final en 'profiles'
+    const { error: profileError } = await sbAdmin
+      .from("profiles")
+      .upsert({
         user_id: authUserId,
         role: "client",
         client_id: clientId,
-      },
-      { onConflict: "user_id" }
-    );
+      }, { onConflict: 'user_id' });
 
-    if (pErr) return text(500, `No se pudo upsert profiles: ${pErr.message}`);
+    if (profileError) throw new Error(`Error en vinculación de perfil: ${profileError.message}`);
 
     return json(200, {
       ok: true,
-      client_id: clientId,
-      auth_user_id: authUserId,
-      mode,
-      message: mode === "invite" ? "Cliente creado e invitación enviada." : "Cliente creado con password manual.",
+      clientId,
+      message: mode === "invite" ? "Invitación enviada correctamente." : "Usuario configurado con acceso manual."
     });
-  } catch (e: any) {
-    return text(500, e?.message || "Server error");
+
+  } catch (err: any) {
+    console.error("Falla en createClient:", err.message);
+    return json(500, { error: err.message || "Error interno del servidor" });
   }
 };

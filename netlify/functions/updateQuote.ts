@@ -1,29 +1,27 @@
 // netlify/functions/updateQuote.ts
 import type { Handler } from "@netlify/functions";
-import { getUserAndProfile, json, text, supabaseAdmin } from "./_util";
-
-function isPrivileged(role: string) {
-  const r = String(role || "").trim().toLowerCase();
-  return r === "admin" || r === "superadmin";
-}
+import { sbAdmin, getUserAndProfile, json, text, isPrivilegedRole } from "./_util";
 
 export const handler: Handler = async (event) => {
-  try {
-    if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
-    if (event.httpMethod !== "POST") return text(405, "Method not allowed");
+  if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
+  if (event.httpMethod !== "POST") return text(405, "Method not allowed");
 
+  try {
     const { user, profile } = await getUserAndProfile(event);
-    if (!user) return text(401, "Unauthorized");
-    if (!profile) return text(401, "Unauthorized (missing profile)");
-    if (!isPrivileged(profile.role)) return text(403, "Forbidden");
+    
+    // Validaciones de seguridad
+    if (!user || !profile) return text(401, "Unauthorized");
+    if (!isPrivilegedRole(profile.role || "")) return text(403, "Forbidden");
 
     const body = JSON.parse(event.body || "{}");
     const id = String(body.id || "").trim();
     if (!id) return text(400, "Missing id");
 
-    const patch: any = {};
+    const patch: any = {
+      updated_at: new Date().toISOString() // Añadimos marca de tiempo de edición
+    };
 
-    // permitimos actualizar solo lo que necesitamos
+    // Campos permitidos para actualización
     const allowed = [
       "client_id",
       "status",
@@ -40,19 +38,32 @@ export const handler: Handler = async (event) => {
       "totals",
     ];
 
+    // Llenamos el patch de forma segura
     for (const k of allowed) {
-      if (k in body) patch[k] = body[k];
+      if (Object.prototype.hasOwnProperty.call(body, k)) {
+        patch[k] = body[k];
+      }
     }
 
-    if ("mode" in patch) patch.mode = String(patch.mode || "").toUpperCase();
-    if ("currency" in patch) patch.currency = String(patch.currency || "").toUpperCase();
+    // Normalización de datos
+    if (patch.mode) patch.mode = String(patch.mode).toUpperCase();
+    if (patch.currency) patch.currency = String(patch.currency).toUpperCase();
 
-    const sb = supabaseAdmin();
-    const { error } = await sb.from("quotes").update(patch).eq("id", id);
-    if (error) return text(500, error.message);
+    // Actualización en base de datos
+    const { error } = await sbAdmin
+      .from("quotes")
+      .update(patch)
+      .eq("id", id);
 
-    return json(200, { ok: true });
+    if (error) {
+      console.error("Error DB updateQuote:", error.message);
+      return text(500, error.message);
+    }
+
+    return json(200, { ok: true, message: "Cotización actualizada" });
+
   } catch (e: any) {
+    console.error("Falla en updateQuote:", e.message);
     return text(500, e?.message || "Server error");
   }
 };

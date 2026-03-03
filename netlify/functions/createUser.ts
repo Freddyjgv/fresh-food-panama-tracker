@@ -1,5 +1,6 @@
+// netlify/functions/createUser.ts
 import type { Handler } from "@netlify/functions";
-import { getUserAndProfile, text, supabaseAdmin } from "./_util";
+import { getUserAndProfile, text, sbAdmin, json, isPrivilegedRole } from "./_util";
 
 function cleanEmail(v: any) {
   return String(v || "").trim().toLowerCase();
@@ -11,25 +12,27 @@ function cleanStr(v: any) {
 type TargetRole = "client" | "admin" | "superadmin";
 
 export const handler: Handler = async (event) => {
+  if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
+  if (event.httpMethod !== "POST") return text(405, "Method not allowed");
+
   try {
     const { user, profile } = await getUserAndProfile(event);
     if (!user || !profile) return text(401, "Unauthorized");
-    if (event.httpMethod !== "POST") return text(405, "Method not allowed");
 
     const actorRole = String(profile.role || "").trim().toLowerCase();
     const isAdmin = actorRole === "admin";
     const isSuperadmin = actorRole === "superadmin";
+    
+    // Solo admins y superadmins crean usuarios
     if (!isAdmin && !isSuperadmin) return text(403, "Forbidden");
 
     const body = JSON.parse(event.body || "{}");
 
-    // payload base
     const email = cleanEmail(body.email);
     const role = cleanStr(body.role).toLowerCase() as TargetRole;
     const invite = body.invite !== false; // default true
     const password = cleanStr(body.password || "");
 
-    // client linking/creation
     const clientId = cleanStr(body.clientId);
     const newClientEmail = cleanEmail(body.newClientEmail);
     const newClientName = cleanStr(body.newClientName);
@@ -37,22 +40,20 @@ export const handler: Handler = async (event) => {
     if (!email) return text(400, "email requerido");
     if (!["client", "admin", "superadmin"].includes(role)) return text(400, "role inválido");
 
-    // permisos: admin solo crea clients
+    // Restricción: admin solo crea clients
     if (isAdmin && role !== "client") return text(403, "Un admin solo puede crear clientes");
-
-    const sb = supabaseAdmin();
 
     // 1) Resolver client_id si role=client
     let resolvedClientId: string | null = null;
 
     if (role === "client") {
       if (clientId) {
-        const { data, error } = await sb.from("clients").select("id").eq("id", clientId).maybeSingle();
+        const { data, error } = await sbAdmin.from("clients").select("id").eq("id", clientId).maybeSingle();
         if (error) return text(500, error.message);
         if (!data) return text(400, "clientId no existe");
         resolvedClientId = data.id;
       } else if (newClientEmail) {
-        const { data: existing, error: exErr } = await sb
+        const { data: existing, error: exErr } = await sbAdmin
           .from("clients")
           .select("id")
           .eq("contact_email", newClientEmail)
@@ -63,7 +64,7 @@ export const handler: Handler = async (event) => {
           resolvedClientId = existing.id;
         } else {
           const nameToUse = newClientName || newClientEmail;
-          const { data: created, error: cErr } = await sb
+          const { data: created, error: cErr } = await sbAdmin
             .from("clients")
             .insert({ name: nameToUse, contact_email: newClientEmail })
             .select("id")
@@ -83,23 +84,23 @@ export const handler: Handler = async (event) => {
     let createdUserId: string | null = null;
 
     if (invite || !password) {
-      const { data, error } = await sb.auth.admin.inviteUserByEmail(email, { redirectTo });
+      const { data, error } = await sbAdmin.auth.admin.inviteUserByEmail(email, { redirectTo });
       if (error) return text(500, error.message);
       createdUserId = data.user?.id || null;
-      if (!createdUserId) return text(500, "No se pudo crear usuario (invite)");
     } else {
-      const { data, error } = await sb.auth.admin.createUser({
+      const { data, error } = await sbAdmin.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
       });
       if (error) return text(500, error.message);
       createdUserId = data.user?.id || null;
-      if (!createdUserId) return text(500, "No se pudo crear usuario (password)");
     }
 
+    if (!createdUserId) return text(500, "No se pudo crear el ID de usuario");
+
     // 3) Upsert profile
-    const { error: pErr } = await sb
+    const { error: pErr } = await sbAdmin
       .from("profiles")
       .upsert(
         { user_id: createdUserId, role, client_id: resolvedClientId },
@@ -108,17 +109,15 @@ export const handler: Handler = async (event) => {
 
     if (pErr) return text(500, pErr.message);
 
-    return text(
-      200,
-      JSON.stringify({
-        ok: true,
-        email,
-        role,
-        user_id: createdUserId,
-        client_id: resolvedClientId,
-        mode: invite || !password ? "invite" : "password",
-      })
-    );
+    return json(200, {
+      ok: true,
+      email,
+      role,
+      user_id: createdUserId,
+      client_id: resolvedClientId,
+      mode: invite || !password ? "invite" : "password",
+    });
+
   } catch (e: any) {
     return text(500, e?.message || "Server error");
   }

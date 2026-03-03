@@ -1,16 +1,17 @@
+// netlify/functions/registerFile.ts
 import type { Handler } from "@netlify/functions";
-import { getUserAndProfile, text, supabaseAdmin } from "./_util";
+import { getUserAndProfile, text, sbAdmin, json, isPrivilegedRole } from "./_util";
 
 export const handler: Handler = async (event) => {
+  if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
+  if (event.httpMethod !== "POST") return text(405, "Method not allowed");
+
   try {
     const { user, profile } = await getUserAndProfile(event);
     if (!user || !profile) return text(401, "Unauthorized");
-    if (event.httpMethod !== "POST") return text(405, "Method not allowed");
 
-    // ✅ admin o superadmin
-    const role = String(profile.role || "").trim().toLowerCase();
-    const privileged = role === "admin" || role === "superadmin";
-    if (!privileged) return text(403, "Forbidden");
+    // Validación de privilegios centralizada
+    if (!isPrivilegedRole(profile.role || "")) return text(403, "Forbidden");
 
     const body = JSON.parse(event.body || "{}");
     const shipmentId = String(body.shipmentId || "").trim();
@@ -20,15 +21,14 @@ export const handler: Handler = async (event) => {
     const storage_path = String(body.storage_path || "").trim();
     const bucket = String(body.bucket || "").trim();
 
+    // Validaciones de integridad de datos
     if (!shipmentId || !kind || !filename || !storage_path || !bucket) {
       return text(400, "Campos requeridos faltantes");
     }
     if (!["doc", "photo"].includes(kind)) return text(400, "kind inválido");
 
-    const sb = supabaseAdmin();
-
-    // (Opcional pero recomendado) Validar que el shipment exista
-    const { data: ship, error: sErr } = await sb
+    // 1. Validar que el embarque exista antes de registrar el archivo
+    const { data: ship, error: sErr } = await sbAdmin
       .from("shipments")
       .select("id")
       .eq("id", shipmentId)
@@ -37,19 +37,26 @@ export const handler: Handler = async (event) => {
     if (sErr) return text(500, sErr.message);
     if (!ship) return text(404, "Shipment not found");
 
-    const { error } = await sb.from("shipment_files").insert({
+    // 2. Insertar el registro en shipment_files
+    const { error } = await sbAdmin.from("shipment_files").insert({
       shipment_id: shipmentId,
       kind,
       doc_type: kind === "doc" ? doc_type : null,
       filename,
       storage_path,
       bucket,
-      uploaded_by: user.email,
+      uploaded_by: user.email, // Mantenemos el email como referencia del autor
     });
 
-    if (error) return text(500, error.message);
-    return text(200, "OK");
+    if (error) {
+      console.error("Error inserting shipment_file:", error.message);
+      return text(500, error.message);
+    }
+
+    return json(200, { ok: true, message: "Archivo registrado exitosamente" });
+
   } catch (e: any) {
+    console.error("Falla en registerFile:", e.message);
     return text(500, e?.message || "Server error");
   }
 };
