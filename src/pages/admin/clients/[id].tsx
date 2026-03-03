@@ -5,7 +5,7 @@ import { AdminLayout } from '../../../components/AdminLayout';
 import { 
   Building2, MapPin, Ship, Mail, Phone, ArrowLeft, 
   Edit3, Loader2, Plus, FileText, 
-  Globe, Package, Clock, CheckCircle2, User, Info, FileUp, Save, X, Shield, ExternalLink
+  Globe, Package, Clock, CheckCircle2, User, Info, FileUp, Save, X, Shield, ExternalLink, Hash
 } from 'lucide-react';
 import Link from 'next/link';
 import ShipmentDrawer from '../../../components/ShipmentDrawer';
@@ -26,8 +26,8 @@ export default function ClientDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<any>({});
 
+  // ✅ Mejora: Función de carga optimizada para ser llamada desde el Drawer
   const fetchData = useCallback(async (clientId: string) => {
-    setLoading(true);
     try {
       const { data: clientData, error: cErr } = await supabase
         .from('clients').select('*').eq('id', clientId).maybeSingle();
@@ -53,7 +53,7 @@ export default function ClientDetailPage() {
       setEditData(fullClient);
       setShipments(shipsRes || []);
     } catch (e: any) {
-      console.error(e.message);
+      console.error("Error fetching data:", e.message);
     } finally {
       setLoading(false);
     }
@@ -62,6 +62,11 @@ export default function ClientDetailPage() {
   useEffect(() => {
     if (router.isReady && id) fetchData(id as string);
   }, [id, router.isReady, fetchData]);
+
+  // ✅ Mejora: Handler para éxito del Drawer
+  const handleShipmentSuccess = () => {
+    if (id) fetchData(id as string); // Refresco automático de la tabla
+  };
 
   const handleLogoUpload = async (e: any) => {
     try {
@@ -90,7 +95,6 @@ export default function ClientDetailPage() {
 
   const saveClientData = async () => {
     try {
-      // ✅ Payload LIMPIO para evitar 'stack depth limit exceeded'
       const payload = {
         contact_email: editData.contact_email || '',
         phone: editData.phone || '',
@@ -112,7 +116,6 @@ export default function ClientDetailPage() {
 
       setClient({...editData});
       setIsEditing(false);
-      alert("Cambios guardados");
     } catch (err: any) {
       alert("Error actualizando: " + err.message);
     }
@@ -221,16 +224,33 @@ export default function ClientDetailPage() {
               </div>
               <table className="pro-table">
                 <thead>
-                  <tr><th>Código</th><th>Producto</th><th>Estado</th><th>Fecha</th></tr>
+                  <tr>
+                    <th>Código</th>
+                    <th>Producto / Variedad</th>
+                    <th>Destino</th>
+                    <th>Carga</th>
+                    <th>Estado</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {shipments.slice(0, 5).map(s => (
                     <Link key={s.id} href={`/admin/shipments/${s.id}`} legacyBehavior>
                         <tr className="clickable-row">
-                        <td className="bold text-green">{s.code}</td>
-                        <td>{s.product_name} <small className="text-muted">{s.product_variety}</small></td>
-                        <td><span className="status-pill">{s.status}</span></td>
-                        <td className="text-muted">{new Date(s.created_at).toLocaleDateString()}</td>
+                          <td className="bold text-green">{s.code}</td>
+                          <td>
+                            <div className="product-cell">
+                              <strong>{s.product_name}</strong>
+                              <span>{s.product_variety} {s.calibre && <small className="cal-tag">Cal: {s.calibre}</small>}</span>
+                            </div>
+                          </td>
+                          <td className="text-muted">{s.destination_port}</td>
+                          <td>
+                             <div className="charge-cell">
+                                <span>{s.boxes || 0} CX</span>
+                                <small>{s.weight || 0} Kg</small>
+                             </div>
+                          </td>
+                          <td><span className="status-pill">{s.status}</span></td>
                         </tr>
                     </Link>
                   ))}
@@ -295,7 +315,7 @@ export default function ClientDetailPage() {
         onClose={() => setIsDrawerOpen(false)}
         clientId={id as string} 
         clientName={client.name}
-        onSuccess={() => fetchData(id as string)}
+        onSuccess={handleShipmentSuccess} // ✅ Refresco automático al crear
         defaultIncoterm={client.default_incoterm}
       />
 
@@ -342,6 +362,13 @@ export default function ClientDetailPage() {
         .pro-table td { padding: 15px; border-bottom: 1px solid #f8fafc; font-size: 13px; }
         .clickable-row { cursor: pointer; transition: 0.2s; }
         .clickable-row:hover { background: #f0fdf4; }
+        .product-cell { display: flex; flex-direction: column; }
+        .product-cell strong { color: #0f172a; }
+        .product-cell span { font-size: 11px; color: #64748b; }
+        .cal-tag { background: #f1f5f9; padding: 1px 4px; border-radius: 4px; color: #475569; font-weight: 700; }
+        .charge-cell { display: flex; flex-direction: column; }
+        .charge-cell span { font-weight: 700; color: #1e293b; }
+        .charge-cell small { font-size: 10px; color: #94a3b8; }
         .status-pill { background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 20px; font-weight: 700; font-size: 11px; }
         .empty-state { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
         .accordion { border-bottom: 1px solid #f1f5f9; }
