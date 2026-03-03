@@ -1,75 +1,62 @@
-import { useState, useEffect } from 'react';
-import { X, Plane, Ship, Loader2, Globe, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Save, Ship, MapPin, Package, Anchor, Plane } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
-interface Props {
+interface ShipmentDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   clientId: string;
   clientName: string;
   onSuccess: () => void;
-  shippingAddresses: any[];
-  defaultIncoterm?: string; // Prop nueva
+  defaultIncoterm?: string; // Recibe el incoterm del cliente
 }
 
 const INCOTERMS = ['EXW', 'FCA', 'FAS', 'FOB', 'CFR', 'CIF', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP'];
 
-export default function ShipmentDrawer({ isOpen, onClose, clientId, onSuccess, shippingAddresses, defaultIncoterm }: Props) {
+export default function ShipmentDrawer({ 
+  isOpen, onClose, clientId, clientName, onSuccess, defaultIncoterm 
+}: ShipmentDrawerProps) {
+  
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<'Aérea' | 'Marítima'>('Aérea');
-
-  const [f, setF] = useState({
-    destination: '',
-    incoterm: defaultIncoterm || 'FOB',
-    product_name: 'Piña',
-    product_variety: 'MD2 Golden',
-    boxes: '',
-    pallets: '',
-    weight_kg: '',
-    shipping_address: '',
-    flight_number: '',
-    awb: ''
+  const [formData, setFormData] = useState({
+    product_name: '',
+    product_variety: '',
+    incoterm: 'FOB',
+    destination_point: '', // Ahora es un campo de texto libre para Puerto/Aeropuerto
+    status: 'Booking Pending'
   });
 
-  // Resetear el incoterm si cambia el default en el cliente
+  // Sincronizar el Incoterm por defecto cuando abre el drawer
   useEffect(() => {
-    if (defaultIncoterm) setF(prev => ({ ...prev, incoterm: defaultIncoterm }));
-  }, [defaultIncoterm]);
+    if (isOpen && defaultIncoterm) {
+      setFormData(prev => ({ ...prev, incoterm: defaultIncoterm }));
+    }
+  }, [isOpen, defaultIncoterm]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const payload = {
-        clientId: clientId,
-        destination: f.destination,
-        incoterm: f.incoterm,
-        boxes: f.boxes ? parseInt(f.boxes) : null,
-        pallets: f.pallets ? parseInt(f.pallets) : null,
-        weight_kg: f.weight_kg ? parseFloat(f.weight_kg) : null,
-        product_name: f.product_name,
-        product_variety: f.product_variety,
-        product_mode: mode,
-        shipping_address: f.shipping_address,
-      };
+      const shipmentCode = `SHP-${Math.floor(1000 + Math.random() * 9000)}`;
 
-      // LLAMADA A TU FUNCIÓN DE NETLIFY
-      const response = await fetch('/.netlify/functions/create-shipment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const { error } = await supabase.from('shipments').insert([{
+        client_id: clientId,
+        code: shipmentCode,
+        product_name: formData.product_name,
+        product_variety: formData.product_variety,
+        incoterm: formData.incoterm,
+        destination_port: formData.destination_point, // Guardamos el punto de destino
+        status: formData.status
+      }]);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || "Error en el servidor");
-      }
-
+      if (error) throw error;
+      
       onSuccess();
       onClose();
+      setFormData({ product_name: '', product_variety: '', incoterm: defaultIncoterm || 'FOB', destination_point: '', status: 'Booking Pending' });
     } catch (err: any) {
-      alert("Error: " + err.message);
+      alert('Error creando embarque: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -78,90 +65,100 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, onSuccess, s
   if (!isOpen) return null;
 
   return (
-    <>
-      <div className="drawer-overlay" onClick={onClose} />
-      <div className="drawer-container">
-        <div className="drawer-header">
+    <div className="drawer-overlay">
+      <div className="drawer-content">
+        <header className="drawer-header">
           <div>
-            <h3>Crear Embarque Operativo</h3>
-            <span className="auto-badge">Correlativo Automático FFP-{new Date().getFullYear()}</span>
+            <h2>Nuevo Embarque</h2>
+            <p>Cliente: <strong>{clientName}</strong></p>
           </div>
-          <button onClick={onClose} className="close-btn"><X size={20}/></button>
-        </div>
+          <button onClick={onClose} className="close-btn"><X size={24} /></button>
+        </header>
 
         <form onSubmit={handleSubmit} className="drawer-form">
-          {/* Selector de Modo */}
-          <div className="mode-selector">
-            <button type="button" className={mode === 'Aérea' ? 'active' : ''} onClick={() => setMode('Aérea')}>
-              <Plane size={16}/> Aéreo
-            </button>
-            <button type="button" className={mode === 'Marítima' ? 'active' : ''} onClick={() => setMode('Marítima')}>
-              <Ship size={16}/> Marítimo
-            </button>
-          </div>
-
-          {/* Destino e Incoterm */}
-          <div className="form-row">
-            <div className="field">
-              <label><Globe size={12}/> Destino (IATA/Puerto)</label>
-              <input required placeholder="Ej: MAD, AMS, MIA" value={f.destination} onChange={e=>setF({...f, destination: e.target.value.toUpperCase()})} />
-            </div>
-            <div className="field">
-              <label><ShieldCheck size={12}/> Incoterm</label>
-              <select value={f.incoterm} onChange={e=>setF({...f, incoterm: e.target.value})}>
-                {INCOTERMS.map(i => <option key={i} value={i}>{i}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="field">
-            <label>Punto de Entrega Final</label>
-            <select required value={f.shipping_address} onChange={e=>setF({...f, shipping_address: e.target.value})}>
-              <option value="">Seleccionar dirección...</option>
-              {shippingAddresses.map(a => <option key={a.id} value={a.address}>{a.address}</option>)}
-            </select>
-          </div>
-
-          <div className="form-row">
-            <div className="field">
+          <section className="form-section">
+            <h3><Package size={18} /> Detalles del Producto</h3>
+            <div className="input-group">
               <label>Producto</label>
-              <input required value={f.product_name} onChange={e=>setF({...f, product_name: e.target.value})} />
+              <input 
+                required 
+                placeholder="Ej: Piña MD2" 
+                value={formData.product_name}
+                onChange={e => setFormData({...formData, product_name: e.target.value})}
+              />
             </div>
-            <div className="field">
-              <label>Variedad</label>
-              <input value={f.product_variety} onChange={e=>setF({...f, product_variety: e.target.value})} />
+            <div className="input-group">
+              <label>Variedad / Calibre</label>
+              <input 
+                placeholder="Ej: Calibre 7, Premium" 
+                value={formData.product_variety}
+                onChange={e => setFormData({...formData, product_variety: e.target.value})}
+              />
             </div>
-          </div>
+          </section>
 
-          <div className="form-row-3">
-            <div className="field"><label>Cajas</label><input type="number" value={f.boxes} onChange={e=>setF({...f, boxes: e.target.value})} /></div>
-            <div className="field"><label>Pallets</label><input type="number" value={f.pallets} onChange={e=>setF({...f, pallets: e.target.value})} /></div>
-            <div className="field"><label>Peso (Kg)</label><input type="number" step="0.01" value={f.weight_kg} onChange={e=>setF({...f, weight_kg: e.target.value})} /></div>
-          </div>
+          <section className="form-section">
+            <h3><Anchor size={18} /> Logística de Destino</h3>
+            <div className="grid-2">
+              <div className="input-group">
+                <label>Incoterm</label>
+                <select 
+                  value={formData.incoterm}
+                  onChange={e => setFormData({...formData, incoterm: e.target.value})}
+                >
+                  {INCOTERMS.map(i => <option key={i} value={i}>{i}</option>)}
+                </select>
+              </div>
+              <div className="input-group">
+                <label>Puerto / Aeropuerto Destino</label>
+                <div className="input-with-icon">
+                  <MapPin size={14} className="inner-icon" />
+                  <input 
+                    required
+                    placeholder="Ej: Puerto de Rotterdam, NL" 
+                    value={formData.destination_point}
+                    onChange={e => setFormData({...formData, destination_point: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
 
-          <button type="submit" className="submit-btn" disabled={loading}>
-            {loading ? <Loader2 className="spin" /> : 'Confirmar y Generar Código'}
-          </button>
+          <footer className="drawer-footer">
+            <button type="button" onClick={onClose} className="btn-abort">Cancelar</button>
+            <button type="submit" disabled={loading} className="btn-submit">
+              {loading ? 'Creando...' : <><Save size={18} /> Crear Embarque</>}
+            </button>
+          </footer>
         </form>
       </div>
 
       <style jsx>{`
-        .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); backdrop-filter: blur(4px); z-index: 1000; }
-        .drawer-container { position: fixed; right: 0; top: 0; height: 100%; width: 450px; background: white; z-index: 1001; padding: 40px; box-shadow: -10px 0 40px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
-        .drawer-header { margin-bottom: 30px; display: flex; justify-content: space-between; }
-        .auto-badge { font-size: 10px; color: #1f7a3a; font-weight: 800; background: #dcfce7; padding: 2px 8px; border-radius: 4px; }
-        .drawer-form { display: flex; flex-direction: column; gap: 20px; }
-        .mode-selector { display: flex; gap: 8px; background: #f1f5f9; padding: 5px; border-radius: 12px; }
-        .mode-selector button { flex: 1; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; background: transparent; color: #64748b; }
-        .mode-selector button.active { background: white; color: #1f7a3a; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        .field label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 6px; }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); z-index: 1000; display: flex; justify-content: flex-end; }
+        .drawer-content { width: 450px; background: white; height: 100%; box-shadow: -10px 0 30px rgba(0,0,0,0.1); display: flex; flex-direction: column; animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        
+        .drawer-header { padding: 30px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+        .drawer-header h2 { margin: 0; font-size: 20px; color: #0f172a; }
+        .drawer-header p { margin: 5px 0 0; font-size: 14px; color: #64748b; }
+        
+        .drawer-form { padding: 30px; flex: 1; overflow-y: auto; }
+        .form-section { margin-bottom: 35px; }
+        .form-section h3 { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #1f7a3a; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.05em; }
+        
+        .input-group { margin-bottom: 20px; }
+        .input-group label { display: block; font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 8px; }
         input, select { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; }
-        .submit-btn { background: #1f7a3a; color: white; border: none; padding: 18px; border-radius: 12px; font-weight: 700; cursor: pointer; margin-top: 20px; font-size: 15px; }
-        .spin { animation: rotate 1s linear infinite; }
-        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .input-with-icon { position: relative; }
+        .inner-icon { position: absolute; left: 12px; top: 15px; color: #94a3b8; }
+        .input-with-icon input { padding-left: 35px; }
+
+        .drawer-footer { margin-top: 20px; display: flex; gap: 12px; }
+        .btn-submit { flex: 2; background: #1f7a3a; color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-abort { flex: 1; background: #f1f5f9; color: #475569; border: none; padding: 14px; border-radius: 12px; font-weight: 600; cursor: pointer; }
       `}</style>
-    </>
+    </div>
   );
 }
