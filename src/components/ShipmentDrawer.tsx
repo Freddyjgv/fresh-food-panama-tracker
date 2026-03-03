@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { X, Plane, Ship, Package, Info, Calendar, FileText, Hash } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Plane, Ship, Loader2, Globe, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
 interface Props {
@@ -9,42 +9,63 @@ interface Props {
   clientName: string;
   onSuccess: () => void;
   shippingAddresses: any[];
+  defaultIncoterm?: string; // Prop nueva
 }
 
-export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, onSuccess, shippingAddresses }: Props) {
+const INCOTERMS = ['EXW', 'FCA', 'FAS', 'FOB', 'CFR', 'CIF', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP'];
+
+export default function ShipmentDrawer({ isOpen, onClose, clientId, onSuccess, shippingAddresses, defaultIncoterm }: Props) {
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<'Aéreo' | 'Marítimo'>('Aéreo');
+  const [mode, setMode] = useState<'Aérea' | 'Marítima'>('Aérea');
 
   const [f, setF] = useState({
-    code: '',
     destination: '',
+    incoterm: defaultIncoterm || 'FOB',
     product_name: 'Piña',
-    product_variety: 'MD2',
-    product_mode: 'Aéreo',
+    product_variety: 'MD2 Golden',
     boxes: '',
     pallets: '',
     weight_kg: '',
+    shipping_address: '',
     flight_number: '',
-    awb: '',
-    caliber: '',
-    color: '',
-    status: 'Registrado'
+    awb: ''
   });
+
+  // Resetear el incoterm si cambia el default en el cliente
+  useEffect(() => {
+    if (defaultIncoterm) setF(prev => ({ ...prev, incoterm: defaultIncoterm }));
+  }, [defaultIncoterm]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
     try {
-      const { error } = await supabase.from('shipments').insert([{
-        ...f,
-        client_id: clientId,
-        product_mode: mode,
+      const payload = {
+        clientId: clientId,
+        destination: f.destination,
+        incoterm: f.incoterm,
         boxes: f.boxes ? parseInt(f.boxes) : null,
         pallets: f.pallets ? parseInt(f.pallets) : null,
         weight_kg: f.weight_kg ? parseFloat(f.weight_kg) : null,
-      }]);
+        product_name: f.product_name,
+        product_variety: f.product_variety,
+        product_mode: mode,
+        shipping_address: f.shipping_address,
+      };
 
-      if (error) throw error;
+      // LLAMADA A TU FUNCIÓN DE NETLIFY
+      const response = await fetch('/.netlify/functions/create-shipment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Error en el servidor");
+      }
+
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -58,106 +79,88 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
 
   return (
     <>
-      <div className="overlay" onClick={onClose} />
-      <div className="drawer">
+      <div className="drawer-overlay" onClick={onClose} />
+      <div className="drawer-container">
         <div className="drawer-header">
           <div>
-            <h3>Nuevo Embarque</h3>
-            <p>Cliente: <strong>{clientName}</strong></p>
+            <h3>Crear Embarque Operativo</h3>
+            <span className="auto-badge">Correlativo Automático FFP-{new Date().getFullYear()}</span>
           </div>
-          <button className="close-btn" onClick={onClose}><X size={20}/></button>
+          <button onClick={onClose} className="close-btn"><X size={20}/></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="drawer-content">
-          {/* MODO DE TRANSPORTE */}
-          <div className="mode-tabs">
-            <button type="button" className={mode === 'Aéreo' ? 'active' : ''} onClick={() => setMode('Aéreo')}>
+        <form onSubmit={handleSubmit} className="drawer-form">
+          {/* Selector de Modo */}
+          <div className="mode-selector">
+            <button type="button" className={mode === 'Aérea' ? 'active' : ''} onClick={() => setMode('Aérea')}>
               <Plane size={16}/> Aéreo
             </button>
-            <button type="button" className={mode === 'Marítimo' ? 'active' : ''} onClick={() => setMode('Marítimo')}>
+            <button type="button" className={mode === 'Marítima' ? 'active' : ''} onClick={() => setMode('Marítima')}>
               <Ship size={16}/> Marítimo
             </button>
           </div>
 
-          {/* DATOS BÁSICOS */}
-          <section className="form-section">
-            <label><Hash size={14}/> Identificación</label>
-            <div className="grid-2">
-              <input required placeholder="Código (FFP-XXXX)" value={f.code} onChange={e=>setF({...f, code: e.target.value})} />
-              <select required value={f.destination} onChange={e=>setF({...f, destination: e.target.value})}>
-                <option value="">Destino Final...</option>
-                {shippingAddresses.map(a => <option key={a.id} value={a.address}>{a.address}</option>)}
+          {/* Destino e Incoterm */}
+          <div className="form-row">
+            <div className="field">
+              <label><Globe size={12}/> Destino (IATA/Puerto)</label>
+              <input required placeholder="Ej: MAD, AMS, MIA" value={f.destination} onChange={e=>setF({...f, destination: e.target.value.toUpperCase()})} />
+            </div>
+            <div className="field">
+              <label><ShieldCheck size={12}/> Incoterm</label>
+              <select value={f.incoterm} onChange={e=>setF({...f, incoterm: e.target.value})}>
+                {INCOTERMS.map(i => <option key={i} value={i}>{i}</option>)}
               </select>
             </div>
-          </section>
+          </div>
 
-          {/* ATRIBUTOS DE FRUTA */}
-          <section className="form-section">
-            <label><Package size={14}/> Detalles del Producto</label>
-            <div className="grid-2">
-              <select value={f.product_name} onChange={e=>setF({...f, product_name: e.target.value})}>
-                <option value="Piña">Piña</option>
-                <option value="Pitahaya">Pitahaya</option>
-                <option value="Guayaba">Guayaba</option>
-              </select>
-              <input placeholder="Variedad (Ej: MD2, Amarilla)" value={f.product_variety} onChange={e=>setF({...f, product_variety: e.target.value})} />
+          <div className="field">
+            <label>Punto de Entrega Final</label>
+            <select required value={f.shipping_address} onChange={e=>setF({...f, shipping_address: e.target.value})}>
+              <option value="">Seleccionar dirección...</option>
+              {shippingAddresses.map(a => <option key={a.id} value={a.address}>{a.address}</option>)}
+            </select>
+          </div>
+
+          <div className="form-row">
+            <div className="field">
+              <label>Producto</label>
+              <input required value={f.product_name} onChange={e=>setF({...f, product_name: e.target.value})} />
             </div>
-            <div className="grid-2 mt-10">
-              <input placeholder="Calibre (Ej: 6, 7, 8)" value={f.caliber} onChange={e=>setF({...f, caliber: e.target.value})} />
-              <input placeholder="Color / Grado" value={f.color} onChange={e=>setF({...f, color: e.target.value})} />
+            <div className="field">
+              <label>Variedad</label>
+              <input value={f.product_variety} onChange={e=>setF({...f, product_variety: e.target.value})} />
             </div>
-          </section>
+          </div>
 
-          {/* CARGA FISICA */}
-          <section className="form-section">
-            <label><Info size={14}/> Pesos y Medidas</label>
-            <div className="grid-3">
-              <input type="number" placeholder="Cajas" value={f.boxes} onChange={e=>setF({...f, boxes: e.target.value})} />
-              <input type="number" placeholder="Pallets" value={f.pallets} onChange={e=>setF({...f, pallets: e.target.value})} />
-              <input type="number" step="0.01" placeholder="Peso Kg" value={f.weight_kg} onChange={e=>setF({...f, weight_kg: e.target.value})} />
-            </div>
-          </section>
+          <div className="form-row-3">
+            <div className="field"><label>Cajas</label><input type="number" value={f.boxes} onChange={e=>setF({...f, boxes: e.target.value})} /></div>
+            <div className="field"><label>Pallets</label><input type="number" value={f.pallets} onChange={e=>setF({...f, pallets: e.target.value})} /></div>
+            <div className="field"><label>Peso (Kg)</label><input type="number" step="0.01" value={f.weight_kg} onChange={e=>setF({...f, weight_kg: e.target.value})} /></div>
+          </div>
 
-          {/* LOGISTICA ESPECIFICA */}
-          {mode === 'Aéreo' && (
-            <section className="form-section">
-              <label><Plane size={14}/> Datos de Vuelo</label>
-              <div className="grid-2">
-                <input placeholder="No. Vuelo" value={f.flight_number} onChange={e=>setF({...f, flight_number: e.target.value})} />
-                <input placeholder="AWB (Guía)" value={f.awb} onChange={e=>setF({...f, awb: e.target.value})} />
-              </div>
-            </section>
-          )}
-
-          <button className="submit-btn" disabled={loading}>
-            {loading ? "Registrando..." : "Crear Embarque"}
+          <button type="submit" className="submit-btn" disabled={loading}>
+            {loading ? <Loader2 className="spin" /> : 'Confirmar y Generar Código'}
           </button>
         </form>
       </div>
 
       <style jsx>{`
-        .overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px); z-index: 1000; }
-        .drawer { position: fixed; right: 0; top: 0; height: 100%; width: 420px; background: white; z-index: 1001; display: flex; flex-direction: column; box-shadow: -10px 0 30px rgba(0,0,0,0.1); }
-        .drawer-header { padding: 25px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
-        .drawer-header h3 { margin: 0; font-size: 18px; color: #1e293b; }
-        .drawer-header p { margin: 2px 0 0; font-size: 13px; color: #64748b; }
-        .drawer-content { padding: 25px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 20px; }
-        
-        .mode-tabs { display: flex; background: #f1f5f9; padding: 4px; border-radius: 12px; }
-        .mode-tabs button { flex: 1; padding: 10px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; color: #64748b; background: transparent; transition: 0.2s; }
-        .mode-tabs button.active { background: white; color: #1f7a3a; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-
-        .form-section label { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; color: #1f7a3a; text-transform: uppercase; margin-bottom: 10px; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-        .mt-10 { margin-top: 10px; }
-        
-        input, select { padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; width: 100%; }
-        input:focus { border-color: #1f7a3a; outline: none; box-shadow: 0 0 0 2px rgba(31, 122, 58, 0.1); }
-
-        .submit-btn { background: #1f7a3a; color: white; border: none; padding: 16px; border-radius: 12px; font-weight: 700; cursor: pointer; transition: 0.2s; margin-top: 10px; }
-        .submit-btn:hover { background: #166534; transform: translateY(-2px); }
-        .close-btn { background: #f8fafc; border: none; padding: 8px; border-radius: 50%; cursor: pointer; color: #64748b; }
+        .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); backdrop-filter: blur(4px); z-index: 1000; }
+        .drawer-container { position: fixed; right: 0; top: 0; height: 100%; width: 450px; background: white; z-index: 1001; padding: 40px; box-shadow: -10px 0 40px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .drawer-header { margin-bottom: 30px; display: flex; justify-content: space-between; }
+        .auto-badge { font-size: 10px; color: #1f7a3a; font-weight: 800; background: #dcfce7; padding: 2px 8px; border-radius: 4px; }
+        .drawer-form { display: flex; flex-direction: column; gap: 20px; }
+        .mode-selector { display: flex; gap: 8px; background: #f1f5f9; padding: 5px; border-radius: 12px; }
+        .mode-selector button { flex: 1; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; background: transparent; color: #64748b; }
+        .mode-selector button.active { background: white; color: #1f7a3a; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .field label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 6px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        input, select { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; }
+        .submit-btn { background: #1f7a3a; color: white; border: none; padding: 18px; border-radius: 12px; font-weight: 700; cursor: pointer; margin-top: 20px; font-size: 15px; }
+        .spin { animation: rotate 1s linear infinite; }
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </>
   );

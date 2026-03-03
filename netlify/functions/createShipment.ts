@@ -36,18 +36,20 @@ export const handler: Handler = async (event) => {
 
     if (clientErr || !clientData) return text(400, "Cliente no encontrado en el directorio");
 
-    // 2) Preparar datos del embarque (Prioridad: Body > Ficha Cliente)
+    // 2) Preparar datos del embarque
     const destination = cleanStr(body.destination).toUpperCase();
+    const incoterm = cleanStr(body.incoterm).toUpperCase() || "N/A"; // Nuevo: Incoterm
     const boxes = body.boxes ?? null;
     const pallets = body.pallets ?? null;
     const weight_kg = body.weight_kg ?? null;
 
-    // Capturamos las direcciones (vienen del selector que hicimos en el paso anterior)
+    // Direcciones
     const shipping_address = cleanStr(body.shipping_address); 
     const billing_address = cleanStr(body.billing_address) || clientData.billing_address;
 
-    if (!["MAD", "AMS", "CDG"].includes(destination)) {
-      return text(400, "Destino inválido (Solo MAD, AMS, CDG)");
+    // VALIDACIÓN DE DESTINO (Ahora flexible)
+    if (!destination || destination.length < 3) {
+      return text(400, "Código de destino inválido (Mínimo 3 caracteres, ej: PTY, MAD, MIA)");
     }
 
     const product_name = cleanStr(body.product_name || body.productName) || "Piña";
@@ -66,13 +68,14 @@ export const handler: Handler = async (event) => {
     const next = (count ?? 0) + 1;
     const code = `${prefix}${pad(next, 4)}`;
 
-    // 4) Insertar Embarque con toda la metadata logística
+    // 4) Insertar Embarque con toda la metadata logística e INCOTERM
     const { data: newShip, error: shipErr } = await sbAdmin
       .from("shipments")
       .insert({
         client_id: clientData.id,
         code,
         destination,
+        incoterm, // <--- CAMBIO: Guardamos el Incoterm
         boxes,
         pallets,
         weight_kg,
@@ -80,7 +83,6 @@ export const handler: Handler = async (event) => {
         product_name,
         product_variety,
         product_mode,
-        // NUEVOS CAMPOS MAESTROS
         shipping_address, 
         billing_address,
         client_phone: clientData.phone,
@@ -91,11 +93,11 @@ export const handler: Handler = async (event) => {
 
     if (shipErr || !newShip) throw shipErr;
 
-    // 5) Hito (Milestone) inicial
+    // 5) Hito (Milestone) inicial (Incluyendo Incoterm en la nota)
     await sbAdmin.from("milestones").upsert({
       shipment_id: newShip.id,
       type: "CREATED",
-      note: `Embarque generado para despacho a ${destination}`,
+      note: `Embarque generado (${incoterm}) para despacho a ${destination}`,
       actor_email: user.email,
       at: new Date().toISOString(),
     }, { onConflict: "shipment_id,type" });

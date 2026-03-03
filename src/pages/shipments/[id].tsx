@@ -9,7 +9,7 @@ import { ProgressStepper } from "../../components/ProgressStepper";
 import { Timeline as ModernTimeline } from "../../components/Timeline";
 import { labelStatus, statusBadgeClass } from "../../lib/shipmentFlow";
 
-import { FileText, Image as ImageIcon, Download, Info, ArrowLeft, Package } from "lucide-react";
+import { FileText, Image as ImageIcon, Download, Info, ArrowLeft, Package, MapPin, Shield } from "lucide-react";
 
 /* =======================
    Types
@@ -28,20 +28,18 @@ type ShipmentDetail = {
   id: string;
   code: string;
   destination: string;
+  incoterm?: string | null; // ✅ Agregado: Incoterm
   status: string;
   created_at: string;
 
-  // ✅ Cliente (soporta varias formas del backend)
   client_name?: string | null;
   clients?: { name?: string | null } | null;
   client?: { name?: string | null } | null;
 
-  // ✅ Multi-product (single product for now)
   product_name?: string | null;
   product_variety?: string | null;
   product_mode?: string | null;
 
-  // ✅ Datos extra (lectura en client)
   caliber?: string | null;
   color?: string | null;
 
@@ -62,22 +60,18 @@ type ShipmentDetail = {
 function fmtDate(iso?: string | null) {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString("es-PA");
+    return new Date(iso).toLocaleDateString("es-PA", {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+    });
   } catch {
     return String(iso);
   }
 }
 
 function clientNameLine(d: ShipmentDetail) {
-  return (
-    String(d.client_name || d.clients?.name || d.client?.name || "").trim() || "—"
-  );
-}
-
-function productVarietyLine(d: ShipmentDetail) {
-  const name = String(d.product_name || "").trim();
-  const variety = String(d.product_variety || "").trim();
-  return [name, variety].filter(Boolean).join(" ") || "—";
+  return String(d.client_name || d.clients?.name || d.client?.name || "").trim() || "—";
 }
 
 function productLine(d: ShipmentDetail) {
@@ -88,16 +82,13 @@ function productLine(d: ShipmentDetail) {
   const mode = (() => {
     const s = modeRaw.toLowerCase();
     if (!s) return "";
-    if (s === "aerea" || s === "aérea" || s === "air") return "Aérea";
-    if (s === "maritima" || s === "marítima" || s === "sea") return "Marítima";
-    if (s === "terrestre" || s === "land") return "Terrestre";
+    if (s.includes("aere") || s === "air") return "Aérea";
+    if (s.includes("marit") || s === "sea") return "Marítima";
     return modeRaw;
   })();
 
   const left = [name, variety].filter(Boolean).join(" ");
-  const full = [left, mode].filter(Boolean).join(" · ");
-
-  return full || "—";
+  return [left, mode].filter(Boolean).join(" · ") || "—";
 }
 
 export default function ShipmentDetailPage() {
@@ -110,33 +101,23 @@ export default function ShipmentDetailPage() {
 
   async function load(shipmentId: string) {
     setLoading(true);
-    setError(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) { window.location.href = "/login"; return; }
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-
-    if (!token) {
-      window.location.href = "/login";
-      return;
-    }
-
-    const res = await fetch(
-      `/.netlify/functions/getShipment?id=${encodeURIComponent(shipmentId)}`,
-      {
+      const res = await fetch(`/.netlify/functions/getShipment?id=${encodeURIComponent(shipmentId)}`, {
         headers: { Authorization: `Bearer ${token}` },
-      }
-    );
+      });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      setError(text || "Error cargando embarque");
+      if (!res.ok) throw new Error(await res.text() || "Error cargando embarque");
+      const json = await res.json();
+      setData(json);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const json = (await res.json()) as ShipmentDetail;
-    setData(json);
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -146,527 +127,143 @@ export default function ShipmentDetailPage() {
   async function download(fileId: string) {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
-    if (!token) return;
-
-    const res = await fetch(
-      `/.netlify/functions/getDownloadUrl?fileId=${encodeURIComponent(fileId)}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-
-    if (!res.ok) {
-      alert("No se pudo generar el link de descarga");
-      return;
-    }
-
+    const res = await fetch(`/.netlify/functions/getDownloadUrl?fileId=${encodeURIComponent(fileId)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+    });
     const { url } = await res.json();
     window.open(url, "_blank");
   }
 
-  /* =======================
-     Hitos (ÚNICA FUENTE)
-     ✅ Timeline: solo hitos existentes (con fecha)
-  ======================= */
-  const steps = useMemo(
-    () => [
-      { type: "CREATED", label: "Creado" },
-      { type: "PACKED", label: "En Empaque" },
-      { type: "DOCS_READY", label: "Documentación lista" },
-      { type: "AT_ORIGIN", label: "En Origen" },
-      { type: "IN_TRANSIT", label: "En tránsito a destino" },
-      { type: "AT_DESTINATION", label: "En Destino" },
-    ],
-    []
-  );
-
-  // ✅ Adaptamos tu estructura (at) a la que usa Timeline (created_at)
   const normalizedMilestonesForTimeline = useMemo(() => {
     const list = data?.milestones ?? [];
+    return list.map((m, idx) => ({
+      id: `${m.type}-${idx}`,
+      type: m.type,
+      created_at: m.at,
+      note: m.note,
+    })).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [data?.milestones]);
 
-    // Mapa de hitos reales (registrados en DB)
-    const hitMap = new Map<string, Milestone>();
-    list.forEach((m) => hitMap.set(String(m.type).toUpperCase(), m));
-
-    // SOLO devolvemos los hitos que existen (tienen "at")
-    return steps
-      .map((s, idx) => {
-        const hit = hitMap.get(String(s.type).toUpperCase());
-        const at = hit?.at ?? null;
-        if (!at) return null;
-        return {
-          id: `${s.type}-${idx}`,
-          type: s.type,
-          created_at: at, // 👈 clave para Timeline
-          note: hit?.note ?? null,
-        };
-      })
-      .filter(Boolean) as Array<{
-      id: string;
-      type: string;
-      created_at: string;
-      note?: string | null;
-    }>;
-  }, [data?.milestones, steps]);
-
-  const clientName = data ? clientNameLine(data) : "—";
-  const product = data ? productLine(data) : "—";
-  const pv = data ? productVarietyLine(data) : "—";
+  if (loading) return <ClientLayout title="Cargando..."><div className="ff-sub">Preparando información del trayecto...</div></ClientLayout>;
 
   return (
-    <ClientLayout
-      title="Detalle del embarque"
-      subtitle="Estado, documentos y fotos del proceso de exportación"
-    >
-      {/* Toolbar */}
-      <div className="ff-spread" style={{ marginBottom: 12 }}>
-        <Link href="/shipments" className="ff-btn ff-btn-ghost" style={{ height: 34 }}>
-          <ArrowLeft size={16} />
-          Volver
-        </Link>
-
-        {data ? (
-          <span
-            className={statusBadgeClass(data.status)}
-            style={{ height: 30, display: "inline-flex", alignItems: "center" }}
-          >
-            {labelStatus(data.status)}
-          </span>
-        ) : null}
+    <ClientLayout title="Expediente de Embarque" subtitle="Seguimiento en tiempo real y documentación">
+      <div className="ff-spread" style={{ marginBottom: 16 }}>
+        <Link href="/shipments" className="ff-btn ff-btn-ghost"><ArrowLeft size={16} /> Volver al listado</Link>
       </div>
 
-      <div className="page">
-        {loading ? (
-          <div className="ff-sub">Cargando…</div>
-        ) : error ? (
-          <div className="ff-card ff-card-pad warn" style={{ boxShadow: "none" }}>
-            <b style={{ display: "block", marginBottom: 4 }}>Error</b>
-            <div className="ff-sub">{error}</div>
+      {data && (
+        <div className="page">
+          {/* HERO HEADER */}
+          <div className="hero">
+            <div className="heroLeft">
+              <div className="codeRow">
+                <div className="codeIcon"><Package size={20} color="var(--ff-green-dark)" /></div>
+                <div style={{minWidth: 0}}>
+                  <div className="heroLabel">Identificador Único</div>
+                  <div className="code">{data.code}</div>
+                  <div className="productLine">{productLine(data)}</div>
+                </div>
+              </div>
+            </div>
+            <div className="heroRight">
+              <span className="pill green"><MapPin size={14}/> {data.destination}</span>
+              <span className="pill blue"><Shield size={14}/> {data.incoterm || 'FOB'}</span>
+              <span className={statusBadgeClass(data.status)}>{labelStatus(data.status)}</span>
+            </div>
           </div>
-        ) : data ? (
-          <>
-            {/* HERO / HEADER ejecutivo */}
-            <div className="hero">
-              <div className="heroLeft">
-                <div className="codeRow">
-                  <span className="codeIcon" aria-hidden="true">
-                    <Package size={16} color="var(--ff-green-dark)" />
-                  </span>
 
-                  <div style={{ minWidth: 0 }}>
-                    {/* Número + Status */}
-                    <div className="heroTop">
-                      <div style={{ minWidth: 0 }}>
-                        <div className="heroLabel">Número de embarque</div>
-                        <div className="code">{data.code}</div>
-                      </div>
+          {/* PROGRESS */}
+          <div className="block">
+            <ProgressStepper milestones={data.milestones ?? []} flightNumber={data.flight_number ?? null} />
+          </div>
 
-                      <span
-                        className={statusBadgeClass(data.status)}
-                        style={{ height: 28, display: "inline-flex", alignItems: "center" }}
-                      >
-                        {labelStatus(data.status)}
-                      </span>
-                    </div>
-
-                    {/* Cliente (debajo) */}
-                    <div className="clientLine" title={clientName}>
-                      <span className="heroLabel">Cliente</span> <b>{clientName}</b>
-                    </div>
-
-                    {/* Producto+Variedad - Modalidad */}
-                    <div className="productLine" title={product}>
-                      {product}
-                    </div>
-
-                    {/* Fecha creado */}
-                    <div className="meta">
-                      Creado: <b>{fmtDate(data.created_at)}</b> · Destino:{" "}
-                      <b>{data.destination}</b>
-                    </div>
-                  </div>
-                </div>
+          <div className="grid2">
+            {/* KPI PANEL */}
+            <div className="ff-card ff-card-pad soft">
+              <div className="sectionTitle"><Info size={16} /> Especificaciones de Carga</div>
+              <div className="kpiRow">
+                <div className="kpi"><div className="kpiLabel">Incoterm</div><div className="kpiValue text-blue">{data.incoterm || 'FOB'}</div></div>
+                <div className="kpi"><div className="kpiLabel">Cajas</div><div className="kpiValue">{data.boxes || '—'}</div></div>
+                <div className="kpi"><div className="kpiLabel">Pallets</div><div className="kpiValue">{data.pallets || '—'}</div></div>
               </div>
-
-              <div className="heroRight">
-                {data.flight_number ? (
-                  <span className="pill">Vuelo: {data.flight_number}</span>
-                ) : null}
-                {data.awb ? <span className="pill">AWB: {data.awb}</span> : null}
+              <div className="kpiRow" style={{ marginTop: 12 }}>
+                <div className="kpi"><div className="kpiLabel">Peso Neto</div><div className="kpiValue">{data.weight_kg ? `${data.weight_kg} kg` : '—'}</div></div>
+                <div className="kpi"><div className="kpiLabel">Calibre</div><div className="kpiValue">{data.caliber || '—'}</div></div>
+                <div className="kpi"><div className="kpiLabel">Color</div><div className="kpiValue">{data.color || '—'}</div></div>
+              </div>
+              <div className="meta-footer">
+                Embarque creado el {fmtDate(data.created_at)} para <strong>{clientNameLine(data)}</strong>
               </div>
             </div>
 
-            {/* Progreso (ancho completo) */}
-            <div className="block">
-              <ProgressStepper
-                milestones={data.milestones ?? []}
-                flightNumber={data.flight_number ?? null}
-              />
+            {/* TIMELINE */}
+            <div className="ff-card ff-card-pad">
+              <div className="sectionTitle">Historial de Eventos</div>
+              <ModernTimeline milestones={normalizedMilestonesForTimeline as any} />
+            </div>
+          </div>
+
+          {/* DOCUMENTACIÓN Y FOTOS */}
+          <div className="grid2">
+            <div className="ff-card ff-card-pad">
+              <div className="sectionTitle"><FileText size={16} /> Documentos Oficiales</div>
+              <div className="doc-list">
+                {data.documents?.length ? data.documents.map(d => (
+                  <div key={d.id} className="itemRow">
+                    <div className="itemTitle">{d.filename}</div>
+                    <button className="ff-btn ff-btn-ghost" onClick={() => download(d.id)}><Download size={14}/> PDF</button>
+                  </div>
+                )) : <p className="ff-sub">No hay documentos disponibles aún.</p>}
+              </div>
             </div>
 
-            {/* Datos (KPI) + Timeline */}
-            <div className="grid2">
-              <div className="ff-card ff-card-pad soft" style={{ boxShadow: "none" }}>
-                <div className="sectionTitle">
-                  <Info size={16} /> Datos
-                </div>
-
-                <div className="kpiRow">
-                  <div className="kpi">
-                    <div className="kpiLabel">Producto + Variedad</div>
-                    <div className="kpiValue" style={{ fontSize: 13 }}>
-                      {pv}
+            <div className="ff-card ff-card-pad">
+              <div className="sectionTitle"><ImageIcon size={16} /> Evidencia Fotográfica</div>
+              <div className="photoGrid">
+                {data.photos?.length ? data.photos.map(p => (
+                  <div key={p.id} className="photoCard" onClick={() => download(p.id)}>
+                    <img src={p.url || ''} alt="evidencia" className="photoImg" />
+                    <div className="photoBody">
+                       <div className="photoTitle">{p.filename}</div>
+                       <div className="photoMeta">{fmtDate(p.created_at)}</div>
                     </div>
                   </div>
-                  <div className="kpi">
-                    <div className="kpiLabel">Cajas</div>
-                    <div className="kpiValue">{data.boxes ?? "—"}</div>
-                  </div>
-                  <div className="kpi">
-                    <div className="kpiLabel">Pallets</div>
-                    <div className="kpiValue">{data.pallets ?? "—"}</div>
-                  </div>
-                </div>
-
-                <div className="kpiRow" style={{ marginTop: 10 }}>
-                  <div className="kpi">
-                    <div className="kpiLabel">Peso total estimado</div>
-                    <div className="kpiValue">
-                      {data.weight_kg ? `${data.weight_kg} kg` : "—"}
-                    </div>
-                  </div>
-                  <div className="kpi">
-                    <div className="kpiLabel">Calibre</div>
-                    <div className="kpiValue">{data.caliber ?? "—"}</div>
-                  </div>
-                  <div className="kpi">
-                    <div className="kpiLabel">Color</div>
-                    <div className="kpiValue">{data.color ?? "—"}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="ff-card ff-card-pad" style={{ boxShadow: "none" }}>
-                <div className="sectionTitle">Timeline logístico</div>
-                <ModernTimeline milestones={normalizedMilestonesForTimeline as any} />
+                )) : <p className="ff-sub">Sin fotos de inspección registradas.</p>}
               </div>
             </div>
-
-            {/* Documentos vs Evidencia */}
-            <div className="grid2">
-              <div className="ff-card ff-card-pad" style={{ boxShadow: "none" }}>
-                <div className="sectionTitle">
-                  <FileText size={16} /> Documentos
-                </div>
-
-                {data.documents?.length ? (
-                  <div style={{ display: "grid", gap: 8 }}>
-                    {data.documents.map((d) => (
-                      <div key={d.id} className="itemRow">
-                        <div style={{ minWidth: 0 }}>
-                          <div className="itemTitle">{d.filename}</div>
-                          <div className="itemMeta">
-                            {d.doc_type ?? "Documento"} · {fmtDate(d.created_at)}
-                          </div>
-                        </div>
-
-                        <button
-                          className="ff-btn ff-btn-ghost"
-                          style={{ height: 34, flex: "0 0 auto" }}
-                          onClick={() => download(d.id)}
-                          type="button"
-                        >
-                          <Download size={16} />
-                          Descargar
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="ff-sub">No hay documentos cargados.</div>
-                )}
-              </div>
-
-              <div className="ff-card ff-card-pad" style={{ boxShadow: "none" }}>
-                <div className="sectionTitle">
-                  <ImageIcon size={16} /> Evidencia (Fotos)
-                </div>
-
-                {data.photos?.length ? (
-                  <div className="photoGrid">
-                    {data.photos.map((p) => (
-                      <div key={p.id} className="photoCard">
-                        {p.url ? (
-                          <img src={p.url} alt={p.filename} className="photoImg" />
-                        ) : (
-                          <div className="photoPlaceholder" />
-                        )}
-
-                        <div className="photoBody">
-                          <div className="photoTitle" title={p.filename}>
-                            {p.filename}
-                          </div>
-                          <div className="photoMeta">{fmtDate(p.created_at)}</div>
-
-                          <button
-                            className="ff-btn ff-btn-ghost"
-                            style={{
-                              height: 34,
-                              width: "100%",
-                              justifyContent: "center",
-                              marginTop: 10,
-                            }}
-                            onClick={() => download(p.id)}
-                            type="button"
-                          >
-                            <Download size={16} />
-                            Ver / Descargar
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="ff-sub">No hay fotos cargadas.</div>
-                )}
-              </div>
-            </div>
-          </>
-        ) : null}
-      </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
-        .page {
-          display: grid;
-          gap: 12px;
-        }
-
-        .warn {
-          border-color: rgba(209, 119, 17, 0.35);
-          background: rgba(209, 119, 17, 0.08);
-        }
-
-        .hero {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          padding: 12px;
-          border: 1px solid var(--ff-border);
-          background: var(--ff-surface);
-          border-radius: var(--ff-radius);
-          box-shadow: none;
-        }
-        .heroLeft {
-          min-width: 0;
-          flex: 1 1 auto;
-        }
-        .heroRight {
-          display: flex;
-          gap: 8px;
-          align-items: flex-start;
-          justify-content: flex-end;
-          flex: 0 0 auto;
-          flex-wrap: wrap;
-        }
-
-        .heroTop {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 10px;
-        }
-
-        .heroLabel {
-          font-size: 11px;
-          font-weight: 900;
-          color: var(--ff-muted);
-          line-height: 14px;
-        }
-
-        .clientLine {
-          margin-top: 6px;
-          font-size: 12px;
-          color: var(--ff-muted);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .block {
-          display: grid;
-          gap: 12px;
-        }
-
-        .grid2 {
-          display: grid;
-          gap: 12px;
-          grid-template-columns: 1fr;
-        }
-        @media (min-width: 1100px) {
-          .grid2 {
-            grid-template-columns: 1fr 1fr;
-          }
-        }
-
-        .codeRow {
-          display: flex;
-          align-items: flex-start;
-          gap: 10px;
-          min-width: 0;
-        }
-        .codeIcon {
-          width: 34px;
-          height: 34px;
-          border-radius: 10px;
-          border: 1px solid rgba(31, 122, 58, 0.18);
-          background: rgba(31, 122, 58, 0.08);
-          display: grid;
-          place-items: center;
-          flex: 0 0 auto;
-        }
-        .code {
-          font-weight: 950;
-          font-size: 16px;
-          line-height: 20px;
-          letter-spacing: -0.2px;
-        }
-
-        .productLine {
-          margin-top: 4px;
-          font-weight: 950;
-          font-size: 13px;
-          line-height: 18px;
-          letter-spacing: -0.15px;
-          color: var(--ff-green-dark);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .meta {
-          font-size: 12px;
-          color: var(--ff-muted);
-          line-height: 16px;
-          word-break: break-word;
-          margin-top: 2px;
-        }
-
-        .pill {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 12px;
-          font-weight: 900;
-          border: 1px solid rgba(15, 23, 42, 0.12);
-          background: rgba(15, 23, 42, 0.03);
-          border-radius: 999px;
-          padding: 6px 10px;
-          white-space: nowrap;
-        }
-
-        .soft {
-          background: rgba(15, 23, 42, 0.02);
-          border: 1px solid rgba(15, 23, 42, 0.08);
-        }
-
-        .sectionTitle {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-weight: 900;
-          font-size: 13px;
-          margin-bottom: 10px;
-        }
-
-        .kpiRow {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 10px;
-        }
-        .kpi {
-          border: 1px solid rgba(15, 23, 42, 0.08);
-          background: rgba(255, 255, 255, 0.7);
-          border-radius: 12px;
-          padding: 10px;
-        }
-        .kpiLabel {
-          font-size: 11px;
-          font-weight: 900;
-          color: var(--ff-muted);
-        }
-        .kpiValue {
-          margin-top: 4px;
-          font-size: 15px;
-          font-weight: 950;
-          letter-spacing: -0.25px;
-          word-break: break-word;
-        }
-
-        .itemRow {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          padding: 10px;
-          border: 1px solid var(--ff-border);
-          border-radius: var(--ff-radius);
-          background: var(--ff-surface);
-        }
-        @media (max-width: 720px) {
-          .itemRow {
-            flex-direction: column;
-            align-items: stretch;
-          }
-        }
-
-        .itemTitle {
-          font-weight: 900;
-          font-size: 13px;
-          line-height: 18px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        .itemMeta {
-          margin-top: 2px;
-          color: var(--ff-muted);
-          font-size: 12px;
-        }
-
-        .photoGrid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-          gap: 10px;
-        }
-        .photoCard {
-          border: 1px solid var(--ff-border);
-          border-radius: var(--ff-radius);
-          overflow: hidden;
-          background: var(--ff-surface);
-        }
-        .photoImg {
-          width: 100%;
-          height: 150px;
-          object-fit: cover;
-          display: block;
-        }
-        .photoPlaceholder {
-          height: 150px;
-          background: rgba(15, 23, 42, 0.03);
-        }
-        .photoBody {
-          padding: 10px;
-        }
-        .photoTitle {
-          font-weight: 900;
-          font-size: 13px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .photoMeta {
-          margin-top: 2px;
-          font-size: 12px;
-          color: var(--ff-muted);
-        }
+        .page { display: grid; gap: 16px; padding-bottom: 40px; }
+        .hero { display: flex; justify-content: space-between; align-items: center; padding: 24px; background: white; border: 1px solid var(--ff-border); border-radius: 16px; }
+        .heroLeft { flex: 1; }
+        .heroRight { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+        .codeIcon { background: #f0fdf4; padding: 10px; border-radius: 12px; border: 1px solid #dcfce7; }
+        .codeRow { display: flex; gap: 16px; align-items: center; }
+        .code { font-size: 24px; font-weight: 900; letter-spacing: -0.5px; color: #0f172a; }
+        .productLine { color: var(--ff-green-dark); font-weight: 700; font-size: 14px; }
+        .pill { padding: 6px 12px; border-radius: 99px; font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+        .pill.green { background: #f0fdf4; color: #166534; border: 1px solid #dcfce7; }
+        .pill.blue { background: #eff6ff; color: #1e40af; border: 1px solid #dbeafe; }
+        .kpiRow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .kpi { background: white; padding: 12px; border-radius: 12px; border: 1px solid #f1f5f9; }
+        .kpiLabel { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; }
+        .kpiValue { font-size: 16px; font-weight: 900; color: #1e293b; margin-top: 4px; }
+        .text-blue { color: #2563eb; }
+        .meta-footer { margin-top: 20px; font-size: 12px; color: #94a3b8; padding-top: 15px; border-top: 1px dashed #e2e8f0; }
+        .doc-list { display: flex; flex-direction: column; gap: 8px; }
+        .itemRow { display: flex; justify-content: space-between; align-items: center; padding: 12px; border: 1px solid #f1f5f9; border-radius: 10px; }
+        .itemTitle { font-size: 13px; font-weight: 600; color: #334155; }
+        .photoGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+        .photoCard { cursor: pointer; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; transition: 0.2s; }
+        .photoCard:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .photoImg { width: 100%; height: 100px; object-fit: cover; }
+        .photoBody { padding: 8px; }
+        .photoTitle { font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .photoMeta { font-size: 10px; color: #94a3b8; }
       `}</style>
     </ClientLayout>
   );
