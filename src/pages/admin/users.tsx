@@ -152,11 +152,12 @@ export default function AdminUsersPage() {
                     <>
                       <td>
                         <div className="client-info">
-                          {/* El Link ahora envuelve todo el bloque del nombre para asegurar el área de clic */}
-                          <Link href={`/admin/clients/${item.id}`} className="client-link-container">
-                            <span className="client-name-text">
-                              <strong>{item.name}</strong> <ExternalLink size={12} />
-                            </span>
+                          {/* Área de clic optimizada */}
+                          <Link href={`/admin/clients/${item.id}`} className="client-nav-link">
+                              <span className="name-wrapper">
+                                <strong>{item.name}</strong> 
+                                <ExternalLink size={12} className="link-icon" />
+                              </span>
                           </Link>
                           <small>{item.tax_id || 'Sin Tax ID'}</small>
                         </div>
@@ -275,26 +276,28 @@ export default function AdminUsersPage() {
         .tabs button { padding: 10px; background: none; border: none; cursor: pointer; font-weight: bold; color: #666; transition: 0.3s; }
         .tabs button.active { color: #1f7a3a; border-bottom: 2px solid #1f7a3a; }
         
-        /* Ajuste crítico para el enlace */
-        :global(.client-link-container) { 
+        /* ESTILO PARA EL ENLACE DE CLIENTE */
+        :global(.client-nav-link) {
           text-decoration: none !important;
           color: #1f7a3a !important;
-          display: inline-block;
           cursor: pointer !important;
-          z-index: 10;
-          position: relative;
-        }
-
-        .client-name-text {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-        }
-
-        .client-name-text:hover {
-          text-decoration: underline;
+          display: inline-block;
         }
         
+        .name-wrapper {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .name-wrapper:hover strong {
+          text-decoration: underline;
+        }
+
+        .link-icon {
+          opacity: 0.5;
+        }
+
         .pro-table { width: 100%; border-collapse: collapse; }
         .pro-table th { background: #f8fafc; color: #64748b; font-size: 11px; text-transform: uppercase; padding: 12px; text-align: left; }
         .pro-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
