@@ -27,7 +27,6 @@ const MASTER_PLACES = [
 ];
 
 export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, onSuccess, defaultIncoterm }: ShipmentDrawerProps) {
-  // Generar ID de embarque visual
   const tempShipmentCode = useMemo(() => `FFP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`, [isOpen]);
   
   const [loading, setLoading] = useState(false);
@@ -52,6 +51,7 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
     status: 'Booking Pending'
   });
 
+  // Carga inicial de datos
   useEffect(() => {
     if (isOpen) {
       const loadData = async () => {
@@ -65,21 +65,24 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
     }
   }, [isOpen, defaultIncoterm]);
 
-  // REEMPLAZA el useEffect de filtrado de variedades por este:
-useEffect(() => {
-  if (formData.product_id) {
-    const matches = allVarieties.filter(v => v.product_id === formData.product_id);
-    setFilteredVarieties(matches);
-    
-    // 🛡️ GUARD CLAUSE: Solo resetear si variedad_id NO está vacío.
-    // Esto detiene el bucle infinito.
-    if (formData.variety_id !== '') {
-      setFormData(prev => ({ ...prev, variety_id: '' }));
+  // Filtrado de variedades (Sin bucle infinito)
+  useEffect(() => {
+    if (formData.product_id) {
+      const matches = allVarieties.filter(v => v.product_id === formData.product_id);
+      setFilteredVarieties(matches);
+    } else {
+      setFilteredVarieties([]);
     }
-  } else {
-    setFilteredVarieties([]);
-  }
-}, [formData.product_id, allVarieties, formData.variety_id]); // Añadimos variety_id a la dependencia
+  }, [formData.product_id, allVarieties]);
+
+  // Manejador manual para cambio de producto (Limpia variedad solo aquí)
+  const handleProductChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFormData(prev => ({
+      ...prev,
+      product_id: e.target.value,
+      variety_id: '' 
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,14 +140,19 @@ useEffect(() => {
             <div className="grid-2">
               <div className="input-group">
                 <label>Producto</label>
-                <select required value={formData.product_id} onChange={e => setFormData({...formData, product_id: e.target.value})}>
+                <select required value={formData.product_id} onChange={handleProductChange}>
                   <option value="">Seleccione...</option>
                   {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
               <div className="input-group">
                 <label>Variedad</label>
-                <select required disabled={!formData.product_id} value={formData.variety_id} onChange={e => setFormData({...formData, variety_id: e.target.value})}>
+                <select 
+                  required 
+                  disabled={!formData.product_id} 
+                  value={formData.variety_id} 
+                  onChange={e => setFormData({...formData, variety_id: e.target.value})}
+                >
                   <option value="">{formData.product_id ? 'Seleccione variedad' : 'Elija producto'}</option>
                   {filteredVarieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </select>
