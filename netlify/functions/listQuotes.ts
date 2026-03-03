@@ -3,19 +3,15 @@ import type { Handler } from "@netlify/functions";
 import { sbAdmin, getUserAndProfile, json, text, isPrivilegedRole } from "./_util";
 
 export const handler: Handler = async (event) => {
-  // 1. Manejo de CORS y Método
   if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
   if (event.httpMethod !== "GET") return text(405, "Method not allowed");
 
   try {
-    // 2. Validación de Identidad
     const { user, profile } = await getUserAndProfile(event);
     if (!user || !profile) return text(401, "Unauthorized");
     
-    // Solo permitimos ver la lista completa a admin/superadmin
     if (!isPrivilegedRole(profile.role)) return text(403, "Forbidden");
 
-    // 3. Paginación y Filtros
     const pageSize = 20;
     const page = Math.max(1, Number(event.queryStringParameters?.page || 1));
     const dir = (event.queryStringParameters?.dir || "desc").toLowerCase() === "asc" ? "asc" : "desc";
@@ -25,12 +21,12 @@ export const handler: Handler = async (event) => {
     const fromIndex = (page - 1) * pageSize;
     const toIndex = fromIndex + pageSize - 1;
 
-    // 4. Construcción de Query con Join a Clientes
+    // 4. Construcción de Query - USANDO ALIAS code:quote_number
     let query = sbAdmin
       .from("quotes")
       .select(`
         id, 
-        code, 
+        code:quote_number, 
         created_at, 
         updated_at, 
         status, 
@@ -49,14 +45,11 @@ export const handler: Handler = async (event) => {
         )
       `, { count: "exact" });
 
-    // Aplicar filtros si existen
     if (status) query = query.eq("status", status);
     
-    // Búsqueda simple (ILIKE funciona sobre columnas de texto)
+    // Búsqueda: Ajustamos para buscar en quote_number si hay un query 'q'
     if (q) {
-      // Nota: La búsqueda en joins (clients.name) requiere configuración específica en Supabase, 
-      // por ahora buscamos en destino y en el snapshot guardado.
-      query = query.or(`destination.ilike.%${q}%, code.ilike.%${q}%`);
+      query = query.or(`destination.ilike.%${q}%, quote_number.ilike.%${q}%`);
     }
 
     query = query
@@ -69,7 +62,7 @@ export const handler: Handler = async (event) => {
     // 5. Mapeo de Datos (Data Transformation)
     const items = (data || []).map((r: any) => ({
       id: r.id,
-      code: r.code || "S/N",
+      code: r.code || "S/N", // r.code ya viene mapeado desde quote_number por el alias
       created_at: r.created_at,
       updated_at: r.updated_at,
       status: r.status,
@@ -80,7 +73,6 @@ export const handler: Handler = async (event) => {
       weight_kg: r.weight_kg,
       margin_markup: r.margin_markup,
       client_id: r.client_id,
-      // Priorizamos el nombre real del join, si no, el del snapshot
       client_name: r.clients?.name || r.client_snapshot?.name || "Cliente Desconocido",
       client_email: r.clients?.contact_email || r.client_snapshot?.contact_email || null,
       total_amount: r.totals?.total || 0,

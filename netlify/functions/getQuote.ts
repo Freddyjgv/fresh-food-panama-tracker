@@ -13,18 +13,22 @@ export const handler: Handler = async (event) => {
     if (!user) return text(401, "Unauthorized");
     if (!profile) return text(401, "Unauthorized (missing profile)");
     
-    // Usamos isPrivilegedRole de _util.ts para consistencia
+    // Acceso restringido: Solo admins y superadmins
     if (!isPrivilegedRole(profile.role || "")) return text(403, "Forbidden");
 
     const id = String(event.queryStringParameters?.id || "").trim();
     if (!id) return text(400, "Missing id");
 
-    // Realizamos la consulta con el join que ya definiste
+    // Realizamos la consulta con el ALIAS code:quote_number
     const { data, error } = await sbAdmin
       .from("quotes")
-      .select("*, clients(name, contact_name, contact_email, phone, country, city)")
+      .select(`
+        *, 
+        code:quote_number, 
+        clients(name, contact_name, contact_email, phone, country, city)
+      `)
       .eq("id", id)
-      .maybeSingle(); // maybeSingle es más seguro que single para evitar errores 406 si no hay datos
+      .maybeSingle(); 
 
     if (error) return text(500, error.message);
     if (!data) return text(404, "Quote not found");
