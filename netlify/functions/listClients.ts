@@ -1,47 +1,44 @@
-// netlify/functions/listClients.ts
-import type { Handler } from "@netlify/functions";
-import { sbAdmin, getUserAndProfile, json, text, isPrivilegedRole } from "./_util";
+import { Handler } from '@netlify/functions';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export const handler: Handler = async (event) => {
-  // 1. Manejo de CORS (Preflight)
-  if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
+  // Verificación de método
+  if (event.httpMethod !== 'GET') return { statusCode: 405, body: 'Method Not Allowed' };
 
   try {
-    // 2. Validación de Sesión y Rol
-    const { user, profile } = await getUserAndProfile(event);
-
-    if (!user || !profile || !isPrivilegedRole(profile.role)) {
-      return text(403, "No autorizado: Se requieren permisos de administrador");
-    }
-
-    // 3. Consulta a la Base de Datos (Tabla 'clients')
-    // Usamos los nombres de columna confirmados por tu SQL anterior
-    const { data: clients, error } = await sbAdmin
-      .from("clients")
+    // Traemos los clientes con sus campos de acceso y datos fiscales
+    const { data, error } = await supabase
+      .from('clients')
       .select(`
-        id,
-        name,
-        contact_name,
-        contact_email,
-        phone,
-        status,
-        country,
-        city,
-        tax_id,
+        id, 
+        name, 
+        legal_name, 
+        tax_id, 
+        contact_email, 
+        phone, 
+        country, 
+        has_platform_access,
+        billing_address,
         created_at
       `)
-      .order("name", { ascending: true });
+      .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error("Error en listClients:", error.message);
-      return json(500, { error: error.message });
-    }
+    if (error) throw error;
 
-    // 4. Respuesta Exitosa
-    return json(200, clients);
-
-  } catch (err: any) {
-    console.error("Error crítico en listClients:", err.message);
-    return text(500, "Error interno del servidor");
+    return {
+      statusCode: 200,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: data }),
+    };
+  } catch (error: any) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ message: error.message }),
+    };
   }
 };
