@@ -147,12 +147,11 @@ export default function AdminUsersPage() {
           <tbody>
             {loading ? <tr><td colSpan={4}>Cargando...</td></tr> : 
               dataList.map(item => (
-                <tr key={item.id}>
+                <tr key={item.id} className="row-hover">
                   {activeTab === 'clients' ? (
                     <>
                       <td>
                         <div className="client-info">
-                          {/* Área de clic optimizada */}
                           <Link href={`/admin/clients/${item.id}`} className="client-nav-link">
                               <span className="name-wrapper">
                                 <strong>{item.name}</strong> 
@@ -276,12 +275,14 @@ export default function AdminUsersPage() {
         .tabs button { padding: 10px; background: none; border: none; cursor: pointer; font-weight: bold; color: #666; transition: 0.3s; }
         .tabs button.active { color: #1f7a3a; border-bottom: 2px solid #1f7a3a; }
         
-        /* ESTILO PARA EL ENLACE DE CLIENTE */
+        /* FIX CLIC: Estilos globales para el componente Link de Next.js */
         :global(.client-nav-link) {
           text-decoration: none !important;
           color: #1f7a3a !important;
           cursor: pointer !important;
           display: inline-block;
+          position: relative;
+          z-index: 2;
         }
         
         .name-wrapper {
@@ -301,6 +302,7 @@ export default function AdminUsersPage() {
         .pro-table { width: 100%; border-collapse: collapse; }
         .pro-table th { background: #f8fafc; color: #64748b; font-size: 11px; text-transform: uppercase; padding: 12px; text-align: left; }
         .pro-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+        .row-hover:hover { background-color: #fbfcfd; }
         
         .badge-ok { background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 20px; font-size: 11px; display: flex; align-items: center; gap: 5px; width: fit-content; }
         .badge-prospect { background: #f1f5f9; color: #475569; padding: 4px 10px; border-radius: 20px; font-size: 11px; }
