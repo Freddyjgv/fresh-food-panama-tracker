@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Save, Package, Globe, Loader2, Check, Hash, Scale, Palette, ThermometerSun, Anchor, Plane } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
@@ -11,12 +11,6 @@ interface ShipmentDrawerProps {
   defaultIncoterm?: string;
 }
 
-const getFlag = (code: string) => {
-  if (!code) return '🌐';
-  const codePoints = code.toUpperCase().split('').map(char => 127397 + char.charCodeAt(0));
-  return String.fromCodePoint(...codePoints);
-};
-
 const MASTER_PLACES = [
   { code: 'MAD', name: 'Madrid-Barajas', country: 'ES' },
   { code: 'BCN', name: 'Puerto de Barcelona', country: 'ES' },
@@ -27,7 +21,8 @@ const MASTER_PLACES = [
 ];
 
 export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, onSuccess, defaultIncoterm }: ShipmentDrawerProps) {
-  const tempShipmentCode = useMemo(() => `FFP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`, [isOpen]);
+  // 1. Generar código solo cuando se abre, de forma estática
+  const [currentCode, setCurrentCode] = useState('');
   
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -48,24 +43,30 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
     estimated_weight: '',
     incoterm: 'FOB',
     destination: '',
-    status: 'Booking Pending'
   });
 
-  // Carga inicial de datos
+  // Carga de datos y generación de ID inicial
   useEffect(() => {
     if (isOpen) {
-      const loadData = async () => {
+      const loadInitialData = async () => {
         const { data: p } = await supabase.from('products').select('*').order('name');
         const { data: v } = await supabase.from('product_varieties').select('*').order('name');
         setProducts(p || []);
         setAllVarieties(v || []);
-        if (defaultIncoterm) setFormData(prev => ({ ...prev, incoterm: defaultIncoterm }));
+        
+        // Seteamos el código una sola vez al abrir
+        setCurrentCode(`FFP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+        
+        if (defaultIncoterm) {
+          setFormData(prev => ({ ...prev, incoterm: defaultIncoterm }));
+        }
       };
-      loadData();
+      loadInitialData();
     }
   }, [isOpen, defaultIncoterm]);
 
-  // Filtrado de variedades (Sin bucle infinito)
+  // 2. Filtrado de variedades: Solo ocurre cuando cambia el product_id
+  // NO usamos setFormData aquí para evitar el bucle infinito
   useEffect(() => {
     if (formData.product_id) {
       const matches = allVarieties.filter(v => v.product_id === formData.product_id);
@@ -75,17 +76,20 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
     }
   }, [formData.product_id, allVarieties]);
 
-  // Manejador manual para cambio de producto (Limpia variedad solo aquí)
+  // 3. Manejador de cambio de producto (Lógica imperativa, no reactiva)
   const handleProductChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
     setFormData(prev => ({
       ...prev,
-      product_id: e.target.value,
-      variety_id: '' 
+      product_id: val,
+      variety_id: '' // Reseteamos variedad solo en la interacción manual
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+    
     setLoading(true);
     try {
       const pName = products.find(p => p.id === formData.product_id)?.name;
@@ -93,7 +97,7 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
       
       const { error } = await supabase.from('shipments').insert([{
         client_id: clientId,
-        code: tempShipmentCode,
+        code: currentCode,
         product_name: pName,
         product_variety: vName,
         product_mode: mode,
@@ -109,14 +113,36 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
       }]);
 
       if (error) throw error;
+      
       setSuccess(true);
-      setTimeout(() => { onSuccess(); handleClose(); }, 1200);
-    } catch (err: any) { alert(err.message); } finally { setLoading(false); }
+      setTimeout(() => {
+        onSuccess();
+        handleClose();
+      }, 1500);
+      
+    } catch (err: any) {
+      console.error("Error saving shipment:", err);
+      alert("Error: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleClose = () => {
-    setFormData({ product_id: '', variety_id: '', calibre: '', color: '', brix_grade: '>13', boxes: '', pallets: '', estimated_weight: '', incoterm: defaultIncoterm || 'FOB', destination: '', status: 'Booking Pending' });
+    setFormData({
+      product_id: '',
+      variety_id: '',
+      calibre: '',
+      color: '',
+      brix_grade: '>13',
+      boxes: '',
+      pallets: '',
+      estimated_weight: '',
+      incoterm: defaultIncoterm || 'FOB',
+      destination: '',
+    });
     setSuccess(false);
+    setLoading(false);
     onClose();
   };
 
@@ -129,7 +155,7 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
           <div className="header-info">
             <h2>Nuevo Embarque</h2>
             <p className="client-name">Cliente: <strong>{clientName}</strong></p>
-            <div className="id-badge">{tempShipmentCode}</div>
+            <div className="id-badge">{currentCode}</div>
           </div>
           <button onClick={handleClose} className="close-btn"><X size={24} /></button>
         </header>
@@ -151,24 +177,24 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
                   required 
                   disabled={!formData.product_id} 
                   value={formData.variety_id} 
-                  onChange={e => setFormData({...formData, variety_id: e.target.value})}
+                  onChange={e => setFormData(f => ({...f, variety_id: e.target.value}))}
                 >
-                  <option value="">{formData.product_id ? 'Seleccione variedad' : 'Elija producto'}</option>
+                  <option value="">Seleccione variedad</option>
                   {filteredVarieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </select>
               </div>
             </div>
 
             <div className="grid-3">
-              <div className="input-group"><label><Hash size={12}/> Calibre</label><input type="text" placeholder="5-7" value={formData.calibre} onChange={e => setFormData({...formData, calibre: e.target.value})} /></div>
-              <div className="input-group"><label><Palette size={12}/> Color</label><input type="text" placeholder="2.5" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} /></div>
-              <div className="input-group"><label><ThermometerSun size={12}/> Brix</label><input type="text" value={formData.brix_grade} onChange={e => setFormData({...formData, brix_grade: e.target.value})} /></div>
+              <div className="input-group"><label><Hash size={12}/> Calibre</label><input type="text" placeholder="5-7" value={formData.calibre} onChange={e => setFormData(f => ({...f, calibre: e.target.value}))} /></div>
+              <div className="input-group"><label><Palette size={12}/> Color</label><input type="text" placeholder="2.5" value={formData.color} onChange={e => setFormData(f => ({...f, color: e.target.value}))} /></div>
+              <div className="input-group"><label><ThermometerSun size={12}/> Brix</label><input type="text" value={formData.brix_grade} onChange={e => setFormData(f => ({...f, brix_grade: e.target.value}))} /></div>
             </div>
 
             <div className="grid-3">
-              <div className="input-group"><label>Cajas</label><input type="number" value={formData.boxes} onChange={e => setFormData({...formData, boxes: e.target.value})} /></div>
-              <div className="input-group"><label>Pallets</label><input type="number" value={formData.pallets} onChange={e => setFormData({...formData, pallets: e.target.value})} /></div>
-              <div className="input-group"><label>Peso (Kg)</label><input type="number" step="0.01" value={formData.estimated_weight} onChange={e => setFormData({...formData, estimated_weight: e.target.value})} /></div>
+              <div className="input-group"><label>Cajas</label><input type="number" value={formData.boxes} onChange={e => setFormData(f => ({...f, boxes: e.target.value}))} /></div>
+              <div className="input-group"><label>Pallets</label><input type="number" value={formData.pallets} onChange={e => setFormData(f => ({...f, pallets: e.target.value}))} /></div>
+              <div className="input-group"><label>Peso (Kg)</label><input type="number" step="0.01" value={formData.estimated_weight} onChange={e => setFormData(f => ({...f, estimated_weight: e.target.value}))} /></div>
             </div>
           </section>
 
@@ -188,7 +214,7 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
               </div>
               <div className="input-group">
                 <label>Incoterm</label>
-                <select value={formData.incoterm} onChange={e => setFormData({...formData, incoterm: e.target.value})}>
+                <select value={formData.incoterm} onChange={e => setFormData(f => ({...f, incoterm: e.target.value}))}>
                   {['FOB', 'CIF', 'CIP', 'FCA', 'CFR', 'DDP'].map(i => <option key={i} value={i}>{i}</option>)}
                 </select>
               </div>
@@ -196,9 +222,9 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
             
             <div className="input-group full-width">
               <label>Lugar de Destino</label>
-              <input list="places-list" placeholder="Nombre del puerto o aeropuerto de destino..." value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} />
+              <input list="places-list" placeholder="Destino final..." value={formData.destination} onChange={e => setFormData(f => ({...f, destination: e.target.value}))} />
               <datalist id="places-list">
-                {MASTER_PLACES.map(p => <option key={p.code} value={`${getFlag(p.country)} ${p.name} (${p.code})`} />)}
+                {MASTER_PLACES.map(p => <option key={p.code} value={p.name} />)}
               </datalist>
             </div>
           </section>
@@ -207,7 +233,7 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
             <button type="button" onClick={handleClose} className="btn-abort">Cancelar</button>
             <button type="submit" disabled={loading || success} className={`btn-submit ${success ? 'success' : ''}`}>
               {loading ? <Loader2 className="spin" size={20} /> : success ? <Check size={20} /> : <Save size={20} />}
-              <span>{success ? 'Embarque Creado' : 'Crear Embarque'}</span>
+              <span>{success ? 'Creado Correctamente' : 'Crear Embarque'}</span>
             </button>
           </footer>
         </form>
