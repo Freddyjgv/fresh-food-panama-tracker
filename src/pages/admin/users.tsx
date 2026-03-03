@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import Link from "next/link"; // Pieza clave añadida
 import { 
   Plus, X, Building2, MapPin, Phone, Mail, 
   ShieldCheck, UserPlus, Trash2, Globe, Search, Loader2, CheckCircle, Edit3, ExternalLink 
@@ -37,6 +38,7 @@ export default function AdminUsersPage() {
   const loadData = async () => {
     setLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
+    // Cambiado a listClientsFull si ese es el nombre de tu función actualizada
     const endpoint = activeTab === 'clients' ? '/.netlify/functions/listClients' : '/.netlify/functions/listUsers';
     
     try {
@@ -153,9 +155,12 @@ export default function AdminUsersPage() {
                     <>
                       <td>
                         <div className="client-info">
-                          <a href={`/admin/clients/${item.id}`} className="client-link">
-                            <strong>{item.name}</strong> <ExternalLink size={12} />
-                          </a>
+                          {/* Enlace corregido para Next.js */}
+                          <Link href={`/admin/clients/${item.id}`} passHref legacyBehavior>
+                            <a className="client-link">
+                              <strong>{item.name}</strong> <ExternalLink size={12} />
+                            </a>
+                          </Link>
                           <small>{item.tax_id || 'Sin Tax ID'}</small>
                         </div>
                       </td>
@@ -273,7 +278,7 @@ export default function AdminUsersPage() {
         .tabs button { padding: 10px; background: none; border: none; cursor: pointer; font-weight: bold; color: #666; transition: 0.3s; }
         .tabs button.active { color: #1f7a3a; border-bottom: 2px solid #1f7a3a; }
         
-        .client-link { color: #1f7a3a; text-decoration: none; display: flex; align-items: center; gap: 5px; }
+        .client-link { color: #1f7a3a; text-decoration: none; display: flex; align-items: center; gap: 5px; cursor: pointer; }
         .client-link:hover { text-decoration: underline; }
         
         .pro-table { width: 100%; border-collapse: collapse; }
