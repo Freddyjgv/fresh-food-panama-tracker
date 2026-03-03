@@ -1,116 +1,126 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { 
-  Plus, X, Building2, MapPin, Phone, Mail, UserPlus, 
-  ShieldCheck, User, Globe, CreditCard, Trash2, CheckCircle, AlertTriangle 
+  Plus, X, Building2, MapPin, Phone, Mail, 
+  ShieldCheck, User, Trash2, Globe, CreditCard, Search, Loader2 
 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import { AdminLayout } from "../../components/AdminLayout";
 
-export default function AdminDirectoryPage() {
+export default function AdminUsersAndStaffPage() {
   const [activeTab, setActiveTab] = useState<'clients' | 'staff'>('clients');
-  const [clients, setClients] = useState<any[]>([]);
-  const [staff, setStaff] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [dataList, setDataList] = useState<any[]>([]);
+  const [search, setSearch] = useState("");
 
-  // Formulario Maestro
-  const [f, setF] = useState({
-    name: "", legal_name: "", tax_id: "", country_origin: "Panamá",
-    payment_condition: "Prepagado", billing_address: "",
+  // ESTADO FORMULARIO (Se limpia según el tab)
+  const [f, setF] = useState<any>({
+    // Campos Cliente
+    name: "", legal_name: "", tax_id: "", email_corp: "", phone_corp: "", 
+    country_origin: "Panamá", payment_condition: "Prepagado", billing_address: "",
     shipping_addresses: [{ id: Date.now(), address: "" }],
-    contacts: [{ id: Date.now(), name: "", email: "", phone: "", has_access: false, already_invited: false }]
+    // Campos Staff
+    staff_name: "", staff_email: "", staff_role: "admin"
   });
-
-  const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const loadData = async () => {
     setLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
-    const headers = { Authorization: `Bearer ${session?.access_token}` };
+    const endpoint = activeTab === 'clients' ? '/.netlify/functions/listClientsFull' : '/.netlify/functions/listUsers';
     
-    const [resClients, resStaff] = await Promise.all([
-      fetch("/.netlify/functions/listClientsFull", { headers }),
-      fetch("/.netlify/functions/listUsers", { headers })
-    ]);
-
-    if (resClients.ok) setClients((await resClients.json()).items || []);
-    if (resStaff.ok) setStaff((await resStaff.json()).items || []);
+    try {
+      const res = await fetch(endpoint, {
+        headers: { Authorization: `Bearer ${session?.access_token}` }
+      });
+      const data = await res.json();
+      setDataList(data.items || []);
+    } catch (e) { console.error(e); }
     setLoading(false);
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [activeTab]);
 
-  const handleSaveClient = async (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validar Emails de contactos
-    const invalidEmails = f.contacts.filter(c => c.email && !validateEmail(c.email));
-    if (invalidEmails.length > 0) return alert("Uno o más correos electrónicos no tienen un formato válido.");
-
-    const contactsToInvite = f.contacts.filter(c => c.has_access && !c.already_invited);
-    if (contactsToInvite.length > 0) {
-      const confirmed = window.confirm(`¿Estás seguro que deseas otorgar acceso a la plataforma a los contactos seleccionados?`);
-      if (!confirmed) return;
-    }
-
     setIsSaving(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch("/.netlify/functions/manageClient", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify(f)
-      });
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
 
-      if (res.ok) {
-        alert("Ficha de cliente guardada y accesos procesados.");
-        setIsDrawerOpen(false);
-        loadData();
+    try {
+      if (activeTab === 'clients') {
+        // GUARDAR CLIENTE (SOLO DB)
+        await fetch("/.netlify/functions/manageClient", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ ...f, skip_auth: true })
+        });
+      } else {
+        // INVITAR STAFF (AUTH + DB)
+        await fetch("/.netlify/functions/inviteUser", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ email: f.staff_email, full_name: f.staff_name, role: f.staff_role })
+        });
       }
-    } finally { setIsSaving(false); }
+      setIsDrawerOpen(false);
+      loadData();
+    } catch (err) { alert("Error al procesar solicitud"); }
+    setIsSaving(false);
   };
 
   return (
-    <AdminLayout title="Gestión de Directorio" subtitle="Control de Clientes, Proveedores y Staff">
+    <AdminLayout title="Configuración de Sistema" subtitle="Administra el staff interno y el directorio de clientes.">
       
-      {/* Selector de Pestañas */}
-      <div className="tabSelector">
-        <button className={activeTab === 'clients' ? 'active' : ''} onClick={() => setActiveTab('clients')}>Directorio de Clientes</button>
-        <button className={activeTab === 'staff' ? 'active' : ''} onClick={() => setActiveTab('staff')}>Usuarios Staff (Internos)</button>
-      </div>
-
-      <div className="toolbar">
-        <button className="btnMain" onClick={() => setIsDrawerOpen(true)}>
-          <Plus size={18} /> {activeTab === 'clients' ? 'Nuevo Cliente' : 'Nuevo Usuario Staff'}
+      {/* NAVEGACIÓN DE TABS */}
+      <div className="tabs">
+        <button className={activeTab === 'clients' ? 'active' : ''} onClick={() => setActiveTab('clients')}>
+          <Building2 size={16} /> Directorio de Clientes
+        </button>
+        <button className={activeTab === 'staff' ? 'active' : ''} onClick={() => setActiveTab('staff')}>
+          <ShieldCheck size={16} /> Gestión de Staff
         </button>
       </div>
 
-      <div className="tableCard">
-        <table className="ff-table">
+      <div className="toolbar">
+        <div className="search">
+          <Search size={16} />
+          <input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <button className="btnCreate" onClick={() => setIsDrawerOpen(true)}>
+          <Plus size={18} /> {activeTab === 'clients' ? 'Añadir Cliente' : 'Invitar Staff'}
+        </button>
+      </div>
+
+      {/* LISTADO DINÁMICO */}
+      <div className="card">
+        <table className="pro-table">
           <thead>
             {activeTab === 'clients' ? (
-              <tr><th>EMPRESA</th><th>PAÍS</th><th>CONDICIÓN</th><th>CONTACTOS</th><th>ACCIONES</th></tr>
+              <tr><th>EMPRESA</th><th>PAÍS</th><th>CONDICIÓN</th><th>CONTACTO</th></tr>
             ) : (
               <tr><th>NOMBRE</th><th>EMAIL</th><th>ROL</th><th>ESTADO</th></tr>
             )}
           </thead>
           <tbody>
-            {loading ? <tr><td colSpan={5}>Cargando...</td></tr> : 
-              activeTab === 'clients' ? clients.map(c => (
-                <tr key={c.id}>
-                  <td><strong>{c.name}</strong><br/><small>{c.tax_id}</small></td>
-                  <td>{c.country_origin}</td>
-                  <td><span className="badge">{c.payment_condition}</span></td>
-                  <td>{c.contacts_count || 0}</td>
-                  <td><button className="btnEdit">Editar Ficha</button></td>
-                </tr>
-              )) : staff.map(u => (
-                <tr key={u.id}>
-                  <td>{u.full_name}</td>
-                  <td>{u.email}</td>
-                  <td><span className={`role ${u.role}`}>{u.role}</span></td>
-                  <td>{u.confirmed_at ? "✅ Activo" : "⏳ Pendiente"}</td>
+            {loading ? <tr><td colSpan={4}><Loader2 className="spin" /> Cargando...</td></tr> : 
+              dataList.map(item => (
+                <tr key={item.id}>
+                  {activeTab === 'clients' ? (
+                    <>
+                      <td><strong>{item.name}</strong><br/><small>{item.tax_id}</small></td>
+                      <td>{item.country_origin}</td>
+                      <td><span className="badge">{item.payment_condition}</span></td>
+                      <td>{item.email_corp}</td>
+                    </>
+                  ) : (
+                    <>
+                      <td><strong>{item.full_name}</strong></td>
+                      <td>{item.email}</td>
+                      <td><span className={`role-badge ${item.role}`}>{item.role}</span></td>
+                      <td>{item.confirmed_at ? "✅ Activo" : "⏳ Pendiente"}</td>
+                    </>
+                  )}
                 </tr>
               ))
             }
@@ -118,83 +128,103 @@ export default function AdminDirectoryPage() {
         </table>
       </div>
 
+      {/* DRAWER LATERAL */}
       {isDrawerOpen && (
         <>
           <div className="overlay" onClick={() => setIsDrawerOpen(false)} />
           <div className="drawer">
-            <div className="dHead">
-              <h3>{activeTab === 'clients' ? 'Ficha de Cliente' : 'Invitar Staff'}</h3>
+            <div className="d-header">
+              <h3>{activeTab === 'clients' ? 'Ficha Maestra Cliente' : 'Invitación de Staff'}</h3>
               <X onClick={() => setIsDrawerOpen(false)} style={{cursor:'pointer'}} />
             </div>
-            
-            <form onSubmit={handleSaveClient} className="dBody">
-              {activeTab === 'clients' && (
+
+            <form className="d-body" onSubmit={handleSave}>
+              {activeTab === 'clients' ? (
                 <>
-                  <section className="formGroup">
-                    <label><Building2 size={14}/> IDENTIDAD COMERCIAL</label>
+                  <div className="group">
+                    <label>IDENTIDAD FISCAL</label>
                     <input required placeholder="Nombre Comercial" value={f.name} onChange={e=>setF({...f, name:e.target.value})} />
-                    <input placeholder="RUC / Tax ID" value={f.tax_id} onChange={e=>setF({...f, tax_id:e.target.value})} />
+                    <input placeholder="Razón Social" value={f.legal_name} onChange={e=>setF({...f, legal_name:e.target.value})} />
+                    <div className="grid">
+                      <input placeholder="RUC / NIF" value={f.tax_id} onChange={e=>setF({...f, tax_id:e.target.value})} />
+                      <select value={f.country_origin} onChange={e=>setF({...f, country_origin:e.target.value})}>
+                        <option value="Panamá">🇵🇦 Panamá</option>
+                        <option value="España">🇪🇸 España</option>
+                        <option value="USA">🇺🇸 USA</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="group">
+                    <label>CONTACTO Y PAGOS</label>
+                    <input required type="email" placeholder="Email Corp." value={f.email_corp} onChange={e=>setF({...f, email_corp:e.target.value})} />
                     <select value={f.payment_condition} onChange={e=>setF({...f, payment_condition:e.target.value})}>
                       <option value="Prepagado">Prepagado</option>
                       <option value="Condicion Especial">Condición Especial</option>
                     </select>
-                  </section>
-
-                  <section className="formGroup">
-                    <label><MapPin size={14}/> LOGÍSTICA (Shipping/Billing)</label>
-                    <textarea placeholder="Dirección de Facturación" value={f.billing_address} onChange={e=>setF({...f, billing_address:e.target.value})} />
-                    {f.shipping_addresses.map((s, i) => (
+                  </div>
+                  <div className="group">
+                    <label>DIRECCIONES (BILLING/SHIPPING)</label>
+                    <textarea placeholder="Billing Address" value={f.billing_address} onChange={e=>setF({...f, billing_address:e.target.value})} />
+                    {f.shipping_addresses.map((s:any, i:number) => (
                       <div key={s.id} className="row">
-                        <input placeholder={`Dirección de Entrega #${i+1}`} value={s.address} onChange={e => {
-                          const news = [...f.shipping_addresses]; news[i].address = e.target.value; setF({...f, shipping_addresses: news});
+                        <input placeholder={`Shipping Address #${i+1}`} value={s.address} onChange={e => {
+                          const ns = [...f.shipping_addresses]; ns[i].address = e.target.value; setF({...f, shipping_addresses: ns});
                         }} />
-                        <Trash2 size={14} onClick={() => setF({...f, shipping_addresses: f.shipping_addresses.filter(x => x.id !== s.id)})} />
                       </div>
                     ))}
-                    <button type="button" onClick={() => setF({...f, shipping_addresses: [...f.shipping_addresses, {id:Date.now(), address:""}]})}>+ Añadir Dirección</button>
-                  </section>
-
-                  <section className="formGroup">
-                    <label><UserPlus size={14}/> CONTACTOS Y ACCESO PLATAFORMA (1:N)</label>
-                    {f.contacts.map((c, i) => (
-                      <div key={c.id} className="contactCard">
-                        <input required placeholder="Nombre del contacto" value={c.name} onChange={e => {
-                          const nc = [...f.contacts]; nc[i].name = e.target.value; setF({...f, contacts: nc});
-                        }} />
-                        <input required type="email" placeholder="Email (Validado)" value={c.email} onChange={e => {
-                          const nc = [...f.contacts]; nc[i].email = e.target.value; setF({...f, contacts: nc});
-                        }} />
-                        <div className="accessOption">
-                          <span>Habilitar Login de Cliente</span>
-                          <input type="checkbox" checked={c.has_access} onChange={e => {
-                            const nc = [...f.contacts]; nc[i].has_access = e.target.checked; setF({...f, contacts: nc});
-                          }} />
-                        </div>
-                      </div>
-                    ))}
-                    <button type="button" onClick={() => setF({...f, contacts: [...f.contacts, {id:Date.now(), name:"", email:"", phone:"", has_access:false, already_invited:false}]})}>+ Añadir Contacto</button>
-                  </section>
+                    <button type="button" className="btn-add" onClick={() => setF({...f, shipping_addresses: [...f.shipping_addresses, {id:Date.now(), address:""}]})}>+ Añadir Shipping</button>
+                  </div>
                 </>
+              ) : (
+                <div className="group">
+                  <label>DATOS DE ACCESO STAFF</label>
+                  <input required placeholder="Nombre Completo" value={f.staff_name} onChange={e=>setF({...f, staff_name:e.target.value})} />
+                  <input required type="email" placeholder="Email de Trabajo" value={f.staff_email} onChange={e=>setF({...f, staff_email:e.target.value})} />
+                  <select value={f.staff_role} onChange={e=>setF({...f, staff_role:e.target.value})}>
+                    <option value="admin">Administrador (Ventas/Logística)</option>
+                    <option value="superadmin">Superadmin (Jefe)</option>
+                  </select>
+                </div>
               )}
-              <button className="btnSave">{isSaving ? "Procesando..." : "Guardar Todo"}</button>
+              <button className="btnSubmit" disabled={isSaving}>{isSaving ? "Guardando..." : "Confirmar y Guardar"}</button>
             </form>
           </div>
         </>
       )}
 
       <style jsx>{`
-        .tabSelector { display: flex; gap: 10px; margin-bottom: 25px; border-bottom: 2px solid #e2e8f0; }
-        .tabSelector button { padding: 10px 20px; border: none; background: none; cursor: pointer; font-weight: 700; color: #64748b; }
-        .tabSelector button.active { color: var(--ff-green-dark); border-bottom: 2px solid var(--ff-green-dark); }
-        .ff-table { width: 100%; border-collapse: collapse; background: white; }
-        .ff-table th { text-align: left; padding: 12px; background: #f8fafc; font-size: 11px; color: #64748b; }
-        .ff-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
-        .drawer { position: fixed; right: 0; top: 0; height: 100%; width: 480px; background: #f8fafc; z-index: 1001; box-shadow: -10px 0 30px rgba(0,0,0,0.1); overflow-y: auto; }
-        .formGroup { background: white; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .contactCard { padding: 10px; background: #f1f5f9; border-radius: 8px; margin-bottom: 10px; }
-        .accessOption { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; font-weight: 800; }
-        .btnSave { background: var(--ff-green-dark); color: white; border: none; padding: 15px; border-radius: 10px; font-weight: 800; width: 100%; cursor: pointer; }
-        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; }
+        .tabs { display: flex; gap: 20px; margin-bottom: 25px; border-bottom: 2px solid #e2e8f0; }
+        .tabs button { padding: 12px 20px; border: none; background: none; cursor: pointer; font-weight: 700; color: #64748b; display: flex; align-items: center; gap: 8px; }
+        .tabs button.active { color: #1f7a3a; border-bottom: 2px solid #1f7a3a; }
+        
+        .toolbar { display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .search { display: flex; align-items: center; gap: 10px; background: white; padding: 8px 15px; border-radius: 10px; border: 1px solid #e2e8f0; width: 300px; }
+        .search input { border: none; outline: none; font-size: 14px; width: 100%; }
+        
+        .btnCreate { background: #1f7a3a; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .card { background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; }
+        .pro-table { width: 100%; border-collapse: collapse; }
+        .pro-table th { background: #f8fafc; text-align: left; padding: 15px; font-size: 11px; font-weight: 900; color: #64748b; }
+        .pro-table td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+
+        .role-badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+        .role-badge.superadmin { background: #fee2e2; color: #991b1b; }
+        .role-badge.admin { background: #e0f2fe; color: #075985; }
+
+        .drawer { position: fixed; right: 0; top: 0; width: 450px; height: 100%; background: #f8fafc; z-index: 1001; display: flex; flex-direction: column; box-shadow: -5px 0 25px rgba(0,0,0,0.1); }
+        .d-header { padding: 25px; background: white; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; }
+        .d-body { padding: 25px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
+        .group { background: white; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 10px; }
+        .group label { font-size: 10px; font-weight: 900; color: #1f7a3a; border-bottom: 1px solid #f1f5f9; padding-bottom: 5px; }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        input, select, textarea { padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #fcfcfc; }
+        textarea { height: 80px; resize: none; font-family: inherit; }
+        
+        .btnSubmit { background: #1f7a3a; color: white; border: none; padding: 18px; border-radius: 12px; font-weight: 900; cursor: pointer; }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; backdrop-filter: blur(2px); }
+        .spin { animation: rotate 1s linear infinite; }
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </AdminLayout>
   );
