@@ -13,6 +13,7 @@ import {
   Truck,
   PackageCheck,
   FileText,
+  ExternalLink,
 } from "lucide-react";
 
 import { supabase } from "../../lib/supabaseClient";
@@ -25,6 +26,7 @@ type ShipmentListItem = {
   destination: string;
   status: string;
   created_at: string;
+  client_id?: string | null;
   client_name?: string | null;
   product_name?: string | null;
   product_variety?: string | null;
@@ -216,7 +218,6 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -291,28 +292,37 @@ export default function AdminDashboard() {
                 <div className="tEmpty">Aún no hay embarques.</div>
               ) : (
                 shipments.map((s) => (
-                  <Link key={s.id} href={`/admin/shipments/${s.id}`} legacyBehavior>
-                    <a className="shipRow">
-                      <div className="cell">
+                  <div key={s.id} className="shipRow">
+                    {/* Área de clic para el Embarque */}
+                    <Link href={`/admin/shipments/${s.id}`} legacyBehavior>
+                      <a className="cell pointer-area">
                         <div className="main code">{s.code}</div>
                         <div className="sub">{fmtDate(s.created_at)}</div>
-                      </div>
+                      </a>
+                    </Link>
 
-                      <div className="cell">
-                        <div className="main client">{s.client_name || "—"}</div>
-                        <div className="sub">{productInline(s)}</div>
-                      </div>
+                    {/* Área de clic para el Cliente (LA MEJORA) */}
+                    <div className="cell">
+                      <Link href={`/admin/clients/${s.client_id || s.id}`} legacyBehavior>
+                        <a className="client-link-dashboard">
+                          <div className="main client">
+                            {s.client_name || "—"} 
+                            <ExternalLink size={10} style={{ marginLeft: 6, opacity: 0.4, display: 'inline' }} />
+                          </div>
+                        </a>
+                      </Link>
+                      <div className="sub">{productInline(s)}</div>
+                    </div>
 
-                      <div className="cell dest">
-                        <div className="main">{(s.destination || "").toUpperCase()}</div>
-                        <div className="sub">&nbsp;</div>
-                      </div>
+                    <div className="cell dest">
+                      <div className="main">{(s.destination || "").toUpperCase()}</div>
+                      <div className="sub">&nbsp;</div>
+                    </div>
 
-                      <div className="cell milestone">
-                        <MiniMilestone status={s.status} />
-                      </div>
-                    </a>
-                  </Link>
+                    <div className="cell milestone">
+                      <MiniMilestone status={s.status} />
+                    </div>
+                  </div>
                 ))
               )}
             </div>
@@ -518,7 +528,28 @@ export default function AdminDashboard() {
           border-bottom: 0;
         }
         .shipRow:hover {
-          background: rgba(31, 122, 58, 0.055);
+          background: rgba(31, 122, 58, 0.02);
+        }
+
+        /* ESTILOS DE LOS ENLACES INTERNOS */
+        .pointer-area {
+          cursor: pointer;
+          text-decoration: none;
+          color: inherit;
+          display: block;
+        }
+        .pointer-area:hover .code {
+          color: var(--ff-green-dark);
+        }
+
+        .client-link-dashboard {
+          text-decoration: none;
+          color: inherit;
+          display: inline-block;
+        }
+        .client-link-dashboard:hover .client {
+          color: var(--ff-green-dark);
+          text-decoration: underline;
         }
 
         .cell {
@@ -599,27 +630,12 @@ export default function AdminDashboard() {
           animation: shimmer 1.1s infinite;
         }
         @keyframes shimmer {
-          0% {
-            transform: translateX(-60%);
-          }
-          100% {
-            transform: translateX(60%);
-          }
+          0% { transform: translateX(-60%); }
+          100% { transform: translateX(60%); }
         }
-        .sk1 {
-          height: 12px;
-          width: 68%;
-        }
-        .sk2 {
-          height: 10px;
-          width: 88%;
-          margin-top: 6px;
-        }
-        .skPill {
-          height: 26px;
-          width: 150px;
-          border-radius: 999px;
-        }
+        .sk1 { height: 12px; width: 68%; }
+        .sk2 { height: 10px; width: 88%; margin-top: 6px; }
+        .skPill { height: 26px; width: 150px; border-radius: 999px; }
 
         .ctaGrid {
           display: grid;
@@ -627,9 +643,7 @@ export default function AdminDashboard() {
           gap: 10px;
         }
         @media (min-width: 980px) {
-          .ctaGrid {
-            grid-template-columns: 1fr 1fr;
-          }
+          .ctaGrid { grid-template-columns: 1fr 1fr; }
         }
 
         .ctaCard {
@@ -660,24 +674,9 @@ export default function AdminDashboard() {
           background: rgba(15, 23, 42, 0.03);
         }
 
-        .ctaTitle {
-          font-weight: 950;
-          letter-spacing: -0.2px;
-          font-size: 14px;
-          line-height: 18px;
-        }
-        .ctaDesc {
-          font-size: 12px;
-          color: var(--ff-muted);
-          line-height: 16px;
-        }
-        .ctaFoot {
-          font-size: 11px;
-          font-weight: 950;
-          letter-spacing: 0.2px;
-          text-transform: uppercase;
-          color: rgba(15, 23, 42, 0.55);
-        }
+        .ctaTitle { font-weight: 950; letter-spacing: -0.2px; font-size: 14px; line-height: 18px; }
+        .ctaDesc { font-size: 12px; color: var(--ff-muted); line-height: 16px; }
+        .ctaFoot { font-size: 11px; font-weight: 950; letter-spacing: 0.2px; text-transform: uppercase; color: rgba(15, 23, 42, 0.55); }
 
         .ctaCard.primary {
           background: linear-gradient(180deg, rgba(31, 122, 58, 0.12) 0%, rgba(31, 122, 58, 0.04) 100%);
@@ -738,27 +737,17 @@ export default function AdminDashboard() {
         }
 
         @media (max-width: 860px) {
-          .shipRow {
-            grid-template-columns: 1.2fr 1.4fr 0.6fr 1fr;
-          }
-          .miniMilestoneTxt {
-            max-width: 130px;
-          }
-          .skPill {
-            width: 130px;
-          }
+          .shipRow { grid-template-columns: 1.2fr 1.4fr 0.6fr 1fr; }
+          .miniMilestoneTxt { max-width: 130px; }
+          .skPill { width: 130px; }
         }
         @media (max-width: 520px) {
           .shipRow {
             grid-template-columns: 1.15fr 1.25fr 0.55fr 1fr;
             padding: 10px 10px;
           }
-          .miniMilestoneTxt {
-            max-width: 110px;
-          }
-          .skPill {
-            width: 110px;
-          }
+          .miniMilestoneTxt { max-width: 110px; }
+          .skPill { width: 110px; }
         }
       `}</style>
     </AdminLayout>
