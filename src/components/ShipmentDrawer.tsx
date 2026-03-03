@@ -76,7 +76,14 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
     setLoading(true);
 
     try {
-      // Mapeo exacto de los campos que espera tu función createShipment de Netlify
+      // 1. Obtener sesión activa para autorizar la función de Netlify
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error("No hay una sesión activa. Por favor, inicia sesión de nuevo.");
+      }
+
+      // 2. Mapeo de datos para createShipment
       const payload = {
         clientId: clientId,
         destination: formData.destination,
@@ -87,30 +94,38 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
         product_name: products.find(p => p.id === formData.product_id)?.name || '',
         product_variety: allVarieties.find(v => v.id === formData.variety_id)?.name || '',
         product_mode: mode,
-        // Campos adicionales requeridos por tu lógica de BD
         calibre: formData.calibre,
         color: formData.color,
         brix_grade: formData.brix_grade
       };
 
-      // Llamada a tu función de Netlify (Ajusta la ruta si es necesario)
+      // 3. Petición a la función de Netlify con el Token Bearer
       const response = await fetch('/.netlify/functions/createShipment', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
         body: JSON.stringify(payload)
       });
 
-      const result = await response.json();
-
+      // Manejo de respuesta de texto (por si la función devuelve text en lugar de json en errores)
       if (!response.ok) {
-        throw new Error(result.message || 'Error al procesar el embarque');
+        const errorText = await response.text();
+        throw new Error(errorText || 'Error en el servidor');
       }
 
-      setSuccess(true);
-      setTimeout(() => {
-        onSuccess();
-        handleClose();
-      }, 1500);
+      const result = await response.json();
+
+      if (result.ok) {
+        setSuccess(true);
+        setTimeout(() => {
+          onSuccess();
+          handleClose();
+        }, 1500);
+      } else {
+        throw new Error(result.message || 'Error desconocido al crear embarque');
+      }
 
     } catch (err: any) {
       console.error("Error en submit:", err);
