@@ -15,6 +15,7 @@ export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") return text(405, "Method not allowed");
 
   try {
+    // 1) Verificación de Identidad y Rol
     const { user, profile } = await getUserAndProfile(event);
     if (!user || !profile) return text(401, "Unauthorized");
 
@@ -24,39 +25,27 @@ export const handler: Handler = async (event) => {
 
     const body = JSON.parse(event.body || "{}");
 
-    // 1) Resolver Cliente y sus datos maestros
+    // 2) Validación del Cliente
     const clientId = cleanStr(body.clientId || body.client_id);
-    if (!clientId) return text(400, "Se requiere el ID del cliente seleccionado");
+    if (!clientId) return text(400, "Se requiere el ID del cliente");
 
-    const { data: clientData, error: clientErr } = await sbAdmin
+    const { data: clientExists, error: clientErr } = await sbAdmin
       .from("clients")
-      .select("id, name, billing_address, country, phone")
+      .select("id")
       .eq("id", clientId)
       .single();
 
-    if (clientErr || !clientData) return text(400, "Cliente no encontrado en el directorio");
+    if (clientErr || !clientExists) return text(400, "Cliente no encontrado");
 
-    // 2) Preparar datos del embarque
+    // 3) Preparar datos logísticos
     const destination = cleanStr(body.destination).toUpperCase();
-    const incoterm = cleanStr(body.incoterm).toUpperCase() || "N/A"; // Nuevo: Incoterm
-    const boxes = body.boxes ?? null;
-    const pallets = body.pallets ?? null;
-    const weight_kg = body.weight_kg ?? null;
-
-    // Direcciones
-    const shipping_address = cleanStr(body.shipping_address); 
-    const billing_address = cleanStr(body.billing_address) || clientData.billing_address;
-
-    // VALIDACIÓN DE DESTINO (Ahora flexible)
+    const incoterm = cleanStr(body.incoterm).toUpperCase() || "FOB";
+    
     if (!destination || destination.length < 3) {
-      return text(400, "Código de destino inválido (Mínimo 3 caracteres, ej: PTY, MAD, MIA)");
+      return text(400, "Destino inválido");
     }
 
-    const product_name = cleanStr(body.product_name || body.productName) || "Piña";
-    const product_variety = cleanStr(body.product_variety || body.productVariety) || "MD2 Golden";
-    const product_mode = cleanStr(body.product_mode || body.productMode) || "Aérea";
-
-    // 3) Generar código correlativo (FFP-2026-0001)
+    // 4) Generar correlativo FFP-2026-XXXX
     const year = new Date().getFullYear();
     const prefix = `FFP-${year}-`;
     const { count, error: cntErr } = await sbAdmin
@@ -65,52 +54,48 @@ export const handler: Handler = async (event) => {
       .ilike("code", `${prefix}%`);
 
     if (cntErr) throw cntErr;
-    const next = (count ?? 0) + 1;
-    const code = `${prefix}${pad(next, 4)}`;
+    const code = `${prefix}${pad((count ?? 0) + 1, 4)}`;
 
-    // 4) Insertar Embarque con toda la metadata logística e INCOTERM
+    // 5) Inserción en Tabla 'shipments'
+    // Se eliminaron columnas redundantes para evitar errores de schema cache
     const { data: newShip, error: shipErr } = await sbAdmin
       .from("shipments")
       .insert({
-        client_id: clientData.id,
+        client_id: clientId,
         code,
         destination,
-        incoterm, // <--- CAMBIO: Guardamos el Incoterm
-        boxes,
-        pallets,
-        weight_kg,
-        status: "CREATED",
-        product_name,
-        product_variety,
-        product_mode,
-        shipping_address, 
-        billing_address,
-        client_phone: clientData.phone,
-        origin_country: clientData.country
+        incoterm,
+        boxes: body.boxes ?? null,
+        pallets: body.pallets ?? null,
+        weight_kg: body.weight_kg ?? null,
+        product_name: cleanStr(body.product_name) || "Piña",
+        product_variety: cleanStr(body.product_variety) || "MD2 Golden",
+        product_mode: cleanStr(body.product_mode) || "Marítima",
+        status: "CREATED"
       })
       .select("id")
       .single();
 
     if (shipErr || !newShip) throw shipErr;
 
-    // 5) Hito (Milestone) inicial (Incluyendo Incoterm en la nota)
-    await sbAdmin.from("milestones").upsert({
+    // 6) Crear Hito Inicial
+    await sbAdmin.from("milestones").insert({
       shipment_id: newShip.id,
       type: "CREATED",
       note: `Embarque generado (${incoterm}) para despacho a ${destination}`,
       actor_email: user.email,
       at: new Date().toISOString(),
-    }, { onConflict: "shipment_id,type" });
+    });
 
     return json(200, { 
       ok: true, 
       code, 
       id: newShip.id, 
-      message: `Embarque ${code} creado exitosamente` 
+      message: `Embarque ${code} creado` 
     });
 
   } catch (e: any) {
-    console.error("Error en createShipment:", e.message);
-    return text(500, e?.message || "Server error");
+    console.error("Error crítico en createShipment:", e.message);
+    return text(500, e?.message || "Internal Server Error");
   }
 };

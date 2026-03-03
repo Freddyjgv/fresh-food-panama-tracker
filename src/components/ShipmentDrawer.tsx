@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Save, Package, Globe, Loader2, Check, Hash, Palette, ThermometerSun, Anchor, Plane } from 'lucide-center';
+import { X, Save, Package, Globe, Loader2, Check, Hash, Palette, ThermometerSun, Anchor, Plane } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
 interface ShipmentDrawerProps {
@@ -76,15 +76,13 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
     setLoading(true);
 
     try {
-      // 1. Validación de Sesión (Evita Error 401)
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Sesión no encontrada. Reingresa al sistema.");
+      if (!session) throw new Error("Sesión no encontrada. Por favor, reinicia sesión.");
 
-      // 2. Preparación de Strings de Producto/Variedad
       const selectedProduct = products.find(p => p.id === formData.product_id);
       const selectedVariety = allVarieties.find(v => v.id === formData.variety_id);
 
-      // 3. Payload mapeado exactamente a tu función createShipment
+      // Payload optimizado: solo lo necesario para el backend
       const payload = {
         clientId: clientId,                             
         destination: formData.destination,              
@@ -95,15 +93,12 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
         product_name: selectedProduct?.name || 'Piña',      
         product_variety: selectedVariety?.name || 'MD2 Golden',  
         product_mode: mode,
-        // Campos extra que tu backend procesa en el body
+        // Metadata técnica del producto
         calibre: formData.calibre,
         color: formData.color,
-        brix_grade: formData.brix_grade,
-        // Requerido por la lógica de tu función de Netlify
-        shipping_address: `Despacho a ${formData.destination}`
+        brix_grade: formData.brix_grade
       };
 
-      // 4. Ejecución vía Netlify Function
       const response = await fetch('/.netlify/functions/createShipment', {
         method: 'POST',
         headers: { 
@@ -127,19 +122,30 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
           handleClose();
         }, 1500);
       } else {
-        throw new Error(result.message || 'La operación no devolvió OK');
+        throw new Error(result.message || 'La operación falló en el servidor');
       }
 
     } catch (err: any) {
       console.error("Submit Error:", err.message);
-      alert("Error al crear embarque: " + err.message);
+      alert("Error: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleClose = () => {
-    setFormData({ product_id: '', variety_id: '', calibre: '', color: '', brix_grade: '>13', boxes: '', pallets: '', estimated_weight: '', incoterm: defaultIncoterm || 'FOB', destination: '' });
+    setFormData({ 
+      product_id: '', 
+      variety_id: '', 
+      calibre: '', 
+      color: '', 
+      brix_grade: '>13', 
+      boxes: '', 
+      pallets: '', 
+      estimated_weight: '', 
+      incoterm: defaultIncoterm || 'FOB', 
+      destination: '' 
+    });
     setSuccess(false);
     onClose();
   };
