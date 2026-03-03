@@ -1,86 +1,71 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { requireAdminOrRedirect } from "../../lib/requireAdmin";
 import { AdminLayout } from "../../components/AdminLayout";
 import { useUILang } from "../../lib/uiLanguage";
 import {
-  RefreshCcw,
-  Users as UsersIcon,
-  Building2,
-  KeyRound,
-  Mail,
-  Plus,
-  Loader2,
-  UserPlus,
-  X
+  RefreshCcw, Building2, Mail, Plus, Loader2, UserPlus, X, 
+  Globe, Phone, MapPin, FileText, ShieldCheck, ExternalLink, Info
 } from "lucide-react";
 
-type Role = "client" | "admin" | "superadmin";
-type Client = { id: string; name: string; contact_email: string; created_at?: string };
-
-async function getTokenOrRedirect() {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  if (!token) {
-    window.location.href = "/login";
-    return null;
-  }
-  return token;
-}
+// Lista pro de países comunes (puedes ampliarla)
+const COUNTRIES = [
+  { code: 'PA', name: 'Panamá', dial: '+507', flag: '🇵🇦' },
+  { code: 'US', name: 'USA', dial: '+1', flag: '🇺🇸' },
+  { code: 'CN', name: 'China', dial: '+86', flag: '🇨🇳' },
+  { code: 'CO', name: 'Colombia', dial: '+57', flag: '🇨🇴' },
+  { code: 'CR', name: 'Costa Rica', dial: '+506', flag: '🇨🇷' },
+  { code: 'ES', name: 'España', dial: '+34', flag: '🇪🇸' },
+  { code: 'MX', name: 'México', dial: '+52', flag: '🇲🇽' },
+];
 
 export default function AdminUsersPage() {
   const { lang } = useUILang();
-  const [meRole, setMeRole] = useState<Role>("client");
-  const [meEmail, setMeEmail] = useState<string | null>(null);
   const [tab, setTab] = useState<"clients" | "users">("clients");
-  
-  // Estado para mostrar/ocultar formularios
   const [showCreateForm, setShowCreateForm] = useState(false);
-
-  const [clients, setClients] = useState<Client[]>([]);
+  
+  // Estados de carga
+  const [clients, setClients] = useState<any[]>([]);
   const [clientsLoading, setClientsLoading] = useState(true);
   const [clientsBusy, setClientsBusy] = useState(false);
 
-  // Formulario Crear cliente+usuario
-  const [cEmail, setCEmail] = useState("");
-  const [cName, setCName] = useState("");
-  const [cContactName, setCContactName] = useState("");
-  const [clientInvite, setClientInvite] = useState(true);
-  const [clientPassword, setClientPassword] = useState("");
-  const [clientBusy, setClientBusy] = useState(false);
-  const [clientMsg, setClientMsg] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
+  // --- ESTADO DEL FORMULARIO PRO ---
+  const [form, setForm] = useState({
+    name: "",
+    legal_name: "",
+    contact_email: "",
+    contact_name: "",
+    tax_id: "",
+    phone: "",
+    website: "",
+    country: "Panamá",
+    city: "",
+    billing_address: "",
+    shipping_address: "",
+    internal_notes: "",
+    // Lógica de usuario
+    create_user_access: false,
+    client_invite: true,
+    password: ""
+  });
 
-  const [users, setUsers] = useState<any[]>([]);
-  const [usersBusy, setUsersBusy] = useState(false);
-  const canListUsers = meRole === "superadmin";
+  const [clientMsg, setClientMsg] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
     (async () => {
       const r = await requireAdminOrRedirect();
-      if (!r.ok) return;
-      await loadMe();
-      await loadClients(true);
-      setClientsLoading(false);
+      if (r.ok) {
+        await loadClients(true);
+        setClientsLoading(false);
+      }
     })();
   }, []);
 
-  async function loadMe() {
-    const token = await getTokenOrRedirect();
-    if (!token) return;
-    const res = await fetch("/.netlify/functions/getMyProfile", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return;
-    const me = await res.json();
-    setMeRole(me.role as Role);
-    setMeEmail(me.email);
-  }
-
   async function loadClients(initial = false) {
     if (!initial) setClientsBusy(true);
-    const token = await getTokenOrRedirect();
+    const { data: { session } } = await supabase.auth.getSession();
     const res = await fetch("/.netlify/functions/listClients", {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${session?.access_token}` },
     });
     if (res.ok) {
       const json = await res.json();
@@ -91,173 +76,203 @@ export default function AdminUsersPage() {
 
   async function onCreateClient(e: React.FormEvent) {
     e.preventDefault();
-    setClientBusy(true);
+    setClientsBusy(true);
     setClientMsg(null);
 
-    const token = await getTokenOrRedirect();
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    // El payload ahora es completo según tu DB
     const payload = {
-      contact_email: cEmail.trim().toLowerCase(),
-      name: cName.trim() || cEmail,
-      contact_name: cContactName.trim(),
-      user_email: cEmail.trim().toLowerCase(),
-      invite: clientInvite,
-      password: clientInvite ? undefined : clientPassword
+      ...form,
+      user_email: form.contact_email, // El email de contacto es el login
+      invite: form.client_invite,
     };
 
     const res = await fetch("/.netlify/functions/createUser", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
       body: JSON.stringify(payload),
     });
 
-    setClientBusy(false);
+    setClientsBusy(false);
     if (!res.ok) {
       const err = await res.text();
       setClientMsg({ text: err, type: 'error' });
     } else {
-      setClientMsg({ text: lang === 'es' ? "✅ ¡Creado con éxito!" : "✅ Created successfully!", type: 'success' });
-      setCEmail(""); setCName(""); setCContactName(""); setClientPassword("");
-      loadClients(false);
-      setTimeout(() => setShowCreateForm(false), 2000);
+      setClientMsg({ text: "✅ ¡Cliente registrado con éxito!", type: 'success' });
+      // Reset y cerrar tras éxito
+      setTimeout(() => {
+        setShowCreateForm(false);
+        loadClients(false);
+      }, 1500);
     }
   }
 
-  if (clientsLoading) return <AdminLayout title="..."><Loader2 className="spin" /></AdminLayout>;
-
   return (
-    <AdminLayout 
-      title={lang === "es" ? "Gestión de Clientes" : "Client Management"}
-      subtitle={`${meEmail} (${meRole})`}
-    >
-      {/* Barra de Navegación Superior */}
-      <div className="nav-bar">
-        <div className="tabs">
-          <button className={`tab-btn ${tab === 'clients' ? 'active' : ''}`} onClick={() => setTab('clients')}>
-            <Building2 size={18} /> {lang === 'es' ? 'Empresas' : 'Companies'}
-          </button>
-          <button className={`tab-btn ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
-            <UsersIcon size={18} /> {lang === 'es' ? 'Usuarios' : 'Users'}
-          </button>
+    <AdminLayout title={lang === "es" ? "Directorio de Clientes" : "Client Directory"}>
+      <div className="ff-header-actions">
+        <div className="ff-tabs-modern">
+          <button className={tab === 'clients' ? 'active' : ''} onClick={() => setTab('clients')}>Clientes</button>
+          <button className={tab === 'users' ? 'active' : ''} onClick={() => setTab('users')}>Usuarios (Admins)</button>
         </div>
         
-        <button className="ff-btn-new" onClick={() => setShowCreateForm(!showCreateForm)}>
-          {showCreateForm ? <X size={18} /> : <Plus size={18} />}
-          {showCreateForm ? (lang === 'es' ? 'Cerrar' : 'Close') : (lang === 'es' ? 'Nuevo Cliente' : 'New Client')}
+        <button className="btn-primary-pro" onClick={() => setShowCreateForm(true)}>
+          <Plus size={18} />
+          {lang === 'es' ? 'Nuevo Cliente' : 'Add Client'}
         </button>
       </div>
 
-      <div className="content-area">
-        {/* Formulario Lateral (Drawer-like) */}
-        {showCreateForm && (
-          <div className="side-form-container">
-            <div className="ff-card2 shadow-lg">
-              <h2 className="h2x">{lang === 'es' ? 'Registrar Nuevo Cliente' : 'Register New Client'}</h2>
-              <p className="subx">{lang === 'es' ? 'Se creará la empresa y su acceso de usuario.' : 'Company and user access will be created.'}</p>
-              
-              <form onSubmit={onCreateClient} className="form-vertical">
-                <div className="input-group">
-                  <label><Mail size={14}/> Email</label>
-                  <input className="in2" value={cEmail} onChange={e => setCEmail(e.target.value)} required />
-                </div>
-                <div className="input-group">
-                  <label><Building2 size={14}/> {lang === 'es' ? 'Nombre Empresa' : 'Company Name'}</label>
-                  <input className="in2" value={cName} onChange={e => setCName(e.target.value)} required />
-                </div>
-                
-                <div className="invite-box">
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={clientInvite} onChange={e => setClientInvite(e.target.checked)} />
-                    <span>{lang === 'es' ? 'Enviar invitación por email' : 'Send email invitation'}</span>
-                  </label>
-                  {!clientInvite && (
-                    <input type="password" placeholder="Contraseña temporal" className="in2 mt-2" value={clientPassword} onChange={e => setClientPassword(e.target.value)} required />
-                  )}
-                </div>
-
-                <button className="ff-primary-full" disabled={clientBusy}>
-                  {clientBusy ? <Loader2 className="spin" size={18}/> : <UserPlus size={18}/>}
-                  {lang === 'es' ? 'Guardar Cliente' : 'Save Client'}
-                </button>
-
-                {clientMsg && <div className={`alert ${clientMsg.type}`}>{clientMsg.text}</div>}
-              </form>
-            </div>
+      <div className="ff-main-grid">
+        {/* TABLA DE CLIENTES */}
+        <div className="ff-card-clean">
+          <div className="table-header">
+            <h3>{clients.length} Clientes registrados</h3>
+            <button onClick={() => loadClients()} className="btn-icon"><RefreshCcw size={16} className={clientsBusy ? 'spin' : ''}/></button>
           </div>
-        )}
-
-        {/* Tabla Principal */}
-        <div className="main-table-container">
-          <div className="ff-card2">
-            <div className="ff-spread2 mb-4">
-              <h2 className="h2x">{lang === 'es' ? 'Listado de Clientes' : 'Client List'} ({clients.length})</h2>
-              <button className="refresh-btn" onClick={() => loadClients()} disabled={clientsBusy}>
-                <RefreshCcw size={16} className={clientsBusy ? 'spin' : ''} />
-              </button>
-            </div>
-            
-            <div className="table-wrapper">
-              <table className="ff-table">
-                <thead>
-                  <tr>
-                    <th>{lang === 'es' ? 'Empresa' : 'Company'}</th>
-                    <th>Email</th>
-                    <th>ID Sistema</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clients.map(c => (
-                    <tr key={c.id}>
-                      <td className="font-bold">{c.name}</td>
-                      <td className="text-muted">{c.contact_email}</td>
-                      <td className="text-mono">{c.id.split('-')[0]}...</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <table className="pro-table">
+            <thead>
+              <tr>
+                <th>Cliente / Empresa</th>
+                <th>Contacto</th>
+                <th>Ubicación</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clients.map(c => (
+                <tr key={c.id}>
+                  <td>
+                    <div className="td-client">
+                      <div className="avatar">{c.name[0]}</div>
+                      <div>
+                        <div className="name">{c.name}</div>
+                        <div className="legal">{c.legal_name || 'Sin razón social'}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="td-contact">
+                      <span><Mail size={12}/> {c.contact_email}</span>
+                      <span><Phone size={12}/> {c.phone || '-'}</span>
+                    </div>
+                  </td>
+                  <td className="td-muted">{c.city}, {c.country}</td>
+                  <td><span className="badge-active">{c.status || 'active'}</span></td>
+                  <td><button className="btn-ghost"><ExternalLink size={14}/></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
+      {/* --- DRAWER FORMULARIO (PANEL LATERAL) --- */}
+      {showCreateForm && (
+        <div className="drawer-overlay" onClick={() => setShowCreateForm(false)}>
+          <div className="drawer-content" onClick={e => e.stopPropagation()}>
+            <div className="drawer-header">
+              <h2>Crear Nuevo Cliente</h2>
+              <button onClick={() => setShowCreateForm(false)}><X/></button>
+            </div>
+
+            <form onSubmit={onCreateClient} className="drawer-form">
+              {/* Sección 1: Empresa */}
+              <section>
+                <div className="section-title"><Building2 size={16}/> Información de Empresa</div>
+                <div className="input-row">
+                  <div className="field">
+                    <label>Nombre Comercial *</label>
+                    <input required value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Ej: Fresh Food Corp" />
+                  </div>
+                  <div className="field">
+                    <label>Razón Social (Legal)</label>
+                    <input value={form.legal_name} onChange={e => setForm({...form, legal_name: e.target.value})} placeholder="Ej: Fresh Food S.A." />
+                  </div>
+                </div>
+                <div className="input-row">
+                  <div className="field">
+                    <label>Tax ID / RUC</label>
+                    <input value={form.tax_id} onChange={e => setForm({...form, tax_id: e.target.value})} placeholder="000-000-000" />
+                  </div>
+                  <div className="field">
+                    <label>Website</label>
+                    <input value={form.website} onChange={e => setForm({...form, website: e.target.value})} placeholder="https://..." />
+                  </div>
+                </div>
+              </section>
+
+              {/* Sección 2: Contacto y Ubicación */}
+              <section>
+                <div className="section-title"><MapPin size={16}/> Contacto y Ubicación</div>
+                <div className="field">
+                  <label>Email de Contacto * (Para facturas y login)</label>
+                  <input required type="email" value={form.contact_email} onChange={e => setForm({...form, contact_email: e.target.value})} placeholder="cliente@email.com" />
+                </div>
+                <div className="input-row">
+                  <div className="field">
+                    <label>Teléfono</label>
+                    <input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} placeholder="+507 6000-0000" />
+                  </div>
+                  <div className="field">
+                    <label>País</label>
+                    <select value={form.country} onChange={e => setForm({...form, country: e.target.value})}>
+                      {COUNTRIES.map(c => <option key={c.code} value={c.name}>{c.flag} {c.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Dirección de Facturación</label>
+                  <textarea rows={2} value={form.billing_address} onChange={e => setForm({...form, billing_address: e.target.value})} />
+                </div>
+              </section>
+
+              {/* Sección 3: Acceso al Portal (Opcional) */}
+              <section className="access-section">
+                <div className="ff-switch-row">
+                  <div>
+                    <div className="section-title" style={{margin:0}}><ShieldCheck size={16}/> Acceso al Portal</div>
+                    <p className="subx">Permite al cliente ver sus cotizaciones y embarques</p>
+                  </div>
+                  <input type="checkbox" className="switch" checked={form.create_user_access} onChange={e => setForm({...form, create_user_access: e.target.checked})} />
+                </div>
+
+                {form.create_user_access && (
+                  <div className="access-details animated-fade">
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={form.client_invite} onChange={e => setForm({...form, client_invite: e.target.checked})} />
+                      <span>Enviar invitación por email (recomendado)</span>
+                    </label>
+                    {!form.client_invite && (
+                      <input type="password" placeholder="Definir contraseña temporal" className="mt-2" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
+                    )}
+                  </div>
+                )}
+              </section>
+
+              <div className="drawer-footer">
+                {clientMsg && <div className={`alert ${clientMsg.type}`}>{clientMsg.text}</div>}
+                <button type="submit" className="btn-save-full" disabled={clientsBusy}>
+                  {clientsBusy ? <Loader2 className="spin" size={20}/> : <UserPlus size={20}/>}
+                  Guardar Cliente
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <style jsx>{`
-        .nav-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #fff; padding: 10px; border-radius: 12px; border: 1px solid #e2e8f0; }
-        .tabs { display: flex; gap: 8px; }
-        .tab-btn { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 8px; border: none; background: transparent; cursor: pointer; font-weight: 600; color: #64748b; transition: all 0.2s; }
-        .tab-btn.active { background: #f1f5f9; color: #1f7a3a; }
-        
-        .ff-btn-new { display: flex; align-items: center; gap: 8px; background: #1f7a3a; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; transition: transform 0.1s; }
-        .ff-btn-new:active { transform: scale(0.95); }
+        .ff-header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .ff-tabs-modern { background: #e2e8f0; padding: 4px; border-radius: 10px; display: flex; gap: 4px; }
+        .ff-tabs-modern button { border: none; padding: 8px 16px; border-radius: 7px; font-weight: 600; cursor: pointer; color: #64748b; background: transparent; transition: 0.2s; }
+        .ff-tabs-modern button.active { background: white; color: #1f7a3a; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 
-        .content-area { display: flex; gap: 20px; align-items: flex-start; }
-        .side-form-container { width: 350px; flex-shrink: 0; position: sticky; top: 20px; }
-        .main-table-container { flex-grow: 1; }
+        .btn-primary-pro { background: #1f7a3a; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; display: flex; align-items: center; gap: 8px; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(31, 122, 58, 0.2); }
 
-        .form-vertical { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
-        .input-group { display: flex; flex-direction: column; gap: 5px; }
-        .input-group label { font-size: 12px; font-weight: 700; color: #475569; display: flex; align-items: center; gap: 5px; }
-        
-        .invite-box { background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px dashed #cbd5e1; }
-        .checkbox-label { display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; }
-        
-        .ff-primary-full { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; background: #1f7a3a; color: white; border: none; height: 45px; border-radius: 8px; font-weight: 700; cursor: pointer; }
-        
-        .alert { padding: 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
-        .alert.success { background: #dcfce7; color: #166534; }
-        .alert.error { background: #fee2e2; color: #991b1b; }
+        .ff-card-clean { background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .table-header { padding: 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+        .table-header h3 { font-size: 16px; font-weight: 800; color: #1e293b; }
 
-        .ff-table { width: 100%; border-collapse: collapse; }
-        .ff-table th { text-align: left; padding: 12px; border-bottom: 2px solid #f1f5f9; color: #64748b; font-size: 12px; text-transform: uppercase; }
-        .ff-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
-        
-        .text-mono { font-family: monospace; color: #94a3b8; }
-        .spin { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        
-        @media (max-width: 1000px) {
-          .content-area { flex-direction: column; }
-          .side-form-container { width: 100%; position: static; }
-        }
-      `}</style>
-    </AdminLayout>
-  );
-}
+        .pro-table { width: 100%; border-collapse: collapse; }
+        .pro-table th { background: #f8fafc; text-align: left; padding: 14px 20px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #647
