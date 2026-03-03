@@ -1,28 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { requireAdminOrRedirect } from "../../lib/requireAdmin";
 import { AdminLayout } from "../../components/AdminLayout";
-import { useUILang } from "../../lib/uiLanguage";
-import {
-  RefreshCcw,
-  Users as UsersIcon,
-  Building2,
-  KeyRound,
-  Mail,
-  Plus,
-  Loader2,
-  X,
-  Globe,
-  Phone,
-  Search,
-  ExternalLink
+import { 
+  Plus, Loader2, X, Building2, Globe, Mail, Search, RefreshCcw, ExternalLink, Phone 
 } from "lucide-react";
 
-type Role = "client" | "admin" | "superadmin";
-type Client = { id: string; name: string; contact_email: string; country?: string; tax_id?: string; legal_name?: string };
-
-// LISTADO DE PAÍSES PARA LOGÍSTICA
+// Lista de países fuera para no recrearla en cada render
 const COUNTRIES = [
   { code: 'PA', name: 'Panamá', flag: '🇵🇦' },
   { code: 'ES', name: 'España', flag: '🇪🇸' },
@@ -37,260 +21,188 @@ const COUNTRIES = [
 ];
 
 export default function AdminUsersPage() {
-  const { lang } = useUILang();
+  // 1. Estados de Control de Flujo (Fundamentales para la estabilidad)
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const isMounted = useRef(true);
 
-  // Estados de tu código original
-  const [meRole, setMeRole] = useState<Role>("client");
-  const [meEmail, setMeEmail] = useState<string | null>(null);
-  const [tab, setTab] = useState<"clients" | "users">("clients");
-  const [clients, setClients] = useState<Client[]>([]);
-  const [clientsLoading, setClientsLoading] = useState(true);
+  // 2. Estados de Datos
+  const [clients, setClients] = useState<any[]>([]);
   const [clientsBusy, setClientsBusy] = useState(false);
-
-  // UI Control
   const [showDrawer, setShowDrawer] = useState(false);
+
+  // 3. Estados del Formulario Pro
+  const [form, setForm] = useState({
+    name: "", legal_name: "", tax_id: "", contact_email: "", 
+    country: "Panamá", phone: "", invite: true
+  });
   const [countrySearch, setCountrySearch] = useState("");
+  const [msg, setMsg] = useState<{text: string, type: 'success' | 'error'} | null>(null);
 
-  // ESTADO EXTENDIDO DEL FORMULARIO (Nuevos campos)
-  const [cEmail, setCEmail] = useState("");
-  const [cName, setCName] = useState("");
-  const [cLegalName, setCLegalName] = useState(""); // Nuevo
-  const [cTaxId, setCTaxId] = useState("");         // Nuevo
-  const [cCountry, setCCountry] = useState("Panamá"); // Nuevo
-  const [cPhone, setCPhone] = useState("");         // Nuevo
-  const [cContactName, setCContactName] = useState("");
-  const [clientInvite, setClientInvite] = useState(true);
-  const [clientPassword, setClientPassword] = useState("");
-  const [clientBusy, setClientBusy] = useState(false);
-  const [clientMsg, setClientMsg] = useState<{text: string, type: 'success' | 'error'} | null>(null);
+  // Lógica de carga ultra-segura
+  const loadData = async () => {
+    if (!isMounted.current) return;
+    setClientsBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
 
-  // Estados para TAB Usuarios
-  const [uEmail, setUEmail] = useState("");
-  const [uRole, setURole] = useState<Role>("client");
-  const [invite, setInvite] = useState(true);
-  const [password, setPassword] = useState("");
-  const [clientMode, setClientMode] = useState<"existing" | "new">("existing");
-  const [selectedClientId, setSelectedClientId] = useState("");
-  const [newClientEmail, setNewClientEmail] = useState("");
-  const [newClientName, setNewClientName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+      const res = await fetch("/.netlify/functions/listClients", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      
+      if (res.ok) {
+        const json = await res.json();
+        if (isMounted.current) setClients(json.items || []);
+      }
+    } catch (e) {
+      console.error("Error cargando clientes:", e);
+    } finally {
+      if (isMounted.current) {
+        setClientsBusy(false);
+        setLoading(false);
+      }
+    }
+  };
 
-  // Usuarios list
-  const [users, setUsers] = useState<any[]>([]);
-  const [usersBusy, setUsersBusy] = useState(false);
-  const canListUsers = meRole === "superadmin";
-
-  // LÓGICA DE CARGA ORIGINAL (INTACTA)
+  // Inicialización en cascada (No rompe el Layout)
   useEffect(() => {
-    (async () => {
-      const r = await requireAdminOrRedirect();
-      if (!r.ok) return;
-      await loadMe();
-      await loadClients(true);
-      setClientsLoading(false);
-    })();
+    isMounted.current = true;
+    requireAdminOrRedirect().then(r => {
+      if (r.ok && isMounted.current) {
+        setIsAuthorized(true);
+        loadData();
+      }
+    });
+    return () => { isMounted.current = false; };
   }, []);
 
-  async function loadMe() {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) return;
-
-    const res = await fetch("/.netlify/functions/getMyProfile", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) {
-      const me = await res.json();
-      setMeEmail(me.email || null);
-      setMeRole(me.role || "client");
-    }
-  }
-
-  async function loadClients(initial = false) {
-    if (!initial) setClientsBusy(true);
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) return;
-
-    const res = await fetch("/.netlify/functions/listClients", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (res.ok) {
-      const json = await res.json();
-      setClients(json.items || []);
-    }
-    setClientsBusy(false);
-  }
-
-  // FILTRO DE PAÍSES
+  // Filtro de países memoizado
   const filteredCountries = useMemo(() => 
     COUNTRIES.filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase())),
     [countrySearch]
   );
 
-  // FUNCIÓN DE CREACIÓN PROFESIONALIZADA
-  async function onCreateClient(e: React.FormEvent) {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    setClientBusy(true);
-    setClientMsg(null);
-
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-
-    const payload: any = {
-      contact_email: cEmail.trim().toLowerCase(),
-      name: cName.trim() || cEmail,
-      legal_name: cLegalName.trim(),
-      tax_id: cTaxId.trim(),
-      country: cCountry,
-      phone: cPhone.trim(),
-      contact_name: cContactName.trim(),
-      user_email: cEmail.trim().toLowerCase(),
-      invite: clientInvite,
-    };
-
-    if (!clientInvite) payload.password = clientPassword;
-
+    setClientsBusy(true);
+    setMsg(null);
+    
+    const { data: { session } } = await supabase.auth.getSession();
     try {
       const res = await fetch("/.netlify/functions/createUser", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ ...form, user_email: form.contact_email }),
       });
 
       if (!res.ok) throw new Error(await res.text());
 
-      setClientMsg({ text: "✅ Cliente registrado con éxito", type: 'success' });
-      // Limpiar y cerrar tras éxito
+      setMsg({ text: "✅ Registrado correctamente", type: 'success' });
       setTimeout(() => {
         setShowDrawer(false);
-        setCEmail(""); setCName(""); setCLegalName(""); setCTaxId("");
-        loadClients();
-      }, 1500);
+        loadData();
+      }, 1000);
     } catch (err: any) {
-      setClientMsg({ text: err.message, type: 'error' });
+      setMsg({ text: err.message, type: 'error' });
     } finally {
-      setClientBusy(false);
+      setClientsBusy(false);
     }
+  };
+
+  if (!isAuthorized || loading) {
+    return (
+      <AdminLayout title="...">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '50vh', gap: '10px' }}>
+          <Loader2 className="spin" /> <span>Estabilizando Directorio...</span>
+        </div>
+      </AdminLayout>
+    );
   }
 
-  if (clientsLoading) return (
-    <AdminLayout title="..."><div className="loader-full"><Loader2 className="spin" /></div></AdminLayout>
-  );
-
   return (
-    <AdminLayout 
-      title={lang === "es" ? "Directorio de Clientes" : "Client Directory"}
-      subtitle={`${meEmail} (${meRole})`}
-    >
-      <div className="controls-row">
-        <div className="tab-switcher">
-          <button className={tab === 'clients' ? 'active' : ''} onClick={() => setTab('clients')}>Clientes</button>
-          <button className={tab === 'users' ? 'active' : ''} onClick={() => setTab('users')}>Usuarios</button>
-        </div>
-        
-        <div className="action-btns">
-          <button className="btn-refresh" onClick={() => loadClients()} disabled={clientsBusy}>
+    <AdminLayout title="Clientes y Directorio">
+      <div className="header-actions">
+        <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{clients.length} Registros activos</h2>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button className="btn-secondary" onClick={() => loadData()} disabled={clientsBusy}>
             <RefreshCcw size={16} className={clientsBusy ? 'spin' : ''} />
           </button>
-          <button className="btn-add" onClick={() => setShowDrawer(true)}>
-            <Plus size={18} /> {lang === "es" ? "Nuevo Cliente" : "New Client"}
+          <button className="btn-primary" onClick={() => setShowDrawer(true)}>
+            <Plus size={18} /> Nuevo Cliente
           </button>
         </div>
       </div>
 
-      {tab === 'clients' ? (
-        <div className="table-card">
-          <table className="pro-table">
-            <thead>
-              <tr>
-                <th>Empresa</th>
-                <th>Identificación</th>
-                <th>Contacto</th>
-                <th>País</th>
-                <th>Acciones</th>
+      <div className="table-wrapper">
+        <table className="pro-table">
+          <thead>
+            <tr>
+              <th>Empresa</th>
+              <th>Identificación</th>
+              <th>País</th>
+              <th>Contacto</th>
+              <th style={{ width: '40px' }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {clients.map(c => (
+              <tr key={c.id}>
+                <td>
+                  <div className="client-cell">
+                    <div className="avatar">{(c.name || "C")[0]}</div>
+                    <div>
+                      <div className="c-name">{c.name}</div>
+                      <div className="c-legal">{c.legal_name || 'Particular'}</div>
+                    </div>
+                  </div>
+                </td>
+                <td><code className="tax-code">{c.tax_id || '-'}</code></td>
+                <td><span className="badge-country">{c.country || 'PA'}</span></td>
+                <td className="email-cell"><Mail size={12} /> {c.contact_email}</td>
+                <td><button className="btn-icon"><ExternalLink size={14} /></button></td>
               </tr>
-            </thead>
-            <tbody>
-              {clients.map(c => (
-                <tr key={c.id}>
-                  <td>
-                    <div className="name-cell">
-                      <div className="avatar">{(c.name || "C")[0]}</div>
-                      <div>
-                        <div className="main-n">{c.name}</div>
-                        <div className="sub-n">{c.legal_name || 'Sin Razón Social'}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="tax-cell">{c.tax_id || '-'}</td>
-                  <td>
-                    <div className="contact-cell">
-                      <span><Mail size={12}/> {c.contact_email}</span>
-                    </div>
-                  </td>
-                  <td><span className="badge-country">{c.country || 'PA'}</span></td>
-                  <td><button className="btn-row"><ExternalLink size={14}/></button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="ff-card2">
-          <p style={{padding: 20}}>Lógica de usuarios heredada activa...</p>
-          {/* Aquí puedes re-insertar tu formulario de usuarios original */}
-        </div>
-      )}
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      {/* DRAWER PROFESIONAL (Injectado sobre tu lógica) */}
       {showDrawer && (
         <div className="drawer-overlay" onClick={() => setShowDrawer(false)}>
-          <div className="drawer-content" onClick={e => e.stopPropagation()}>
+          <div className="drawer-panel" onClick={e => e.stopPropagation()}>
             <div className="drawer-header">
-              <h3>Registro de Nuevo Cliente</h3>
-              <X className="close-x" onClick={() => setShowDrawer(false)} />
+              <h3>Crear Perfil Logístico</h3>
+              <X className="pointer" onClick={() => setShowDrawer(false)} />
             </div>
-            
-            <form onSubmit={onCreateClient} className="drawer-form">
-              <div className="form-section">
-                <label><Building2 size={14}/> Datos de la Empresa</label>
-                <input required placeholder="Nombre Comercial *" value={cName} onChange={e => setCName(e.target.value)} />
-                <input placeholder="Razón Social (Legal Name)" value={cLegalName} onChange={e => setCLegalName(e.target.value)} />
-                <input placeholder="Tax ID / RUC / NIF" value={cTaxId} onChange={e => setCTaxId(e.target.value)} />
+            <form onSubmit={handleCreate} className="drawer-body">
+              <div className="input-group">
+                <label><Building2 size={12}/> DATOS FISCALES</label>
+                <input required placeholder="Nombre Comercial" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+                <input placeholder="Razón Social" value={form.legal_name} onChange={e => setForm({...form, legal_name: e.target.value})} />
+                <input placeholder="RUC / Tax ID" value={form.tax_id} onChange={e => setForm({...form, tax_id: e.target.value})} />
               </div>
 
-              <div className="form-section">
-                <label><Globe size={14}/> Ubicación y Contacto</label>
-                <div className="search-input">
-                  <Search size={14} />
+              <div className="input-group">
+                <label><Globe size={12}/> UBICACIÓN EUROPA / AMÉRICA</label>
+                <div className="search-box">
+                  <Search size={14} className="s-icon" />
                   <input placeholder="Buscar país..." value={countrySearch} onChange={e => setCountrySearch(e.target.value)} />
                 </div>
-                <select size={3} value={cCountry} onChange={e => setCCountry(e.target.value)} className="country-list">
-                  {filteredCountries.map(cn => (
-                    <option key={cn.code} value={cn.name}>{cn.flag} {cn.name}</option>
-                  ))}
+                <select size={3} className="country-select" value={form.country} onChange={e => setForm({...form, country: e.target.value})}>
+                  {filteredCountries.map(cn => <option key={cn.code} value={cn.name}>{cn.flag} {cn.name}</option>)}
                 </select>
-                <input required type="email" placeholder="Email de acceso *" value={cEmail} onChange={e => setCEmail(e.target.value)} />
-                <input placeholder="Teléfono" value={cPhone} onChange={e => setCPhone(e.target.value)} />
               </div>
 
-              <div className="form-section security">
-                <label className="check-row">
-                  <input type="checkbox" checked={clientInvite} onChange={e => setClientInvite(e.target.checked)} />
-                  <span>Enviar invitación por email</span>
-                </label>
-                {!clientInvite && (
-                  <input type="password" placeholder="Contraseña temporal *" value={clientPassword} onChange={e => setClientPassword(e.target.value)} required />
-                )}
+              <div className="input-group">
+                <label><Mail size={12}/> CONTACTO</label>
+                <input required type="email" placeholder="Email de acceso" value={form.contact_email} onChange={e => setForm({...form, contact_email: e.target.value})} />
+                <input placeholder="Teléfono internacional" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
               </div>
 
               <div className="drawer-footer">
-                {clientMsg && <div className={`msg-banner ${clientMsg.type}`}>{clientMsg.text}</div>}
-                <button type="submit" className="btn-submit" disabled={clientBusy}>
-                  {clientBusy ? <Loader2 className="spin" /> : "Guardar Cliente"}
+                {msg && <div className={`alert ${msg.type}`}>{msg.text}</div>}
+                <button type="submit" className="btn-save" disabled={clientsBusy}>
+                  {clientsBusy ? <Loader2 className="spin" /> : "Registrar Cliente"}
                 </button>
               </div>
             </form>
@@ -299,49 +211,45 @@ export default function AdminUsersPage() {
       )}
 
       <style jsx>{`
-        .loader-full { display: flex; justify-content: center; padding: 100px; color: #64748b; }
-        .controls-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .tab-switcher { background: #f1f5f9; padding: 4px; border-radius: 10px; display: flex; gap: 4px; }
-        .tab-switcher button { border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; color: #64748b; background: transparent; transition: 0.2s; }
-        .tab-switcher button.active { background: white; color: #1f7a3a; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .btn-primary { background: #1f7a3a; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .btn-secondary { background: white; border: 1px solid #e2e8f0; padding: 10px; border-radius: 10px; cursor: pointer; color: #64748b; }
         
-        .action-btns { display: flex; gap: 10px; }
-        .btn-add { background: #1f7a3a; color: white; border: none; padding: 10px 18px; border-radius: 10px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-        .btn-refresh { background: white; border: 1px solid #e2e8f0; padding: 10px; border-radius: 10px; cursor: pointer; }
-
-        .table-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }
-        .pro-table { width: 100%; border-collapse: collapse; }
-        .pro-table th { background: #f8fafc; padding: 14px 20px; text-align: left; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
-        .pro-table td { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
-
-        .name-cell { display: flex; align-items: center; gap: 12px; }
-        .avatar { width: 32px; height: 32px; background: #dcfce7; color: #166534; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        .main-n { font-weight: 600; color: #1e293b; }
-        .sub-n { font-size: 11px; color: #94a3b8; }
-        .badge-country { background: #f1f5f9; padding: 4px 10px; border-radius: 6px; font-weight: 500; font-size: 12px; }
-
-        .drawer-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); z-index: 9999; display: flex; justify-content: flex-end; backdrop-filter: blur(2px); }
-        .drawer-content { width: 420px; background: white; height: 100%; display: flex; flex-direction: column; animation: slideIn 0.3s ease-out; }
+        .table-wrapper { background: white; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; }
+        .pro-table { width: 100%; border-collapse: collapse; text-align: left; }
+        .pro-table th { background: #f8fafc; padding: 15px 20px; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #f1f5f9; }
+        .pro-table td { padding: 15px 20px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        
+        .client-cell { display: flex; align-items: center; gap: 12px; }
+        .avatar { width: 34px; height: 34px; background: #dcfce7; color: #166534; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; }
+        .c-name { font-weight: 700; color: #1e293b; }
+        .c-legal { font-size: 11px; color: #94a3b8; }
+        .tax-code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-family: monospace; color: #475569; }
+        .badge-country { background: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+        
+        .drawer-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); z-index: 9999; display: flex; justify-content: flex-end; backdrop-filter: blur(4px); }
+        .drawer-panel { width: 420px; background: white; height: 100%; display: flex; flex-direction: column; box-shadow: -10px 0 30px rgba(0,0,0,0.1); animation: slideIn 0.3s ease-out; }
         @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
         
-        .drawer-header { padding: 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
-        .drawer-form { padding: 24px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; flex: 1; }
-        .form-section { display: flex; flex-direction: column; gap: 10px; }
-        .form-section label { font-size: 11px; font-weight: bold; color: #1f7a3a; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
-        .form-section input, .country-list { border: 1px solid #e2e8f0; padding: 12px; border-radius: 10px; outline: none; transition: 0.2s; font-size: 14px; }
-        .form-section input:focus { border-color: #1f7a3a; box-shadow: 0 0 0 3px rgba(31, 122, 58, 0.1); }
+        .drawer-header { padding: 25px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+        .drawer-body { padding: 25px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; flex: 1; }
+        .input-group { display: flex; flex-direction: column; gap: 8px; }
+        .input-group label { font-size: 10px; font-weight: 800; color: #1f7a3a; letter-spacing: 0.1em; }
+        .input-group input, .country-select { border: 1px solid #e2e8f0; padding: 12px; border-radius: 10px; outline: none; transition: 0.2s; }
+        .input-group input:focus { border-color: #1f7a3a; box-shadow: 0 0 0 3px rgba(31, 122, 58, 0.1); }
         
-        .search-input { position: relative; display: flex; align-items: center; }
-        .search-input :global(svg) { position: absolute; left: 12px; color: #94a3b8; }
-        .search-input input { padding-left: 35px !important; width: 100%; }
-
-        .btn-submit { background: #1f7a3a; color: white; border: none; padding: 16px; border-radius: 12px; font-weight: bold; cursor: pointer; margin-top: 10px; }
-        .msg-banner { padding: 10px; border-radius: 8px; font-size: 12px; text-align: center; }
-        .msg-banner.success { background: #dcfce7; color: #166534; }
-        .msg-banner.error { background: #fee2e2; color: #991b1b; }
+        .search-box { position: relative; }
+        .s-icon { position: absolute; left: 12px; top: 13px; color: #94a3b8; }
+        .search-box input { padding-left: 35px !important; width: 100%; font-size: 13px; }
+        
+        .btn-save { background: #1f7a3a; color: white; border: none; padding: 16px; border-radius: 12px; font-weight: bold; cursor: pointer; }
+        .alert { padding: 12px; border-radius: 8px; font-size: 13px; text-align: center; }
+        .alert.success { background: #dcfce7; color: #166534; }
+        .alert.error { background: #fee2e2; color: #991b1b; }
         
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .pointer { cursor: pointer; }
       `}</style>
     </AdminLayout>
   );
