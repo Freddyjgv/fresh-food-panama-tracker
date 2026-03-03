@@ -11,7 +11,6 @@ interface ShipmentDrawerProps {
   defaultIncoterm?: string;
 }
 
-// 🚩 Función para generar banderas
 const getFlag = (code: string) => {
   if (!code) return '🌐';
   const codePoints = code.toUpperCase().split('').map(char => 127397 + char.charCodeAt(0));
@@ -28,7 +27,6 @@ const MASTER_PLACES = [
 ];
 
 export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, onSuccess, defaultIncoterm }: ShipmentDrawerProps) {
-  const [currentCode, setCurrentCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [mode, setMode] = useState<'Marítima' | 'Aérea'>('Marítima');
@@ -49,7 +47,6 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
     destination: '',
   });
 
-  // 1. Carga inicial: Solo al abrir para evitar re-renders innecesarios
   useEffect(() => {
     if (isOpen) {
       const loadData = async () => {
@@ -57,20 +54,17 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
         const { data: v } = await supabase.from('product_varieties').select('*').order('name');
         setProducts(p || []);
         setAllVarieties(v || []);
-        setCurrentCode(`FFP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
         if (defaultIncoterm) setFormData(f => ({ ...f, incoterm: defaultIncoterm }));
       };
       loadData();
     }
   }, [isOpen, defaultIncoterm]);
 
-  // 2. Filtrado de variedades "al vuelo" (Evita el Stack Depth Error)
   const filteredVarieties = useMemo(() => {
     if (!formData.product_id) return [];
     return allVarieties.filter(v => v.product_id === formData.product_id);
   }, [formData.product_id, allVarieties]);
 
-  // 3. Manejador de cambio de producto: Limpia variedad de forma imperativa
   const handleProductChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     setFormData(prev => ({ ...prev, product_id: val, variety_id: '' }));
@@ -82,35 +76,45 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
     setLoading(true);
 
     try {
-      const pName = products.find(p => p.id === formData.product_id)?.name || '';
-      const vName = allVarieties.find(v => v.id === formData.variety_id)?.name || '';
-      
+      // Mapeo exacto de los campos que espera tu función createShipment de Netlify
       const payload = {
-        client_id: clientId,
-        code: currentCode,
-        destination: formData.destination, // Mapeado a NOT NULL
-        status: 'CREATED',                // Mapeado a NOT NULL
-        product_name: pName,
-        product_variety: vName,
-        product_mode: mode,
-        calibre: formData.calibre,        // Columna 'calibre'
-        color: formData.color,
+        clientId: clientId,
+        destination: formData.destination,
         incoterm: formData.incoterm,
-        brix_grade: formData.brix_grade,
         boxes: formData.boxes ? parseInt(formData.boxes) : null,
         pallets: formData.pallets ? parseInt(formData.pallets) : null,
-        weight: formData.estimated_weight ? parseFloat(formData.estimated_weight) : null,
         weight_kg: formData.estimated_weight ? parseFloat(formData.estimated_weight) : null,
-        destination_port: formData.destination
+        product_name: products.find(p => p.id === formData.product_id)?.name || '',
+        product_variety: allVarieties.find(v => v.id === formData.variety_id)?.name || '',
+        product_mode: mode,
+        // Campos adicionales requeridos por tu lógica de BD
+        calibre: formData.calibre,
+        color: formData.color,
+        brix_grade: formData.brix_grade
       };
 
-      const { error } = await supabase.from('shipments').insert([payload]);
-      if (error) throw error;
+      // Llamada a tu función de Netlify (Ajusta la ruta si es necesario)
+      const response = await fetch('/.netlify/functions/createShipment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Error al procesar el embarque');
+      }
 
       setSuccess(true);
-      setTimeout(() => { onSuccess(); handleClose(); }, 1500);
+      setTimeout(() => {
+        onSuccess();
+        handleClose();
+      }, 1500);
+
     } catch (err: any) {
-      alert("Error de guardado: " + err.message);
+      console.error("Error en submit:", err);
+      alert("Error: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -131,7 +135,7 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
           <div className="header-info">
             <h2>Nuevo Embarque</h2>
             <p className="client-name">Cliente: <strong>{clientName}</strong></p>
-            <div className="id-badge">{currentCode}</div>
+            <div className="id-badge">CORRELATIVO AUTOMÁTICO</div>
           </div>
           <button onClick={handleClose} className="close-btn"><X size={24} /></button>
         </header>
@@ -220,19 +224,16 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
         .logistic-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 15px; margin-bottom: 15px; }
-        .input-group { margin-bottom: 15px; }
         .input-group label { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase; }
-        input, select { width: 100%; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; color: #0f172a; transition: 0.2s; }
+        input, select { width: 100%; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; color: #0f172a; }
         input:focus { border-color: #1f7a3a; outline: none; box-shadow: 0 0 0 3px rgba(31,122,58,0.1); }
         .mode-selector { display: flex; background: #f1f5f9; padding: 4px; border-radius: 10px; gap: 4px; }
-        .mode-selector button { flex: 1; border: none; padding: 8px; border-radius: 7px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; color: #64748b; background: transparent; transition: 0.2s; }
+        .mode-selector button { flex: 1; border: none; padding: 8px; border-radius: 7px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; color: #64748b; background: transparent; }
         .mode-selector button.active { background: white; color: #1f7a3a; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .drawer-footer { padding: 20px 30px; border-top: 1px solid #f1f5f9; display: flex; gap: 10px; }
-        .btn-submit { flex: 2; background: #1f7a3a; color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: 0.3s; }
-        .btn-submit:hover { background: #166534; transform: translateY(-1px); }
+        .btn-submit { flex: 2; background: #1f7a3a; color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; }
         .btn-submit.success { background: #16a34a; }
-        .btn-abort { flex: 1; background: #f1f5f9; border: none; border-radius: 12px; color: #64748b; font-weight: 600; cursor: pointer; transition: 0.2s; }
-        .btn-abort:hover { background: #e2e8f0; }
+        .btn-abort { flex: 1; background: #f1f5f9; border: none; border-radius: 12px; color: #64748b; font-weight: 600; cursor: pointer; }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
