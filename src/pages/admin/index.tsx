@@ -156,7 +156,8 @@ export default function AdminDashboard() {
       } else { setErrShipments("Error cargando embarques"); }
 
       if (cRes.status === "fulfilled") {
-        setClientsTotal(cRes.value.total ?? cRes.value.items?.length || 0);
+        // CORRECCIÓN AQUÍ: Paréntesis para evitar error de linting
+        setClientsTotal(cRes.value.total ?? (cRes.value.items?.length || 0));
       }
     } finally {
       setShipmentsLoading(false);
@@ -204,7 +205,7 @@ export default function AdminDashboard() {
                         <div className="sub">{fmtDate(s.created_at)}</div>
                     </Link>
 
-                    {/* CELDA CLIENTE - CORREGIDA */}
+                    {/* CELDA CLIENTE */}
                     <div className="cell">
                       {s.client_id ? (
                         <Link href={`/admin/clients/${s.client_id}`} className="client-link-dashboard">
@@ -276,7 +277,6 @@ export default function AdminDashboard() {
         .shipRow:last-child { border-bottom: 0; }
         .shipRow:hover { background: #f8fafc; }
 
-        /* AREA DE CLIC MEJORADA */
         :global(.pointer-area), :global(.client-link-dashboard) { 
           padding: 12px;
           display: block; 
