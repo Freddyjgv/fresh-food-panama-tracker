@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Package, Anchor, Plane, Layers, Globe, Loader2, Check, Hash, Scale, Palette } from 'lucide-react';
+import { X, Save, Package, Globe, Loader2, Check, Hash, Scale, Palette, ThermometerSun } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
 interface ShipmentDrawerProps {
@@ -7,7 +7,7 @@ interface ShipmentDrawerProps {
   onClose: () => void;
   clientId: string;
   clientName: string;
-  onSuccess: () => void; // Esta función hará la magia del refresco
+  onSuccess: () => void;
   defaultIncoterm?: string;
 }
 
@@ -20,10 +20,7 @@ const getFlag = (code: string) => {
 const MASTER_PLACES = [
   { code: 'MAD', name: 'Madrid-Barajas', country: 'ES' },
   { code: 'BCN', name: 'Puerto de Barcelona', country: 'ES' },
-  { code: 'ALG', name: 'Puerto de Algeciras', country: 'ES' },
-  { code: 'CDG', name: 'Paris Charles de Gaulle', country: 'FR' },
   { code: 'RTM', name: 'Port of Rotterdam', country: 'NL' },
-  { code: 'AMS', name: 'Schiphol Amsterdam', country: 'NL' },
   { code: 'ANR', name: 'Port of Antwerp', country: 'BE' },
   { code: 'GDN', name: 'Port of Gdansk', country: 'PL' },
 ];
@@ -38,8 +35,9 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
   const [formData, setFormData] = useState({
     product_id: '',
     variety_id: '',
-    calibre: '',
-    color: '',
+    calibre: '',       // MANUAL
+    color: '',         // MANUAL
+    brix_grade: '>13', // MANUAL (PREDETERMINADO)
     boxes: '',
     pallets: '',
     estimated_weight: '',
@@ -65,6 +63,7 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
     if (formData.product_id) {
       const matches = allVarieties.filter(v => v.product_id === formData.product_id);
       setFilteredVarieties(matches);
+      setFormData(prev => ({ ...prev, variety_id: '' })); 
     } else {
       setFilteredVarieties([]);
     }
@@ -84,6 +83,7 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
         product_variety: vName,
         calibre: formData.calibre,
         color: formData.color,
+        brix_grade: formData.brix_grade,
         boxes: parseInt(formData.boxes) || 0,
         pallets: parseInt(formData.pallets) || 0,
         weight: parseFloat(formData.estimated_weight) || 0,
@@ -94,15 +94,12 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
 
       if (error) throw error;
       setSuccess(true);
-      setTimeout(() => { 
-        onSuccess(); // Disparamos el refresco en el padre
-        handleClose(); 
-      }, 1200);
+      setTimeout(() => { onSuccess(); handleClose(); }, 1200);
     } catch (err: any) { alert(err.message); } finally { setLoading(false); }
   };
 
   const handleClose = () => {
-    setFormData({ product_id: '', variety_id: '', calibre: '', color: '', boxes: '', pallets: '', estimated_weight: '', incoterm: defaultIncoterm || 'FOB', destination: '', status: 'Booking Pending' });
+    setFormData({ product_id: '', variety_id: '', calibre: '', color: '', brix_grade: '>13', boxes: '', pallets: '', estimated_weight: '', incoterm: defaultIncoterm || 'FOB', destination: '', status: 'Booking Pending' });
     setSuccess(false);
     onClose();
   };
@@ -120,6 +117,8 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
         <form onSubmit={handleSubmit} className="drawer-form">
           <section className="form-section">
             <h3><Package size={16} /> CONFIGURACIÓN DE CARGA</h3>
+            
+            {/* FILA 1: PRODUCTO + VARIEDAD */}
             <div className="grid-2">
               <div className="input-group">
                 <label>Producto</label>
@@ -137,16 +136,21 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
               </div>
             </div>
 
+            {/* FILA 2: CALIBRE + COLOR */}
             <div className="grid-2">
-              <div className="input-group"><label><Hash size={12}/> Calibre</label><input type="text" placeholder="Ej: 5-7" value={formData.calibre} onChange={e => setFormData({...formData, calibre: e.target.value})} /></div>
-              <div className="input-group"><label><Palette size={12}/> Color</label><input type="text" placeholder="Ej: 2.75" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} /></div>
+              <div className="input-group"><label><Hash size={12}/> Calibre (Manual)</label><input type="text" placeholder="Ej: 5-7" value={formData.calibre} onChange={e => setFormData({...formData, calibre: e.target.value})} /></div>
+              <div className="input-group"><label><Palette size={12}/> Color (Manual)</label><input type="text" placeholder="Ej: 2.75" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} /></div>
             </div>
 
+            {/* FILA 3: BRIX + CAJAS + PALLETS */}
             <div className="grid-3">
-              <div className="input-group"><label>Cajas</label><input type="number" value={formData.boxes} onChange={e => setFormData({...formData, boxes: e.target.value})} /></div>
-              <div className="input-group"><label>Pallets</label><input type="number" value={formData.pallets} onChange={e => setFormData({...formData, pallets: e.target.value})} /></div>
-              <div className="input-group"><label>Peso (Kg)</label><input type="number" step="0.01" value={formData.estimated_weight} onChange={e => setFormData({...formData, estimated_weight: e.target.value})} /></div>
+              <div className="input-group"><label><ThermometerSun size={12}/> Brix</label><input type="text" value={formData.brix_grade} onChange={e => setFormData({...formData, brix_grade: e.target.value})} /></div>
+              <div className="input-group"><label>Cajas</label><input type="number" placeholder="0" value={formData.boxes} onChange={e => setFormData({...formData, boxes: e.target.value})} /></div>
+              <div className="input-group"><label>Pallets</label><input type="number" placeholder="0" value={formData.pallets} onChange={e => setFormData({...formData, pallets: e.target.value})} /></div>
             </div>
+
+            {/* FILA 4: PESO ESTIMADO */}
+            <div className="input-group"><label><Scale size={12}/> Peso Estimado (Kg)</label><input type="number" step="0.01" placeholder="0.00" value={formData.estimated_weight} onChange={e => setFormData({...formData, estimated_weight: e.target.value})} /></div>
           </section>
 
           <section className="form-section">
@@ -158,9 +162,9 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
                 </select>
               </div>
               <div className="input-group"><label>Destino</label>
-                <input list="places-list" placeholder="Seleccione o escriba..." value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} />
+                <input list="places-list" placeholder="Puerto o Aeropuerto..." value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} />
                 <datalist id="places-list">
-                  {MASTER_PLACES.map(p => <option key={p.code} value={`${getFlag(p.country)} ${p.name} (${p.code})`} />)}
+                  {MASTER_PLACES.map(p => <option key={p.code} value={`${getFlag(p.country)} ${p.name}`} />)}
                 </datalist>
               </div>
             </div>
@@ -170,14 +174,15 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
             <button type="button" onClick={handleClose} className="btn-abort">Cancelar</button>
             <button type="submit" disabled={loading || success} className={`btn-submit ${success ? 'success' : ''}`}>
               {loading ? <Loader2 className="spin" size={20} /> : success ? <Check size={20} /> : <Save size={20} />}
-              <span>{success ? '¡Creado!' : 'Crear Embarque'}</span>
+              <span>{success ? '¡Listo!' : 'Crear Embarque'}</span>
             </button>
           </footer>
         </form>
       </div>
+
       <style jsx>{`
         .drawer-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); z-index: 1000; display: flex; justify-content: flex-end; }
-        .drawer-content { width: 500px; background: white; height: 100%; box-shadow: -10px 0 50px rgba(0,0,0,0.1); animation: slide 0.3s ease-out; }
+        .drawer-content { width: 500px; background: white; height: 100%; box-shadow: -10px 0 50px rgba(0,0,0,0.1); animation: slide 0.3s ease-out; display: flex; flex-direction: column; }
         @keyframes slide { from { transform: translateX(100%); } to { transform: translateX(0); } }
         .drawer-header { padding: 30px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
         .drawer-form { padding: 30px; flex: 1; overflow-y: auto; background: #fcfcfd; }
@@ -188,7 +193,8 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
         .grid-incoterm { display: grid; grid-template-columns: 100px 1fr; gap: 15px; }
         .input-group { margin-bottom: 15px; }
         .input-group label { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase; }
-        input, select { width: 100%; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; }
+        input, select { width: 100%; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; background: white; transition: 0.2s; }
+        input:focus, select:focus { border-color: #1f7a3a; box-shadow: 0 0 0 3px rgba(31,122,58,0.1); outline: none; }
         .drawer-footer { padding: 20px 30px; border-top: 1px solid #f1f5f9; display: flex; gap: 10px; }
         .btn-submit { flex: 2; background: #1f7a3a; color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; }
         .btn-submit.success { background: #16a34a; }
