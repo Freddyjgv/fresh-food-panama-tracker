@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { X, Save, Package, Globe, Loader2, Check, Hash, Scale, Palette, ThermometerSun, Anchor, Plane } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Save, Package, Globe, Loader2, Check, Hash, Palette, ThermometerSun, Anchor, Plane } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
 interface ShipmentDrawerProps {
@@ -11,6 +11,13 @@ interface ShipmentDrawerProps {
   defaultIncoterm?: string;
 }
 
+// 🚩 Función para generar banderas
+const getFlag = (code: string) => {
+  if (!code) return '🌐';
+  const codePoints = code.toUpperCase().split('').map(char => 127397 + char.charCodeAt(0));
+  return String.fromCodePoint(...codePoints);
+};
+
 const MASTER_PLACES = [
   { code: 'MAD', name: 'Madrid-Barajas', country: 'ES' },
   { code: 'BCN', name: 'Puerto de Barcelona', country: 'ES' },
@@ -21,16 +28,13 @@ const MASTER_PLACES = [
 ];
 
 export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, onSuccess, defaultIncoterm }: ShipmentDrawerProps) {
-  // 1. Generar código solo cuando se abre, de forma estática
   const [currentCode, setCurrentCode] = useState('');
-  
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [mode, setMode] = useState<'Marítima' | 'Aérea'>('Marítima');
   
   const [products, setProducts] = useState<any[]>([]);
   const [allVarieties, setAllVarieties] = useState<any[]>([]);
-  const [filteredVarieties, setFilteredVarieties] = useState<any[]>([]);
   
   const [formData, setFormData] = useState({
     product_id: '',
@@ -45,104 +49,76 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
     destination: '',
   });
 
-  // Carga de datos y generación de ID inicial
+  // 1. Carga inicial: Solo al abrir para evitar re-renders innecesarios
   useEffect(() => {
     if (isOpen) {
-      const loadInitialData = async () => {
+      const loadData = async () => {
         const { data: p } = await supabase.from('products').select('*').order('name');
         const { data: v } = await supabase.from('product_varieties').select('*').order('name');
         setProducts(p || []);
         setAllVarieties(v || []);
-        
-        // Seteamos el código una sola vez al abrir
         setCurrentCode(`FFP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
-        
-        if (defaultIncoterm) {
-          setFormData(prev => ({ ...prev, incoterm: defaultIncoterm }));
-        }
+        if (defaultIncoterm) setFormData(f => ({ ...f, incoterm: defaultIncoterm }));
       };
-      loadInitialData();
+      loadData();
     }
   }, [isOpen, defaultIncoterm]);
 
-  // 2. Filtrado de variedades: Solo ocurre cuando cambia el product_id
-  // NO usamos setFormData aquí para evitar el bucle infinito
-  useEffect(() => {
-    if (formData.product_id) {
-      const matches = allVarieties.filter(v => v.product_id === formData.product_id);
-      setFilteredVarieties(matches);
-    } else {
-      setFilteredVarieties([]);
-    }
+  // 2. Filtrado de variedades "al vuelo" (Evita el Stack Depth Error)
+  const filteredVarieties = useMemo(() => {
+    if (!formData.product_id) return [];
+    return allVarieties.filter(v => v.product_id === formData.product_id);
   }, [formData.product_id, allVarieties]);
 
-  // 3. Manejador de cambio de producto (Lógica imperativa, no reactiva)
+  // 3. Manejador de cambio de producto: Limpia variedad de forma imperativa
   const handleProductChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
-    setFormData(prev => ({
-      ...prev,
-      product_id: val,
-      variety_id: '' // Reseteamos variedad solo en la interacción manual
-    }));
+    setFormData(prev => ({ ...prev, product_id: val, variety_id: '' }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
-    
     setLoading(true);
+
     try {
-      const pName = products.find(p => p.id === formData.product_id)?.name;
-      const vName = allVarieties.find(v => v.id === formData.variety_id)?.name;
+      const pName = products.find(p => p.id === formData.product_id)?.name || '';
+      const vName = allVarieties.find(v => v.id === formData.variety_id)?.name || '';
       
-      const { error } = await supabase.from('shipments').insert([{
+      const payload = {
         client_id: clientId,
         code: currentCode,
+        destination: formData.destination, // Mapeado a NOT NULL
+        status: 'CREATED',                // Mapeado a NOT NULL
         product_name: pName,
         product_variety: vName,
         product_mode: mode,
-        calibre: formData.calibre,
+        calibre: formData.calibre,        // Columna 'calibre'
         color: formData.color,
-        brix_grade: formData.brix_grade,
-        boxes: parseInt(formData.boxes) || 0,
-        pallets: parseInt(formData.pallets) || 0,
-        weight: parseFloat(formData.estimated_weight) || 0,
         incoterm: formData.incoterm,
-        destination_port: formData.destination,
-        status: 'CREATED'
-      }]);
+        brix_grade: formData.brix_grade,
+        boxes: formData.boxes ? parseInt(formData.boxes) : null,
+        pallets: formData.pallets ? parseInt(formData.pallets) : null,
+        weight: formData.estimated_weight ? parseFloat(formData.estimated_weight) : null,
+        weight_kg: formData.estimated_weight ? parseFloat(formData.estimated_weight) : null,
+        destination_port: formData.destination
+      };
 
+      const { error } = await supabase.from('shipments').insert([payload]);
       if (error) throw error;
-      
+
       setSuccess(true);
-      setTimeout(() => {
-        onSuccess();
-        handleClose();
-      }, 1500);
-      
+      setTimeout(() => { onSuccess(); handleClose(); }, 1500);
     } catch (err: any) {
-      console.error("Error saving shipment:", err);
-      alert("Error: " + err.message);
+      alert("Error de guardado: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleClose = () => {
-    setFormData({
-      product_id: '',
-      variety_id: '',
-      calibre: '',
-      color: '',
-      brix_grade: '>13',
-      boxes: '',
-      pallets: '',
-      estimated_weight: '',
-      incoterm: defaultIncoterm || 'FOB',
-      destination: '',
-    });
+    setFormData({ product_id: '', variety_id: '', calibre: '', color: '', brix_grade: '>13', boxes: '', pallets: '', estimated_weight: '', incoterm: defaultIncoterm || 'FOB', destination: '' });
     setSuccess(false);
-    setLoading(false);
     onClose();
   };
 
@@ -173,12 +149,7 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
               </div>
               <div className="input-group">
                 <label>Variedad</label>
-                <select 
-                  required 
-                  disabled={!formData.product_id} 
-                  value={formData.variety_id} 
-                  onChange={e => setFormData(f => ({...f, variety_id: e.target.value}))}
-                >
+                <select required disabled={!formData.product_id} value={formData.variety_id} onChange={e => setFormData({...formData, variety_id: e.target.value})}>
                   <option value="">Seleccione variedad</option>
                   {filteredVarieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </select>
@@ -186,15 +157,15 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
             </div>
 
             <div className="grid-3">
-              <div className="input-group"><label><Hash size={12}/> Calibre</label><input type="text" placeholder="5-7" value={formData.calibre} onChange={e => setFormData(f => ({...f, calibre: e.target.value}))} /></div>
-              <div className="input-group"><label><Palette size={12}/> Color</label><input type="text" placeholder="2.5" value={formData.color} onChange={e => setFormData(f => ({...f, color: e.target.value}))} /></div>
-              <div className="input-group"><label><ThermometerSun size={12}/> Brix</label><input type="text" value={formData.brix_grade} onChange={e => setFormData(f => ({...f, brix_grade: e.target.value}))} /></div>
+              <div className="input-group"><label><Hash size={12}/> Calibre</label><input type="text" placeholder="Ej: 5" value={formData.calibre} onChange={e => setFormData({...formData, calibre: e.target.value})} /></div>
+              <div className="input-group"><label><Palette size={12}/> Color</label><input type="text" placeholder="Ej: 2.5" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} /></div>
+              <div className="input-group"><label><ThermometerSun size={12}/> Brix</label><input type="text" value={formData.brix_grade} onChange={e => setFormData({...formData, brix_grade: e.target.value})} /></div>
             </div>
 
             <div className="grid-3">
-              <div className="input-group"><label>Cajas</label><input type="number" value={formData.boxes} onChange={e => setFormData(f => ({...f, boxes: e.target.value}))} /></div>
-              <div className="input-group"><label>Pallets</label><input type="number" value={formData.pallets} onChange={e => setFormData(f => ({...f, pallets: e.target.value}))} /></div>
-              <div className="input-group"><label>Peso (Kg)</label><input type="number" step="0.01" value={formData.estimated_weight} onChange={e => setFormData(f => ({...f, estimated_weight: e.target.value}))} /></div>
+              <div className="input-group"><label>Cajas</label><input type="number" value={formData.boxes} onChange={e => setFormData({...formData, boxes: e.target.value})} /></div>
+              <div className="input-group"><label>Pallets</label><input type="number" value={formData.pallets} onChange={e => setFormData({...formData, pallets: e.target.value})} /></div>
+              <div className="input-group"><label>Peso (Kg)</label><input type="number" step="0.01" value={formData.estimated_weight} onChange={e => setFormData({...formData, estimated_weight: e.target.value})} /></div>
             </div>
           </section>
 
@@ -204,17 +175,13 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
               <div className="input-group">
                 <label>Modalidad de Envío</label>
                 <div className="mode-selector">
-                  <button type="button" className={mode === 'Marítima' ? 'active' : ''} onClick={() => setMode('Marítima')}>
-                    <Anchor size={16} /> Marítima
-                  </button>
-                  <button type="button" className={mode === 'Aérea' ? 'active' : ''} onClick={() => setMode('Aérea')}>
-                    <Plane size={16} /> Aérea
-                  </button>
+                  <button type="button" className={mode === 'Marítima' ? 'active' : ''} onClick={() => setMode('Marítima')}><Anchor size={16} /> Marítima</button>
+                  <button type="button" className={mode === 'Aérea' ? 'active' : ''} onClick={() => setMode('Aérea')}><Plane size={16} /> Aérea</button>
                 </div>
               </div>
               <div className="input-group">
                 <label>Incoterm</label>
-                <select value={formData.incoterm} onChange={e => setFormData(f => ({...f, incoterm: e.target.value}))}>
+                <select value={formData.incoterm} onChange={e => setFormData({...formData, incoterm: e.target.value})}>
                   {['FOB', 'CIF', 'CIP', 'FCA', 'CFR', 'DDP'].map(i => <option key={i} value={i}>{i}</option>)}
                 </select>
               </div>
@@ -222,9 +189,9 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
             
             <div className="input-group full-width">
               <label>Lugar de Destino</label>
-              <input list="places-list" placeholder="Destino final..." value={formData.destination} onChange={e => setFormData(f => ({...f, destination: e.target.value}))} />
+              <input list="places-list" required placeholder="Nombre del puerto o aeropuerto..." value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} />
               <datalist id="places-list">
-                {MASTER_PLACES.map(p => <option key={p.code} value={p.name} />)}
+                {MASTER_PLACES.map(p => <option key={p.code} value={`${getFlag(p.country)} ${p.name} (${p.code})`} />)}
               </datalist>
             </div>
           </section>
@@ -233,7 +200,7 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
             <button type="button" onClick={handleClose} className="btn-abort">Cancelar</button>
             <button type="submit" disabled={loading || success} className={`btn-submit ${success ? 'success' : ''}`}>
               {loading ? <Loader2 className="spin" size={20} /> : success ? <Check size={20} /> : <Save size={20} />}
-              <span>{success ? 'Creado Correctamente' : 'Crear Embarque'}</span>
+              <span>{success ? 'Embarque Creado' : 'Crear Embarque'}</span>
             </button>
           </footer>
         </form>
@@ -244,7 +211,7 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
         .drawer-content { width: 500px; background: white; height: 100%; box-shadow: -10px 0 50px rgba(0,0,0,0.1); display: flex; flex-direction: column; animation: slide 0.3s ease-out; }
         @keyframes slide { from { transform: translateX(100%); } to { transform: translateX(0); } }
         .drawer-header { padding: 30px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: flex-start; }
-        .header-info h2 { margin: 0; font-size: 20px; font-weight: 800; }
+        .header-info h2 { margin: 0; font-size: 20px; font-weight: 800; color: #0f172a; }
         .client-name { margin: 4px 0; font-size: 13px; color: #64748b; }
         .id-badge { display: inline-block; background: #f0fdf4; color: #166534; padding: 4px 10px; border-radius: 6px; font-family: monospace; font-size: 12px; font-weight: 700; border: 1px solid #dcfce7; margin-top: 8px; }
         .drawer-form { padding: 30px; flex: 1; overflow-y: auto; background: #fcfcfd; }
@@ -255,15 +222,17 @@ export default function ShipmentDrawer({ isOpen, onClose, clientId, clientName, 
         .logistic-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 15px; margin-bottom: 15px; }
         .input-group { margin-bottom: 15px; }
         .input-group label { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase; }
-        input, select { width: 100%; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; transition: 0.2s; }
+        input, select { width: 100%; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; color: #0f172a; transition: 0.2s; }
         input:focus { border-color: #1f7a3a; outline: none; box-shadow: 0 0 0 3px rgba(31,122,58,0.1); }
         .mode-selector { display: flex; background: #f1f5f9; padding: 4px; border-radius: 10px; gap: 4px; }
         .mode-selector button { flex: 1; border: none; padding: 8px; border-radius: 7px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; color: #64748b; background: transparent; transition: 0.2s; }
         .mode-selector button.active { background: white; color: #1f7a3a; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .drawer-footer { padding: 20px 30px; border-top: 1px solid #f1f5f9; display: flex; gap: 10px; }
-        .btn-submit { flex: 2; background: #1f7a3a; color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .btn-submit { flex: 2; background: #1f7a3a; color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: 0.3s; }
+        .btn-submit:hover { background: #166534; transform: translateY(-1px); }
         .btn-submit.success { background: #16a34a; }
-        .btn-abort { flex: 1; background: #f1f5f9; border: none; border-radius: 12px; color: #64748b; font-weight: 600; cursor: pointer; }
+        .btn-abort { flex: 1; background: #f1f5f9; border: none; border-radius: 12px; color: #64748b; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        .btn-abort:hover { background: #e2e8f0; }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
