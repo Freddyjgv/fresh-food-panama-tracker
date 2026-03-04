@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { 
   Save, FileText, Package, Loader2, Building2, Plane, Ship, 
-  Globe, DollarSign, Thermometer, Droplets, Info, Calculator, ChevronDown, Download
+  Globe, DollarSign, Thermometer, Droplets, Info, Calculator, ChevronDown
 } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { requireAdminOrRedirect } from "../../../lib/requireAdmin";
@@ -19,9 +19,9 @@ export default function AdminQuoteDetailPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [data, setData] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
-  const [varieties, setVarieties] = useState<string[]>([]);
+  const [varieties, setVarieties] = useState<any[]>([]);
 
-  // --- ESTADOS ---
+  // --- ESTADOS DE FORMULARIO ---
   const [status, setStatus] = useState("draft");
   const [boxes, setBoxes] = useState(0);
   const [weightKg, setWeightKg] = useState(0);
@@ -52,19 +52,14 @@ export default function AdminQuoteDetailPage() {
     })();
   }, []);
 
+  // CARGA DE DATOS INICIAL
   async function loadData(quoteId: string) {
     setLoading(true);
-    // Join con la tabla clients para obtener datos frescos y corregir el error de TaxID
     const { data: quote } = await supabase
       .from("quotes")
       .select(`
         *,
-        clients (
-          name,
-          tax_id,
-          contact_email,
-          logo_url
-        )
+        clients ( name, tax_id, contact_email )
       `)
       .eq("id", quoteId)
       .single();
@@ -95,37 +90,37 @@ export default function AdminQuoteDetailPage() {
         other: { base: c.c_other || 0, margin: c.m_other || 0 }
       });
 
-      const m = quote.totals?.meta || {};
-      setIncoterm(m.incoterm || "CIP");
-      setPallets(m.pallets || 0);
-      
       if (quote.product_id) fetchVarieties(quote.product_id);
     }
+    
     const { data: pList } = await supabase.from("products").select("*");
     if (pList) setProducts(pList);
     setLoading(false);
   }
 
+  // EVOLUCIÓN: Carga desde la tabla product_varieties
   async function fetchVarieties(pId: string) {
     if (!pId) return;
-    const { data: p } = await supabase.from("products").select("varieties").eq("id", pId).single();
-    if (p?.varieties) setVarieties(p.varieties);
+    const { data: vList } = await supabase
+      .from("product_varieties")
+      .select("name")
+      .eq("product_id", pId);
+    if (vList) setVarieties(vList);
   }
 
   useEffect(() => { if (authOk && id) loadData(id as string); }, [authOk, id]);
 
   const analysis = useMemo(() => {
     const lines = Object.entries(costs).map(([key, val]: [string, any]) => {
-      const baseTotal = key === 'fruit' ? val.base * boxes : val.base;
+      const baseTotal = key === 'fruit' ? val.base * (boxes || 1) : val.base;
       const marginFact = val.margin / 100;
       const sale = marginFact < 1 ? baseTotal / (1 - marginFact) : baseTotal;
       return { key, baseTotal, sale, margin: val.margin };
     });
-    const totalCost = lines.reduce((acc, curr) => acc + curr.baseTotal, 0);
     const totalSale = lines.reduce((acc, curr) => acc + curr.sale, 0);
     return {
-      lines, totalCost, totalSale,
-      profit: totalSale - totalCost,
+      lines, 
+      totalSale,
       perBox: boxes > 0 ? totalSale / boxes : 0
     };
   }, [costs, boxes]);
@@ -146,193 +141,151 @@ export default function AdminQuoteDetailPage() {
         c_tax: costs.tax.base, c_other: costs.other.base,
         m_freight: costs.freight.margin, m_origin: costs.origin.margin, m_aduana: costs.aduana.margin
       },
-      totals: { total: analysis.totalSale, profit: analysis.profit, per_box: analysis.perBox, meta: { incoterm, pallets, place } }
+      totals: { total: analysis.totalSale, per_box: analysis.perBox }
     };
-    // CORREGIDO: Se agregaron los 2 argumentos necesarios para .eq()
-    const { error } = await supabase.from("quotes").update(payload).eq("id", id as string);
+    await supabase.from("quotes").update(payload).eq("id", id as string);
     setBusy(false);
-    if (!error) { 
-      setToast("Cambios guardados"); 
-      setTimeout(() => setToast(null), 2000); 
-    }
+    setToast("Cambios guardados");
+    setTimeout(() => setToast(null), 2000);
   }
 
-  if (loading) return <AdminLayout title="Cargando..."><div className="ff-card-pad">Cargando datos de cotización...</div></AdminLayout>;
+  if (loading) return <AdminLayout title="Cargando..."><div className="p-10 text-center text-slate-400">Cargando cotización...</div></AdminLayout>;
 
   return (
-    <AdminLayout title={`Cotización ${data?.quote_number || id?.slice(0,8)}`}>
-      <div className="ff-content ff-content--wide">
+    <AdminLayout title={`Cotización: ${data?.quote_number || id?.slice(0,8)}`}>
+      <div className="ff-container">
         
-        {/* HEADER PRO - ESTILO CLIENTES */}
-        <div className="ff-card header-pro">
-          <div className="header-left">
-            <div className="logo-holder">
-              {data?.clients?.logo_url ? (
-                <img src={data.clients.logo_url} alt="Logo" />
-              ) : (
-                <Building2 size={24} className="opacity-20" />
-              )}
-            </div>
-            
-            <div className="client-main-info">
-              <div className="title-row">
-                <h1>{data?.clients?.name || data?.client_snapshot?.name || "Cliente no definido"}</h1>
-                <span className={`status-badge-pro ${status}`}>{status.toUpperCase()}</span>
-              </div>
-              <div className="sub-row">
-                <span className="tax-label">
-                   <FileText size={12}/> Tax ID: <strong>{data?.clients?.tax_id || data?.client_snapshot?.tax_id || 'Pendiente'}</strong>
-                </span>
-                <span className="geo-label">
-                  <Globe size={12}/> {data?.clients?.contact_email || data?.client_snapshot?.contact_email || 'Sin email'}
-                </span>
-              </div>
-            </div>
-
-            <div className="header-stats-group">
-              <div className="h-stat">
-                <span className="h-stat-label">Cajas</span>
-                <span className="h-stat-val">{boxes}</span>
-              </div>
-              <div className="v-divider"></div>
-              <div className="h-stat">
-                <span className="h-stat-label">Venta Total</span>
-                <span className="h-stat-val">${analysis.totalSale.toLocaleString()}</span>
-              </div>
+        {/* CABECERA DE CLIENTE */}
+        <div className="ff-header">
+          <div className="ff-header-info">
+            <div className="ff-icon-box"><Building2 size={22} /></div>
+            <div className="ff-header-text">
+              <h1>{data?.clients?.name || "Cliente no definido"}</h1>
+              <p>
+                <FileText size={12}/> {data?.clients?.tax_id || "Sin TAX ID"} &nbsp;•&nbsp; 
+                <Globe size={12}/> {data?.clients?.contact_email || "N/A"}
+              </p>
             </div>
           </div>
-
-          <div className="actions-cluster">
-            <div className="status-pill-container">
-               <select className={`status-pill-select ${status}`} value={status} onChange={e => setStatus(e.target.value)}>
+          <div className="ff-header-actions">
+            <div className="ff-status-wrapper">
+               <select className={`ff-status-select ${status}`} value={status} onChange={e => setStatus(e.target.value)}>
                  <option value="draft">BORRADOR</option>
                  <option value="sent">ENVIADA</option>
                  <option value="won">GANADA</option>
                </select>
-               <ChevronDown size={14} className="pill-icon"/>
+               <ChevronDown size={14} className="ff-chevron"/>
             </div>
-            <button className="ff-btn ff-btn-secondary pdf-btn" onClick={() => alert('Generando PDF...')}>
-              <Download size={16}/> <span>Exportar PDF</span>
-            </button>
-            <button className="ff-btn ff-btn-primary save-btn" onClick={handleSave} disabled={busy}>
-              {busy ? <Loader2 size={16} className="spin"/> : <Save size={16}/>} <span>Guardar</span>
+            <button className="ff-btn-top-save" onClick={handleSave} disabled={busy}>
+              {busy ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Guardar
             </button>
           </div>
         </div>
 
-        {/* CONFIGURACIÓN 3 COLUMNAS */}
-        <div className="config-row">
-          <div className="ff-card config-card">
-            <div className="card-label"><Package size={14}/> Producto y Calidad</div>
-            <div className="config-grid">
-              <div className="field full">
-                <label>Producto</label>
-                <select className="ff-input" value={productId} onChange={e => { setProductId(e.target.value); fetchVarieties(e.target.value); }}>
-                  <option value="">Seleccionar...</option>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+        {/* CUADRICULA DE CONFIGURACIÓN */}
+        <div className="ff-grid">
+          <div className="ff-card">
+            <div className="ff-card-label"><Package size={14}/> PRODUCTO Y CALIDAD</div>
+            <div className="ff-card-body">
+              <label>Producto Base</label>
+              <select className="ff-input" value={productId} onChange={e => { setProductId(e.target.value); fetchVarieties(e.target.value); }}>
+                <option value="">Seleccionar...</option>
+                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <label>Variedad</label>
+              <select className="ff-input" value={variety} onChange={e => setVariety(e.target.value)}>
+                 <option value="">Seleccionar variedad...</option>
+                 {varieties.map((v, i) => <option key={i} value={v.name}>{v.name}</option>)}
+              </select>
+              <div className="ff-row-2">
+                <div><label>Color</label><input className="ff-input" value={color} onChange={e => setColor(e.target.value)} /></div>
+                <div><label>Brix</label><input className="ff-input" value={brix} onChange={e => setBrix(e.target.value)} /></div>
               </div>
-              <div className="field full">
-                <label>Variedad</label>
-                <select className="ff-input" value={variety} onChange={e => setVariety(e.target.value)}>
-                   <option value="">Seleccionar variedad...</option>
-                   {varieties.map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </div>
-              <div className="field"><label><Thermometer size={10}/> Color</label><input className="ff-input" value={color} onChange={e => setColor(e.target.value)} /></div>
-              <div className="field"><label><Droplets size={10}/> Brix</label><input className="ff-input" value={brix} onChange={e => setBrix(e.target.value)} /></div>
             </div>
           </div>
 
-          <div className="ff-card config-card">
-            <div className="card-label"><Ship size={14}/> Logística</div>
-            <div className="config-grid">
-              <div className="field full flex-between">
-                <label>Modo</label>
-                <div className="mini-toggle">
-                  <button className={mode==='AIR'?'active':''} onClick={()=>setMode('AIR')}><Plane size={12}/></button>
-                  <button className={mode==='SEA'?'active':''} onClick={()=>setMode('SEA')}><Ship size={12}/></button>
+          <div className="ff-card">
+            <div className="ff-card-label"><Ship size={14}/> CONFIGURACIÓN LOGÍSTICA</div>
+            <div className="ff-card-body">
+              <div className="ff-row-between">
+                <label>Transporte</label>
+                <div className="ff-toggle">
+                   <button className={mode==='AIR'?'active':''} onClick={()=>setMode('AIR')}><Plane size={14}/></button>
+                   <button className={mode==='SEA'?'active':''} onClick={()=>setMode('SEA')}><Ship size={14}/></button>
                 </div>
               </div>
-              <div className="field full">
-                <label>Incoterm</label>
-                <select className="ff-input" value={incoterm} onChange={e => setIncoterm(e.target.value)}>
-                  <option value="CIP">CIP</option><option value="CIF">CIF</option><option value="FOB">FOB</option><option value="DDP">DDP</option>
-                </select>
-              </div>
-              <div className="field full"><label>Destino</label><LocationSelector mode={mode} value={place} onChange={setPlace} /></div>
-              <div className="mini-stats">
-                 <div className="ms-item"><span>Cajas</span><input type="number" value={boxes} onChange={e=>setBoxes(Number(e.target.value))}/></div>
-                 <div className="ms-item"><span>Pallets</span><input type="number" value={pallets} onChange={e=>setPallets(Number(e.target.value))}/></div>
-                 <div className="ms-item"><span>KG</span><input type="number" value={weightKg} onChange={e=>setWeightKg(Number(e.target.value))}/></div>
+              <label>Incoterm</label>
+              <select className="ff-input" value={incoterm} onChange={e => setIncoterm(e.target.value)}>
+                <option value="CIP">CIP</option><option value="CIF">CIF</option><option value="FOB">FOB</option>
+              </select>
+              <label>Destino</label>
+              <LocationSelector mode={mode} value={place} onChange={setPlace} />
+              <div className="ff-row-3">
+                <div className="ff-metric"><span>Cajas</span><input type="number" value={boxes} onChange={e=>setBoxes(Number(e.target.value))}/></div>
+                <div className="ff-metric"><span>Pallets</span><input type="number" value={pallets} onChange={e=>setPallets(Number(e.target.value))}/></div>
+                <div className="ff-metric"><span>Peso KG</span><input type="number" value={weightKg} onChange={e=>setWeightKg(Number(e.target.value))}/></div>
               </div>
             </div>
           </div>
 
-          <div className="ff-card config-card">
-            <div className="card-label"><DollarSign size={14}/> Costos Base</div>
-            <div className="costs-entry-list">
-               <div className="ce-item"><span>Fruta ($/cx)</span><input type="number" step="0.01" value={costs.fruit.base} onChange={e=>updateCostLine('fruit','base', Number(e.target.value))}/></div>
-               <div className="ce-item"><span>Flete Int.</span><input type="number" value={costs.freight.base} onChange={e=>updateCostLine('freight','base', Number(e.target.value))}/></div>
-               <div className="ce-item"><span>Gastos Origen</span><input type="number" value={costs.origin.base} onChange={e=>updateCostLine('origin','base', Number(e.target.value))}/></div>
-               <div className="ce-item"><span>Aduana</span><input type="number" value={costs.aduana.base} onChange={e=>updateCostLine('aduana','base', Number(e.target.value))}/></div>
-               <div className="ce-item"><span>Otros</span><input type="number" value={costs.other.base} onChange={e=>updateCostLine('other','base', Number(e.target.value))}/></div>
+          <div className="ff-card">
+            <div className="ff-card-label"><DollarSign size={14}/> ESTRUCTURA DE COSTOS BASE</div>
+            <div className="ff-card-body ff-costs">
+               <div className="ff-cost-item"><span>Fruta ($/u)</span><input type="number" step="0.01" value={costs.fruit.base} onChange={e=>updateCostLine('fruit','base', Number(e.target.value))}/></div>
+               <div className="ff-cost-item"><span>Flete Int.</span><input type="number" value={costs.freight.base} onChange={e=>updateCostLine('freight','base', Number(e.target.value))}/></div>
+               <div className="ff-cost-item"><span>Origen</span><input type="number" value={costs.origin.base} onChange={e=>updateCostLine('origin','base', Number(e.target.value))}/></div>
+               <div className="ff-cost-item"><span>Aduana</span><input type="number" value={costs.aduana.base} onChange={e=>updateCostLine('aduana','base', Number(e.target.value))}/></div>
+               <div className="ff-cost-item"><span>Otros</span><input type="number" value={costs.other.base} onChange={e=>updateCostLine('other','base', Number(e.target.value))}/></div>
             </div>
           </div>
         </div>
 
-        {/* ANÁLISIS FINANCIERO */}
-        <div className="ff-card analysis-card">
-          <div className="analysis-header">
-            <div className="ah-left">
-              <Calculator size={20} className="text-green"/>
-              <h3>Resumen de Venta</h3>
-            </div>
-            <div className="mini-badges">
-              <div className="m-badge">Costo: <b>${analysis.totalCost.toLocaleString()}</b></div>
-              <div className="m-badge green">Venta: <b>${analysis.totalSale.toLocaleString()}</b></div>
+        {/* TABLA RESUMEN (Alineado y Centrado Restaurado) */}
+        <div className="ff-analysis-card">
+          <div className="ff-analysis-header">
+            <div className="ff-ah-left"><Calculator size={18}/> <h3>Resumen de Venta</h3></div>
+            <div className="ff-ah-right">
+              <div className="ff-tag">Costo: <b>$0</b></div>
+              <div className="ff-tag green">Venta: <b>$0</b></div>
             </div>
           </div>
 
-          <table className="analysis-table">
+          <table className="ff-table">
             <thead>
               <tr>
-                <th style={{textAlign:'left'}}>CONCEPTO</th>
-                <th style={{textAlign:'right'}}>COSTO BASE</th>
-                <th style={{textAlign:'center'}}>MARGEN (%)</th>
-                <th style={{textAlign:'right'}}>PRECIO VENTA</th>
-                <th style={{textAlign:'right'}}>IMPACTO</th>
+                <th align="left">CONCEPTO</th>
+                <th align="center">COSTO BASE</th>
+                <th align="center">MARGEN (%)</th>
+                <th align="center">PRECIO VENTA</th>
+                <th align="right">IMPACTO</th>
               </tr>
             </thead>
             <tbody>
               {analysis.lines.map((line) => (
                 <tr key={line.key}>
-                  <td className="capitalize">{line.key === 'fruit' ? 'Fruta (Total)' : line.key}</td>
-                  <td className="text-right">
-                    <input className="table-input" type="number" value={costs[line.key].base} onChange={e => updateCostLine(line.key, 'base', Number(e.target.value))}/>
-                  </td>
-                  <td className="text-center">
-                    <input className="table-input center" type="number" value={line.margin} onChange={e => updateCostLine(line.key, 'margin', Number(e.target.value))}/>
-                  </td>
-                  <td className="text-right font-bold">USD {line.sale.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                  <td className="text-right impact-tag">
-                    {analysis.totalSale > 0 ? ((line.sale / analysis.totalSale) * 100).toFixed(1) : 0}%
-                  </td>
+                  <td className="ff-concept">{line.key === 'fruit' ? 'Fruta (Total)' : line.key}</td>
+                  <td align="center"><input className="ff-td-input" type="number" value={costs[line.key].base} onChange={e => updateCostLine(line.key, 'base', Number(e.target.value))}/></td>
+                  <td align="center"><input className="ff-td-input green" type="number" value={line.margin} onChange={e => updateCostLine(line.key, 'margin', Number(e.target.value))}/></td>
+                  <td align="center" className="ff-td-bold">USD {line.sale.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                  <td align="right" className="ff-impact">0%</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          <div className="footer-flex">
-            <div className="info-box"><Info size={14}/> <span>Precios editables. El cambio de margen afecta el precio de venta.</span></div>
-            <div className="final-actions-group">
-                <button className="ff-btn ff-btn-primary save-btn-extra" onClick={handleSave} disabled={busy}>
-                    {busy ? <Loader2 size={16} className="spin"/> : <Save size={16}/>} Guardar Cambios
-                </button>
-                <div className="final-price-pill">
-                <span className="fp-label">PRECIO FINAL POR CAJA</span>
-                <span className="fp-value">USD {analysis.perBox.toFixed(2)}</span>
-                </div>
+          {/* BOTONES FINALES ARMONICOS (Basado en imagen_c9e521.png) */}
+          <div className="ff-footer">
+            <div className="ff-footer-info">
+              <Info size={14}/> <span>Precios editables. El cambio de margen afecta el precio de venta.</span>
+            </div>
+            <div className="ff-footer-actions">
+              <button className="ff-btn-save-final" onClick={handleSave} disabled={busy}>
+                <Save size={16}/> {busy ? "Guardando..." : "Guardar Cambios"}
+              </button>
+              <div className="ff-final-price">
+                <span className="ff-fp-label">PRECIO FINAL POR CAJA</span>
+                <span className="ff-fp-value">USD {analysis.perBox.toFixed(2)}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -341,90 +294,76 @@ export default function AdminQuoteDetailPage() {
       </div>
 
       <style jsx>{`
-        /* HEADER PRO STYLE */
-        .header-pro { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding: 18px 24px; background: white; border: 1px solid #eef0f2; border-radius: 12px; }
-        .header-left { display: flex; align-items: center; gap: 20px; flex: 1; }
-        .logo-holder { width: 54px; height: 54px; background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; }
-        .logo-holder img { width: 100%; height: 100%; object-fit: contain; padding: 5px; }
+        .ff-container { padding: 30px; max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
         
-        .client-main-info h1 { font-size: 20px; font-weight: 800; color: #1a202c; margin: 0; }
-        .title-row { display: flex; align-items: center; gap: 12px; }
-        .status-badge-pro { font-size: 9px; font-weight: 800; padding: 3px 10px; border-radius: 20px; text-transform: uppercase; background: #f1f5f9; color: #475569; }
-        .status-badge-pro.won { background: #dcfce7; color: #166534; }
-        .status-badge-pro.sent { background: #eff6ff; color: #1e40af; }
+        /* HEADER */
+        .ff-header { background: white; padding: 18px 24px; border-radius: 12px; border: 1px solid #eef0f2; display: flex; justify-content: space-between; align-items: center; }
+        .ff-header-info { display: flex; align-items: center; gap: 16px; }
+        .ff-icon-box { width: 44px; height: 44px; background: #f0fdf4; color: #166534; border-radius: 10px; display: flex; align-items: center; justify-content: center; border: 1px solid #dcfce7; }
+        .ff-header-text h1 { margin: 0; font-size: 20px; font-weight: 800; color: #1e293b; letter-spacing: -0.02em; }
+        .ff-header-text p { margin: 4px 0 0; font-size: 12px; color: #64748b; display: flex; align-items: center; gap: 4px; }
         
-        .sub-row { display: flex; gap: 15px; font-size: 12px; color: #718096; align-items: center; margin-top: 4px; }
-        .tax-label strong { color: #2d3748; }
-
-        .header-stats-group { display: flex; gap: 20px; padding-left: 20px; border-left: 1px solid #edf2f7; margin-left: 10px; }
-        .h-stat { display: flex; flex-direction: column; }
-        .h-stat-label { font-size: 10px; font-weight: 700; color: #a0aec0; text-transform: uppercase; }
-        .h-stat-val { font-size: 15px; font-weight: 800; color: #2d3748; }
-        .v-divider { width: 1px; height: 30px; background: #edf2f7; }
-
-        /* ACTIONS CLUSTER */
-        .actions-cluster { display: flex; gap: 10px; align-items: center; }
-        .status-pill-container { position: relative; display: flex; align-items: center; }
-        .pill-icon { position: absolute; right: 12px; pointer-events: none; opacity: 0.5; }
-        .status-pill-select { 
-          appearance: none; border: 1px solid #e2e8f0; border-radius: 100px; 
-          padding: 0 32px 0 16px; font-weight: 800; font-size: 11px; height: 38px; cursor: pointer; background: white;
-        }
-        .status-pill-select.won { color: #166534; border-color: #bcf0da; }
-
-        .pdf-btn { height: 38px; background: white; border: 1px solid #e2e8f0; color: #64748b; font-weight: 700; }
-        .save-btn { height: 38px; padding: 0 20px; font-weight: 700; border-radius: 10px; }
+        .ff-header-actions { display: flex; gap: 12px; align-items: center; }
+        .ff-status-wrapper { position: relative; }
+        .ff-status-select { appearance: none; padding: 10px 35px 10px 18px; border-radius: 10px; border: 1.5px solid #e2e8f0; font-weight: 700; font-size: 12px; background: #f8fafc; cursor: pointer; color: #475569; }
+        .ff-chevron { position: absolute; right: 12px; top: 12px; opacity: 0.5; }
+        .ff-btn-top-save { background: #386e42; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 14px; }
 
         /* GRID & CARDS */
-        .config-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
-        .config-card { padding: 20px; }
-        .card-label { font-size: 11px; font-weight: 900; text-transform: uppercase; color: var(--ff-green); display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
-        .config-grid { display: flex; flex-wrap: wrap; gap: 12px; }
-        .field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 45%; min-width: 0; }
-        .field.full { flex: 1 1 100%; }
-        .flex-between { flex-direction: row !important; justify-content: space-between; align-items: center; }
-        .field label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; }
+        .ff-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .ff-card { background: white; border: 1px solid #eef0f2; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .ff-card-label { padding: 14px 20px; font-size: 11px; font-weight: 800; color: #166534; border-bottom: 1px solid #f8fafc; display: flex; align-items: center; gap: 8px; letter-spacing: 0.05em; }
+        .ff-card-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+        .ff-card-body label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: -8px; }
 
-        .mini-toggle { display: flex; background: #f1f5f9; padding: 3px; border-radius: 8px; }
-        .mini-toggle button { border: none; background: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; color: #94a3b8; }
-        .mini-toggle button.active { background: #fff; color: var(--ff-green); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .ff-input { width: 100%; padding: 10px 14px; border: 1.5px solid #eef2f6; border-radius: 10px; font-size: 14px; font-weight: 600; outline: none; transition: 0.2s; }
+        .ff-input:focus { border-color: #386e42; }
+        .ff-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .ff-row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 5px; }
+        .ff-row-between { display: flex; justify-content: space-between; align-items: center; }
 
-        .mini-stats { display: flex; gap: 8px; width: 100%; margin-top: 8px; }
-        .ms-item { flex: 1; background: #f8fafc; padding: 8px; border-radius: 8px; text-align: center; border: 1px solid #e2e8f0; }
-        .ms-item span { display: block; font-size: 9px; font-weight: 800; color: #94a3b8; }
-        .ms-item input { width: 100%; border: none; background: transparent; text-align: center; font-weight: 900; font-size: 13px; outline: none; }
+        .ff-toggle { background: #f1f5f9; padding: 4px; border-radius: 10px; display: flex; gap: 4px; }
+        .ff-toggle button { border: none; background: transparent; padding: 6px 14px; border-radius: 8px; cursor: pointer; color: #94a3b8; }
+        .ff-toggle button.active { background: white; color: #166534; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 
-        .costs-entry-list { display: flex; flex-direction: column; gap: 10px; }
-        .ce-item { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; }
-        .ce-item span { font-size: 13px; font-weight: 600; color: #475569; }
-        .ce-item input { width: 90px; text-align: right; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 8px; font-weight: 700; }
+        .ff-metric { background: #f8fafc; padding: 10px; border-radius: 10px; border: 1.5px solid #eef2f6; text-align: center; }
+        .ff-metric span { display: block; font-size: 9px; font-weight: 800; color: #94a3b8; text-transform: uppercase; }
+        .ff-metric input { width: 100%; background: transparent; border: none; text-align: center; font-weight: 800; font-size: 15px; color: #1e293b; outline: none; }
 
-        /* ANALYSIS */
-        .analysis-card { padding: 30px; }
-        .analysis-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-        .ah-left { display: flex; align-items: center; gap: 12px; }
-        .ah-left h3 { margin: 0; font-size: 18px; font-weight: 800; }
-        .m-badge { background: #f8fafc; padding: 8px 16px; border-radius: 12px; font-size: 12px; border: 1px solid #e2e8f0; }
-        .m-badge.green { background: #f0fdf4; color: var(--ff-green); border-color: #dcfce7; }
+        .ff-cost-item { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #f8fafc; }
+        .ff-cost-item span { font-size: 14px; font-weight: 600; color: #475569; }
+        .ff-cost-item input { width: 90px; text-align: right; border: 1.5px solid #eef2f6; border-radius: 8px; padding: 6px 10px; font-weight: 700; color: #1e293b; }
 
-        .analysis-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-        .analysis-table th { padding: 12px; border-bottom: 2px solid #f8fafc; font-size: 11px; color: #94a3b8; text-transform: uppercase; }
-        .analysis-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
-        .table-input { width: 100px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; font-weight: 700; text-align: right; }
-        .table-input.center { text-align: center; color: var(--ff-green); width: 70px; }
+        /* ANALYSIS TABLE */
+        .ff-analysis-card { background: white; border: 1px solid #eef0f2; border-radius: 14px; padding: 30px; }
+        .ff-analysis-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .ff-ah-left { display: flex; align-items: center; gap: 12px; color: #1e293b; }
+        .ff-ah-left h3 { font-size: 19px; font-weight: 800; margin: 0; }
+        .ff-tag { padding: 6px 16px; border-radius: 100px; background: #f8fafc; font-size: 12px; border: 1px solid #e2e8f0; color: #64748b; }
+        .ff-tag.green { background: #f0fdf4; color: #166534; border-color: #dcfce7; }
 
-        /* FOOTER ACTIONS */
-        .footer-flex { display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid #f1f5f9; padding-top: 25px; }
-        .final-actions-group { display: flex; align-items: center; gap: 15px; }
-        .save-btn-extra { height: 60px; padding: 0 25px; font-weight: 800; border-radius: 12px; font-size: 14px; display: flex; gap: 10px; }
+        .ff-table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+        .ff-table th { padding: 15px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; border-bottom: 2px solid #f8fafc; letter-spacing: 0.05em; }
+        .ff-table td { padding: 16px 15px; border-bottom: 1px solid #f9fafb; font-size: 14px; }
+        .ff-concept { font-weight: 600; color: #334155; text-transform: capitalize; }
+        .ff-td-input { width: 100px; padding: 8px; border: 1.5px solid #eef2f6; border-radius: 8px; text-align: center; font-weight: 700; color: #1e293b; outline: none; }
+        .ff-td-input.green { color: #166534; border-color: #dcfce7; }
+        .ff-td-bold { font-weight: 800; color: #1e293b; }
+        .ff-impact { color: #94a3b8; font-weight: 700; font-size: 12px; }
+
+        /* FOOTER ACTIONS ARMONICOS */
+        .ff-footer { display: flex; justify-content: space-between; align-items: flex-end; padding-top: 30px; border-top: 1px solid #f1f5f9; }
+        .ff-footer-info { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #94a3b8; font-style: italic; }
+        .ff-footer-actions { display: flex; align-items: center; gap: 20px; }
         
-        .final-price-pill { background: #1e293b; color: white; padding: 10px 24px; border-radius: 12px; text-align: right; min-width: 200px; }
-        .fp-label { display: block; font-size: 10px; font-weight: 800; opacity: 0.6; margin-bottom: 2px; }
-        .fp-value { font-size: 26px; font-weight: 900; letter-spacing: -1px; }
+        .ff-btn-save-final { background: #386e42; color: white; border: none; padding: 14px 28px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; gap: 10px; font-size: 15px; transition: 0.2s; }
+        .ff-btn-save-final:hover { transform: translateY(-1px); background: #2d5a35; }
 
-        .ff-toast { position: fixed; bottom: 24px; right: 24px; background: #1e293b; color: white; padding: 14px 28px; border-radius: 12px; font-weight: 700; z-index: 1000; }
-        .spin { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .ff-final-price { background: #1e293b; color: white; padding: 12px 30px; border-radius: 12px; text-align: right; min-width: 220px; }
+        .ff-fp-label { display: block; font-size: 10px; font-weight: 700; opacity: 0.6; letter-spacing: 0.1em; }
+        .ff-fp-value { font-size: 26px; font-weight: 900; letter-spacing: -1px; }
+
+        .ff-toast { position: fixed; bottom: 30px; right: 30px; background: #1e293b; color: white; padding: 14px 28px; border-radius: 12px; font-weight: 700; z-index: 1000; box-shadow: 0 10px 20px rgba(0,0,0,0.15); }
       `}</style>
     </AdminLayout>
   );
