@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { 
   Save, FileText, Package, Loader2, Building2, Plane, Ship, Boxes, Weight, 
-  ChevronDown, ChevronUp, Globe, DollarSign, Thermometer, Droplets 
+  ChevronDown, ChevronUp, Globe, DollarSign, Thermometer, Droplets, Info, TrendingUp
 } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { requireAdminOrRedirect } from "../../../lib/requireAdmin";
@@ -31,21 +31,23 @@ export default function AdminQuoteDetailPage() {
   const [incoterm, setIncoterm] = useState("CIP");
   const [place, setPlace] = useState("");
   
-  // Estado de Producto
+  // Producto
   const [productId, setProductId] = useState("");
   const [variety, setVariety] = useState("");
   const [color, setColor] = useState("2.75 - 3");
   const [brix, setBrix] = useState("> 13");
 
-  // Costos
+  // Estructura de Costos Completa
   const [cFruit, setCFruit] = useState(13.30);
   const [cFreight, setCFreight] = useState(0);
   const [cOrigin, setCOrigin] = useState(0);
   const [cAduana, setCAduana] = useState(0);
   const [cInsp, setCInsp] = useState(0);
+  const [cDoc, setCDoc] = useState(0);
+  const [cTax, setCTax] = useState(0);
   const [cOther, setCOther] = useState(0);
 
-  const [showCosts, setShowCosts] = useState(false);
+  const [showCosts, setShowCosts] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -56,11 +58,7 @@ export default function AdminQuoteDetailPage() {
 
   async function loadData(quoteId: string) {
     setLoading(true);
-    const { data: quote, error } = await supabase
-      .from("quotes")
-      .select("*")
-      .eq("id", quoteId)
-      .single();
+    const { data: quote } = await supabase.from("quotes").select("*").eq("id", quoteId).single();
 
     if (quote) {
       setData(quote);
@@ -72,10 +70,10 @@ export default function AdminQuoteDetailPage() {
       setPlace(quote.destination || "");
       setProductId(quote.product_id || "");
       
-      const pDetails = quote.product_details || {};
-      setVariety(pDetails.variety || "");
-      setColor(pDetails.color || "2.75 - 3");
-      setBrix(pDetails.brix || "> 13");
+      const p = quote.product_details || {};
+      setVariety(p.variety || "");
+      setColor(p.color || "2.75 - 3");
+      setBrix(p.brix || "> 13");
 
       const c = quote.costs || {};
       setCFruit(c.c_fruit || 13.30);
@@ -83,13 +81,14 @@ export default function AdminQuoteDetailPage() {
       setCOrigin(c.c_origin || 0);
       setCAduana(c.c_aduana || 0);
       setCInsp(c.c_insp || 0);
+      setCDoc(c.c_doc || 0);
+      setCTax(c.c_tax || 0);
       setCOther(c.c_other || 0);
 
       const m = quote.totals?.meta || {};
       setIncoterm(m.incoterm || "CIP");
       setPallets(m.pallets || 0);
     }
-
     const { data: pList } = await supabase.from("products").select("*");
     if (pList) setProducts(pList);
     setLoading(false);
@@ -98,7 +97,8 @@ export default function AdminQuoteDetailPage() {
   useEffect(() => { if (authOk && id) loadData(id as string); }, [authOk, id]);
 
   const computed = useMemo(() => {
-    const totalCost = (Number(cFruit) * Number(boxes)) + Number(cFreight) + Number(cOrigin) + Number(cAduana) + Number(cInsp) + Number(cOther);
+    const totalCost = (Number(cFruit) * Number(boxes)) + Number(cFreight) + Number(cOrigin) + 
+                      Number(cAduana) + Number(cInsp) + Number(cDoc) + Number(cTax) + Number(cOther);
     const m = Number(margin) / 100;
     const totalSale = m < 1 ? totalCost / (1 - m) : totalCost;
     return {
@@ -107,206 +107,250 @@ export default function AdminQuoteDetailPage() {
       profit: totalSale - totalCost,
       perBox: boxes > 0 ? totalSale / boxes : 0
     };
-  }, [boxes, margin, cFruit, cFreight, cOrigin, cAduana, cInsp, cOther]);
+  }, [boxes, margin, cFruit, cFreight, cOrigin, cAduana, cInsp, cDoc, cTax, cOther]);
 
   async function handleSave() {
     setBusy(true);
     const payload = {
-      status, boxes, weight_kg: weightKg, margin_markup: margin, mode,
-      destination: place,
+      status, boxes, weight_kg: weightKg, margin_markup: margin, mode, destination: place,
       product_id: productId,
       product_details: { variety, color, brix },
-      costs: { c_fruit: cFruit, c_freight: cFreight, c_origin: cOrigin, c_aduana: cAduana, c_insp: cInsp, c_other: cOther },
-      totals: {
-        total: computed.totalSale,
-        profit: computed.profit,
-        meta: { incoterm, pallets, place }
-      }
+      costs: { c_fruit: cFruit, c_freight: cFreight, c_origin: cOrigin, c_aduana: cAduana, c_insp: cInsp, c_doc: cDoc, c_tax: cTax, c_other: cOther },
+      totals: { total: computed.totalSale, profit: computed.profit, per_box: computed.perBox, meta: { incoterm, pallets, place } }
     };
-
     const { error } = await supabase.from("quotes").update(payload).eq("id", id);
     setBusy(false);
-    if (!error) {
-      setToast("Cambios guardados");
-      setTimeout(() => setToast(null), 2000);
-    }
+    if (!error) { setToast("Cambios guardados"); setTimeout(() => setToast(null), 2000); }
   }
 
-  if (loading) return <AdminLayout title="Cargando..."><div className="p-8">Cargando datos...</div></AdminLayout>;
+  if (loading) return <AdminLayout title="Cargando..."><div className="ff-card-pad">Sincronizando...</div></AdminLayout>;
 
   return (
     <AdminLayout title={`Cotización ${data?.quote_number || id?.slice(0,8)}`}>
-      <div className="quote-container">
+      <div className="ff-content ff-content--wide">
         
-        {/* HEADER CARD */}
-        <div className="card header-card">
-          <div className="client-info">
-            <div className="avatar"><Building2 size={24} /></div>
+        {/* TOP BAR */}
+        <div className="ff-card ff-card-pad header-flex">
+          <div className="client-brand">
+            <div className="avatar-box"><Building2 size={20} /></div>
             <div>
-              <h2>{data?.client_snapshot?.name || "Cliente Demo"}</h2>
-              <p><FileText size={14}/> Tax ID: {data?.client_snapshot?.tax_id || "N/A"} | <Globe size={14}/> {data?.client_snapshot?.contact_email}</p>
+              <h2 className="client-name">{data?.client_snapshot?.name || "Cliente Demo"}</h2>
+              <div className="client-meta">
+                <span><FileText size={12}/> {data?.client_snapshot?.tax_id || "N/A"}</span>
+                <span><Globe size={12}/> {data?.client_snapshot?.contact_email}</span>
+              </div>
             </div>
           </div>
-          <div className="header-actions">
+          <div className="actions-cluster">
             <select className={`status-pill ${status}`} value={status} onChange={e => setStatus(e.target.value)}>
               <option value="draft">BORRADOR</option>
               <option value="sent">ENVIADA</option>
               <option value="won">GANADA</option>
             </select>
-            <button className="btn-save" onClick={handleSave} disabled={busy}>
-              {busy ? <Loader2 size={18} className="spin"/> : <Save size={18}/>} 
-              {busy ? "Guardando..." : "Guardar Cambios"}
+            <button className="ff-btn ff-btn-primary" onClick={handleSave} disabled={busy}>
+              {busy ? <Loader2 size={16} className="spin"/> : <Save size={16}/>} Guardar
             </button>
           </div>
         </div>
 
-        <div className="workspace">
-          <div className="left-panel">
+        <div className="main-grid">
+          {/* COLUMNA IZQUIERDA: 25% (EDICIÓN) */}
+          <aside className="editor-side">
             
-            {/* PRODUCTO */}
-            <div className="card section-card">
-              <div className="section-title"><Package size={18}/> <h3>Producto y Calidad</h3></div>
-              <div className="input-grid">
+            <div className="ff-card editor-card">
+              <div className="card-head"><Package size={16}/> <h4>Producto</h4></div>
+              <div className="fields-stack">
                 <div className="field">
                   <label>Producto</label>
-                  <select value={productId} onChange={e => {
-                    setProductId(e.target.value);
-                    const p = products.find(x => x.id === e.target.value);
-                    if(p) setVariety(p.variety || "");
-                  }}>
+                  <select className="ff-input" value={productId} onChange={e => setProductId(e.target.value)}>
                     <option value="">Seleccionar...</option>
                     {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
-                <div className="field"><label>Variedad</label><input value={variety} onChange={e => setVariety(e.target.value)} /></div>
-                <div className="field"><label><Thermometer size={12}/> Color</label><input value={color} onChange={e => setColor(e.target.value)} /></div>
-                <div className="field"><label><Droplets size={12}/> Brix</label><input value={brix} onChange={e => setBrix(e.target.value)} /></div>
+                <div className="field"><label>Variedad</label><input className="ff-input" value={variety} onChange={e => setVariety(e.target.value)} /></div>
+                <div className="field-row">
+                  <div className="field"><label><Thermometer size={10}/> Color</label><input className="ff-input" value={color} onChange={e => setColor(e.target.value)} /></div>
+                  <div className="field"><label><Droplets size={10}/> Brix</label><input className="ff-input" value={brix} onChange={e => setBrix(e.target.value)} /></div>
+                </div>
               </div>
             </div>
 
-            {/* LOGÍSTICA */}
-            <div className="card section-card">
-              <div className="section-header-row">
-                <div className="section-title"><Ship size={18}/> <h3>Configuración Logística</h3></div>
+            <div className="ff-card editor-card">
+              <div className="card-head-spread">
+                <div className="card-head"><Ship size={16}/> <h4>Logística</h4></div>
                 <div className="mode-toggle">
-                  <button className={mode==='AIR'?'active':''} onClick={()=>setMode('AIR')}><Plane size={14}/> Aéreo</button>
-                  <button className={mode==='SEA'?'active':''} onClick={()=>setMode('SEA')}><Ship size={14}/> Marítimo</button>
+                  <button className={mode==='AIR'?'active':''} onClick={()=>setMode('AIR')}><Plane size={12}/></button>
+                  <button className={mode==='SEA'?'active':''} onClick={()=>setMode('SEA')}><Ship size={12}/></button>
                 </div>
               </div>
-              <div className="log-top-grid">
-                <div className="field"><label>Incoterm</label>
-                  <select value={incoterm} onChange={e => setIncoterm(e.target.value)}>
-                    <option value="CIP">CIP</option><option value="FOB">FOB</option><option value="DDP">DDP</option>
+              <div className="fields-stack">
+                <div className="field">
+                  <label>Incoterm</label>
+                  <select className="ff-input" value={incoterm} onChange={e => setIncoterm(e.target.value)}>
+                    <option value="CIP">CIP</option><option value="FOB">FOB</option><option value="DDP">DDP</option><option value="CIF">CIF</option>
                   </select>
                 </div>
-                <div className="field place-field"><label>Lugar (Place)</label>
-                  <LocationSelector mode={mode} value={place} onChange={setPlace} />
+                <div className="field"><label>Lugar</label><LocationSelector mode={mode} value={place} onChange={setPlace} /></div>
+                <div className="stats-mini-grid">
+                   <div className="mini-box"><span>Cajas</span><input type="number" value={boxes} onChange={e=>setBoxes(Number(e.target.value))}/></div>
+                   <div className="mini-box"><span>Pallets</span><input type="number" value={pallets} onChange={e=>setPallets(Number(e.target.value))}/></div>
+                   <div className="mini-box"><span>Peso</span><input type="number" value={weightKg} onChange={e=>setWeightKg(Number(e.target.value))}/></div>
                 </div>
-              </div>
-              <div className="log-bottom-stats">
-                <div className="stat-box"><Boxes size={16}/><div className="inner"><label>Cajas</label><input type="number" value={boxes} onChange={e=>setBoxes(Number(e.target.value))}/></div></div>
-                <div className="stat-box"><Package size={16}/><div className="inner"><label>Pallets</label><input type="number" value={pallets} onChange={e=>setPallets(Number(e.target.value))}/></div></div>
-                <div className="stat-box"><Weight size={16}/><div className="inner"><label>Peso (KG)</label><input type="number" value={weightKg} onChange={e=>setWeightKg(Number(e.target.value))}/></div></div>
               </div>
             </div>
 
-            {/* COSTOS */}
-            <div className="card section-card">
-              <div className="section-header-row">
-                <div className="section-title"><DollarSign size={18}/> <h3>Estructura de Costos (USD)</h3></div>
-                <button className="btn-text" onClick={()=>setShowCosts(!showCosts)}>
-                  {showCosts ? <><ChevronUp size={16}/> Ocultar</> : <><ChevronDown size={16}/> Editar detalles</>}
-                </button>
+            <div className="ff-card editor-card">
+              <div className="card-head-spread" onClick={()=>setShowCosts(!showCosts)} style={{cursor:'pointer'}}>
+                <div className="card-head"><DollarSign size={16}/> <h4>Costos</h4></div>
+                {showCosts ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
               </div>
               {showCosts && (
-                <div className="costs-expanded">
-                  <div className="field"><label>Fruta $/caja</label><input type="number" step="0.01" value={cFruit} onChange={e=>setCFruit(Number(e.target.value))}/></div>
-                  <div className="field"><label>Flete</label><input type="number" value={cFreight} onChange={e=>setCFreight(Number(e.target.value))}/></div>
-                  <div className="field"><label>Origen</label><input type="number" value={cOrigin} onChange={e=>setCOrigin(Number(e.target.value))}/></div>
-                  <div className="field"><label>Aduana</label><input type="number" value={cAduana} onChange={e=>setCAduana(Number(e.target.value))}/></div>
-                  <div className="field"><label>Inspección</label><input type="number" value={cInsp} onChange={e=>setCInsp(Number(e.target.value))}/></div>
-                  <div className="field"><label>Otros</label><input type="number" value={cOther} onChange={e=>setCOther(Number(e.target.value))}/></div>
+                <div className="fields-stack costs-stack">
+                  <div className="field-val"><span>Fruta $/caja</span><input type="number" step="0.01" value={cFruit} onChange={e=>setCFruit(Number(e.target.value))}/></div>
+                  <div className="field-val"><span>Flete Int.</span><input type="number" value={cFreight} onChange={e=>setCFreight(Number(e.target.value))}/></div>
+                  <div className="field-val"><span>Origen</span><input type="number" value={cOrigin} onChange={e=>setCOrigin(Number(e.target.value))}/></div>
+                  <div className="field-val"><span>Aduana</span><input type="number" value={cAduana} onChange={e=>setCAduana(Number(e.target.value))}/></div>
+                  <div className="field-val"><span>Inspección</span><input type="number" value={cInsp} onChange={e=>setCInsp(Number(e.target.value))}/></div>
+                  <div className="field-val"><span>Docs</span><input type="number" value={cDoc} onChange={e=>setCDoc(Number(e.target.value))}/></div>
+                  <div className="field-val"><span>Impuestos</span><input type="number" value={cTax} onChange={e=>setCTax(Number(e.target.value))}/></div>
+                  <div className="field-val"><span>Otros</span><input type="number" value={cOther} onChange={e=>setCOther(Number(e.target.value))}/></div>
                 </div>
               )}
             </div>
-          </div>
+          </aside>
 
-          <div className="right-panel">
-            <div className="summary-card">
-              <h4>RESUMEN DE VENTA</h4>
-              <div className="margin-input">
-                <label>Margen Deseado (%)</label>
-                <input type="number" value={margin} onChange={e=>setMargin(Number(e.target.value))}/>
+          {/* COLUMNA DERECHA: 75% (RESUMEN CLARO) */}
+          <main className="display-side">
+            <div className="ff-card summary-display">
+              <div className="display-header">
+                <div>
+                  <h3>Resumen Financiero de Venta</h3>
+                  <p>Cálculo basado en el {margin}% de margen operativo.</p>
+                </div>
+                <div className="margin-control-box">
+                  <label>MARGEN DESEADO (%)</label>
+                  <input type="number" value={margin} onChange={e=>setMargin(Number(e.target.value))}/>
+                </div>
               </div>
-              <div className="summary-rows">
-                <div className="s-row"><span>Costo Operativo</span><b>USD {computed.totalCost.toLocaleString()}</b></div>
-                <div className="s-row sale"><span>Precio Venta Final</span><b>USD {computed.totalSale.toLocaleString()}</b></div>
-                <div className="s-row utility"><span>Utilidad Bruta</span><b>USD {computed.profit.toLocaleString()}</b></div>
+
+              <div className="finance-grid">
+                <div className="finance-card">
+                  <div className="f-icon"><Package size={20}/></div>
+                  <div className="f-info">
+                    <span className="f-label">Inversión Operativa</span>
+                    <span className="f-value">USD {computed.totalCost.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                  </div>
+                </div>
+                <div className="finance-card highlight">
+                  <div className="f-icon"><TrendingUp size={20}/></div>
+                  <div className="f-info">
+                    <span className="f-label">Precio de Venta Total</span>
+                    <span className="f-value">USD {computed.totalSale.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                  </div>
+                </div>
+                <div className="finance-card utility">
+                  <div className="f-icon"><DollarSign size={20}/></div>
+                  <div className="f-info">
+                    <span className="f-label">Utilidad Proyectada</span>
+                    <span className="f-value">USD {computed.profit.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                  </div>
+                </div>
               </div>
-              <div className="box-badge">
-                <span className="b-label">VALOR POR CAJA</span>
-                <span className="b-value">USD {computed.perBox.toFixed(2)}</span>
+
+              <div className="big-badge-container">
+                <div className="per-box-badge">
+                   <div className="badge-text">
+                      <h4>VALOR FINAL POR CAJA</h4>
+                      <p>Precio sugerido de venta al cliente</p>
+                   </div>
+                   <div className="badge-price">
+                      <span className="currency">USD</span>
+                      <span className="amount">{computed.perBox.toFixed(2)}</span>
+                   </div>
+                </div>
               </div>
-              {toast && <div className="toast-in-card">{toast}</div>}
+
+              <div className="info-footer">
+                <Info size={14}/>
+                <span>Este cálculo incluye flete, seguros y gastos de nacionalización según el incoterm {incoterm}.</span>
+              </div>
             </div>
-          </div>
+
+            {toast && <div className="ff-toast">{toast}</div>}
+          </main>
         </div>
       </div>
 
       <style jsx>{`
-        .quote-container { padding: 20px; max-width: 1400px; margin: 0 auto; font-family: sans-serif; }
-        .card { background: white; border-radius: 16px; border: 1px solid #eef2f6; box-shadow: 0 4px 12px rgba(0,0,0,0.03); margin-bottom: 20px; padding: 24px; }
-        
-        .header-card { display: flex; justify-content: space-between; align-items: center; }
-        .client-info { display: flex; gap: 16px; align-items: center; }
-        .avatar { background: #f0fdf4; color: #166534; padding: 12px; border-radius: 12px; }
-        .client-info h2 { margin: 0; font-size: 20px; color: #1e293b; font-weight: 700; }
-        .client-info p { margin: 4px 0 0; color: #64748b; font-size: 13px; display: flex; align-items: center; gap: 8px; }
-        
-        .header-actions { display: flex; gap: 12px; }
-        .status-pill { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 16px; font-weight: 700; font-size: 12px; cursor: pointer; }
-        .status-pill.draft { background: #f8fafc; }
-        .status-pill.won { background: #dcfce7; color: #166534; }
-        .btn-save { background: #1f7a3a; color: white; border: none; padding: 10px 24px; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-radius: 12px; }
+        .client-brand { display: flex; gap: 14px; align-items: center; }
+        .avatar-box { background: #f0fdf4; color: var(--ff-green); padding: 10px; border-radius: 10px; border: 1px solid rgba(31,122,58,0.1); }
+        .client-name { margin: 0; font-size: 18px; font-weight: 800; color: var(--ff-text); }
+        .client-meta { display: flex; gap: 12px; font-size: 12px; color: var(--ff-muted); margin-top: 2px; }
+        .client-meta span { display: flex; align-items: center; gap: 4px; }
 
-        .workspace { display: grid; grid-template-columns: 1fr 360px; gap: 24px; }
-        .section-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .section-title { display: flex; align-items: center; gap: 10px; color: #1e293b; }
-        .section-title h3 { margin: 0; font-size: 16px; font-weight: 700; }
-        
-        .input-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-        .field { display: flex; flex-direction: column; gap: 6px; }
-        .field label { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; }
-        input, select { padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0; outline: none; font-size: 14px; }
+        .actions-cluster { display: flex; gap: 12px; }
+        .status-pill { border: 1px solid var(--ff-border); border-radius: 6px; padding: 0 12px; font-weight: 700; font-size: 11px; height: 36px; cursor: pointer; }
+        .status-pill.draft { background: #f1f5f9; color: #475569; }
+        .status-pill.won { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
 
-        .mode-toggle { background: #f1f5f9; padding: 4px; border-radius: 10px; display: flex; gap: 4px; }
-        .mode-toggle button { border: none; background: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; color: #64748b; cursor: pointer; }
-        .mode-toggle button.active { background: white; color: #1e293b; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-
-        .log-top-grid { display: grid; grid-template-columns: 140px 1fr; gap: 16px; margin-bottom: 20px; }
-        .log-bottom-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; border-top: 1px solid #f1f5f9; padding-top: 20px; }
-        .stat-box { background: #f8fafc; padding: 12px; border-radius: 12px; display: flex; align-items: center; gap: 12px; color: #94a3b8; }
-        .inner { display: flex; flex-direction: column; }
-        .inner input { border: none; background: none; padding: 0; font-size: 16px; font-weight: 700; color: #1e293b; width: 60px; }
-
-        .costs-expanded { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-        .btn-text { background: none; border: none; color: #1f7a3a; font-weight: 700; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
-
-        .summary-card { background: #1e293b; color: white; padding: 30px; border-radius: 24px; position: sticky; top: 20px; }
-        .summary-card h4 { font-size: 12px; color: #94a3b8; margin-bottom: 24px; letter-spacing: 1px; }
-        .margin-input { background: rgba(255,255,255,0.05); padding: 16px; border-radius: 16px; margin-bottom: 24px; }
-        .margin-input input { background: transparent; border: 1px solid rgba(255,255,255,0.2); color: white; width: 100%; text-align: center; font-size: 20px; font-weight: 800; }
+        .main-grid { display: grid; grid-template-columns: 320px 1fr; gap: 24px; align-items: start; }
         
-        .summary-rows { display: flex; flex-direction: column; gap: 14px; margin-bottom: 30px; }
-        .s-row { display: flex; justify-content: space-between; font-size: 14px; color: #94a3b8; }
-        .s-row.sale { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 14px; color: white; font-weight: 700; font-size: 16px; }
-        .s-row.utility { color: #4ade80; font-weight: 700; }
+        /* EDITOR SIDE (25%) */
+        .editor-card { margin-bottom: 16px; border-radius: 10px; }
+        .card-head { display: flex; align-items: center; gap: 8px; color: var(--ff-green); padding: 12px 16px; border-bottom: 1px solid var(--ff-border); }
+        .card-head h4 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 800; }
+        .card-head-spread { display: flex; justify-content: space-between; align-items: center; padding-right: 16px; }
         
-        .box-badge { background: #1f7a3a; padding: 24px; border-radius: 20px; text-align: center; }
-        .b-label { display: block; font-size: 11px; font-weight: 700; opacity: 0.8; }
-        .b-value { font-size: 32px; font-weight: 800; }
+        .fields-stack { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+        .field { display: flex; flex-direction: column; gap: 4px; }
+        .field label { font-size: 10px; font-weight: 700; color: var(--ff-muted); text-transform: uppercase; }
+        .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+        .stats-mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+        .mini-box { background: #f8fafc; padding: 8px; border-radius: 8px; border: 1px solid var(--ff-border); text-align: center; }
+        .mini-box span { display: block; font-size: 9px; font-weight: 700; color: var(--ff-muted); margin-bottom: 2px; }
+        .mini-box input { width: 100%; border: none; background: transparent; text-align: center; font-weight: 800; font-size: 13px; outline: none; }
+
+        .costs-stack { gap: 8px; }
+        .field-val { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 6px 0; border-bottom: 1px solid #f1f5f9; }
+        .field-val span { font-size: 11px; font-weight: 600; color: #475569; }
+        .field-val input { width: 70px; text-align: right; border: 1px solid #e2e8f0; border-radius: 4px; padding: 2px 6px; font-size: 12px; font-weight: 700; }
+
+        .mode-toggle { display: flex; background: #f1f5f9; padding: 3px; border-radius: 6px; }
+        .mode-toggle button { border: none; background: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; color: #94a3b8; }
+        .mode-toggle button.active { background: #fff; color: var(--ff-green); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+        /* DISPLAY SIDE (75%) */
+        .summary-display { padding: 40px; border-radius: 16px; border: none; background: #fff; box-shadow: 0 10px 40px rgba(15,23,42,0.04); }
+        .display-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; border-bottom: 2px solid #f8fafc; padding-bottom: 20px; }
+        .display-header h3 { margin: 0; font-size: 24px; font-weight: 800; color: var(--ff-text); }
+        .display-header p { margin: 5px 0 0; color: var(--ff-muted); font-size: 14px; }
+
+        .margin-control-box { background: #f0fdf4; padding: 12px 20px; border-radius: 12px; border: 1px solid #dcfce7; text-align: right; }
+        .margin-control-box label { display: block; font-size: 10px; font-weight: 800; color: var(--ff-green); margin-bottom: 4px; }
+        .margin-control-box input { background: transparent; border: none; font-size: 24px; font-weight: 900; color: var(--ff-green); width: 60px; text-align: right; outline: none; }
+
+        .finance-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 40px; }
+        .finance-card { padding: 24px; border-radius: 16px; background: #f8fafc; display: flex; align-items: center; gap: 16px; border: 1px solid #f1f5f9; }
+        .finance-card.highlight { background: #fff; border: 2px solid var(--ff-green); }
+        .finance-card.utility { background: #f0fdf4; border: 1px solid #dcfce7; }
+        .f-icon { width: 44px; height: 44px; border-radius: 12px; background: #fff; display: grid; place-items: center; color: var(--ff-green); box-shadow: 0 4px 10px rgba(0,0,0,0.03); }
+        .f-label { display: block; font-size: 12px; font-weight: 600; color: var(--ff-muted); margin-bottom: 4px; }
+        .f-value { font-size: 18px; font-weight: 800; color: var(--ff-text); }
+        .finance-card.utility .f-value { color: var(--ff-green); }
+
+        .big-badge-container { margin-bottom: 30px; }
+        .per-box-badge { background: var(--ff-green); color: #fff; padding: 40px; border-radius: 24px; display: flex; justify-content: space-between; align-items: center; }
+        .badge-text h4 { margin: 0; font-size: 14px; font-weight: 700; opacity: 0.9; }
+        .badge-text p { margin: 4px 0 0; font-size: 13px; opacity: 0.7; }
+        .badge-price { display: flex; align-items: baseline; gap: 8px; }
+        .badge-price .currency { font-size: 20px; font-weight: 600; opacity: 0.8; }
+        .badge-price .amount { font-size: 64px; font-weight: 900; letter-spacing: -2px; }
+
+        .info-footer { display: flex; align-items: center; gap: 10px; color: var(--ff-muted); font-size: 12px; padding: 20px; background: #f1f5f9; border-radius: 12px; }
+        .ff-toast { position: fixed; bottom: 20px; right: 20px; background: var(--ff-green); color: white; padding: 12px 24px; border-radius: 8px; font-weight: 700; box-shadow: 0 10px 20px rgba(0,0,0,0.1); z-index: 100; }
         
-        .toast-in-card { margin-top: 12px; text-align: center; color: #4ade80; font-weight: 700; font-size: 13px; }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
