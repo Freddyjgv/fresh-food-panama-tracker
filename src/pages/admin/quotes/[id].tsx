@@ -54,7 +54,7 @@ export default function AdminQuoteDetailPage() {
 
   async function loadData(quoteId: string) {
     setLoading(true);
-    // CORRECCIÓN: Join con la tabla clients para obtener datos frescos
+    // Join con la tabla clients para obtener datos frescos y corregir el error de TaxID
     const { data: quote } = await supabase
       .from("quotes")
       .select(`
@@ -148,9 +148,13 @@ export default function AdminQuoteDetailPage() {
       },
       totals: { total: analysis.totalSale, profit: analysis.profit, per_box: analysis.perBox, meta: { incoterm, pallets, place } }
     };
-    const { error } = await supabase.from("quotes").update(payload).eq(id as string);
+    // CORREGIDO: Se agregaron los 2 argumentos necesarios para .eq()
+    const { error } = await supabase.from("quotes").update(payload).eq("id", id as string);
     setBusy(false);
-    if (!error) { setToast("Cambios guardados"); setTimeout(() => setToast(null), 2000); }
+    if (!error) { 
+      setToast("Cambios guardados"); 
+      setTimeout(() => setToast(null), 2000); 
+    }
   }
 
   if (loading) return <AdminLayout title="Cargando..."><div className="ff-card-pad">Cargando datos de cotización...</div></AdminLayout>;
