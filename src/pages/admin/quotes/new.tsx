@@ -73,15 +73,15 @@ export default function AdminQuoteNew() {
   async function loadClients() {
     setClientsLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
       if (!token) return;
 
       const res = await fetch("/.netlify/functions/listClients", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await res.json();
-      const items: ClientItem[] = Array.isArray(data) ? data : (data.items || []);
+      const dataJson = await res.json();
+      const items: ClientItem[] = Array.isArray(dataJson) ? dataJson : (dataJson.items || []);
       
       setClients(items);
       if (items.length > 0) setSelectedClientId(items[0].id);
@@ -111,13 +111,14 @@ export default function AdminQuoteNew() {
     setMsg(null);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
       if (!token) throw new Error("Sesión expirada");
 
       let finalClientId = selectedClientId;
       let clientSnapshot = {};
 
+      // 1. Manejo de Cliente Nuevo
       if (clientMode === "new") {
         if (!newClient.company_name || !newClient.contact_email) {
           throw new Error("Nombre de empresa y Email son obligatorios");
@@ -147,6 +148,7 @@ export default function AdminQuoteNew() {
         };
       }
 
+      // 2. Creación de Cotización con OBJETO COSTS INICIAL (Evita error NOT NULL)
       const resQuote = await fetch("/.netlify/functions/createQuote", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -156,13 +158,26 @@ export default function AdminQuoteNew() {
           margin_markup: Number(quoteData.margin),
           client_id: finalClientId,
           client_snapshot: clientSnapshot,
-          status: "draft"
+          status: "draft",
+          // ✅ Corrección: Estructura inicial de costos para la base de datos
+          costs: {
+            c_fruit: 0,
+            c_othf: 0,
+            c_freight: 0,
+            c_handling: 0,
+            c_origin: 0,
+            c_aduana: 0,
+            c_insp: 0,
+            c_itbms: 7,
+            c_others: 0
+          }
         }),
       });
 
       const quoteJson = await resQuote.json();
       if (!resQuote.ok) throw new Error(quoteJson.error || "Error creando cotización");
 
+      // Redirigir al detalle de la cotización creada
       window.location.href = `/admin/quotes/${quoteJson.id}`;
 
     } catch (err: any) {
@@ -180,7 +195,6 @@ export default function AdminQuoteNew() {
       </div>
 
       <div className="mainContainer">
-        {/* COLUMNA IZQUIERDA: CLIENTE */}
         <div className="card">
           <div className="cardHeader">
             <div className="headerIcon"><Building2 size={22} /></div>
@@ -218,17 +232,15 @@ export default function AdminQuoteNew() {
                 <div className="field"><label>Tax ID / RUC</label><input value={newClient.tax_id} onChange={e => setNewClient({...newClient, tax_id: e.target.value})} /></div>
                 <div className="field"><label>Teléfono</label><input value={newClient.phone} onChange={e => setNewClient({...newClient, phone: e.target.value})} /></div>
               </div>
-
               <div className="sectionLabel"><MapPin size={14}/> Ubicación</div>
               <div className="inputGroup">
                 <div className="field"><label>País</label><input value={newClient.country} onChange={e => setNewClient({...newClient, country: e.target.value})} /></div>
-                <div className="field"><label>Dirección</label><textarea value={newClient.billing_address} onChange={e => setNewClient({...newClient, billing_address: e.target.value})} /></div>
+                <div className="field full"><label>Dirección</label><textarea value={newClient.billing_address} onChange={e => setNewClient({...newClient, billing_address: e.target.value})} /></div>
               </div>
             </div>
           )}
         </div>
 
-        {/* COLUMNA DERECHA: PARAMETROS */}
         <div className="stack">
           <div className="card secondaryCard">
             <h3>Logística Base</h3>
@@ -240,7 +252,6 @@ export default function AdminQuoteNew() {
                   <button className={quoteData.mode === 'SEA' ? 'active' : ''} onClick={() => setQuoteData({...quoteData, mode: 'SEA'})}><Ship size={14}/> Marítimo</button>
                 </div>
               </div>
-              
               <div className="field">
                 <label>Moneda</label>
                 <select value={quoteData.currency} onChange={e => setQuoteData({...quoteData, currency: e.target.value as any})}>
@@ -248,19 +259,16 @@ export default function AdminQuoteNew() {
                   <option value="EUR">EUR (€)</option>
                 </select>
               </div>
-
               <div className="field">
-                <label>Destino (IATA/Puerto)</label>
+                <label>Destino</label>
                 <input placeholder="MAD / AMS" value={quoteData.destination} onChange={e => setQuoteData({...quoteData, destination: e.target.value})} />
               </div>
-
               <div className="field">
-                <label>Cantidad de Cajas</label>
+                <label>Cajas</label>
                 <input type="number" value={quoteData.boxes} onChange={e => setQuoteData({...quoteData, boxes: e.target.value})} />
               </div>
-
               <div className="field">
-                <label>Margen / Markup %</label>
+                <label>Margen %</label>
                 <input type="number" value={quoteData.margin} onChange={e => setQuoteData({...quoteData, margin: e.target.value})} />
               </div>
             </div>
@@ -268,10 +276,8 @@ export default function AdminQuoteNew() {
             <button className="btnCreate" onClick={handleCreate} disabled={saving}>
               {saving ? "Generando..." : <><PlusCircle size={18}/> Iniciar Borrador</>}
             </button>
-
             {msg && <div className={`alert ${msg.type}`}>{msg.text}</div>}
           </div>
-          
           <div className="infoNote">
             <Globe size={16} />
             Al crear el borrador, podrás editar costos detallados de fruta, flete e inspecciones.
@@ -285,36 +291,27 @@ export default function AdminQuoteNew() {
         .mainContainer { display: grid; grid-template-columns: 1fr 400px; gap: 24px; }
         .card { background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 24px; }
         .cardHeader { display: flex; gap: 16px; margin-bottom: 24px; }
-        .headerIcon { color: var(--ff-green); background: rgba(31, 122, 58, 0.1); padding: 10px; border-radius: 14px; display: flex; align-items: center; }
+        .headerIcon { color: #1f7a3a; background: rgba(31, 122, 58, 0.1); padding: 10px; border-radius: 14px; display: flex; align-items: center; }
         .muted { color: #64748b; font-size: 13px; margin: 0; }
-        
         .tabSelector { display: flex; background: #f1f5f9; padding: 4px; border-radius: 12px; margin-bottom: 24px; }
         .tabSelector button { flex: 1; border: none; padding: 10px; border-radius: 9px; cursor: pointer; font-weight: 800; font-size: 12px; color: #64748b; transition: 0.2s; }
         .tabSelector button.active { background: white; color: #0f172a; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-
         .searchBar { display: flex; align-items: center; gap: 10px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 14px; border-radius: 12px; margin-bottom: 12px; }
         .searchBar input { border: none; background: transparent; outline: none; width: 100%; font-size: 14px; }
         .mainSelect { width: 100%; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px; font-size: 14px; outline: none; }
-
-        .sectionLabel { font-size: 11px; font-weight: 900; color: #94a3b8; text-transform: uppercase; margin-top: 10px; display: flex; align-items: center; gap: 6px; }
+        .sectionLabel { font-size: 11px; font-weight: 900; color: #94a3b8; text-transform: uppercase; margin: 20px 0 10px 0; display: flex; align-items: center; gap: 6px; }
         .inputGroup { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         .field { display: flex; flex-direction: column; gap: 6px; }
         .field.full { grid-column: 1 / -1; }
         .field label { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; }
         .field input, .field select, .field textarea { padding: 10px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; outline: none; }
-        
         .modeToggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .modeToggle button { padding: 10px; border-radius: 10px; border: 1px solid #cbd5e1; background: white; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
-        .modeToggle button.active { background: #0f172a; color: white; border-color: #0f172a; }
-
-        .btnCreate { width: 100%; margin-top: 10px; padding: 16px; background: var(--ff-green); color: white; border: none; border-radius: 14px; font-weight: 900; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 15px; }
-        .btnCreate:hover { filter: brightness(1.1); }
-        .btnCreate:disabled { opacity: 0.5; cursor: not-allowed; }
-
+        .modeToggle button.active { background: #1f7a3a; color: white; border-color: #1f7a3a; }
+        .btnCreate { width: 100%; margin-top: 10px; padding: 16px; background: #1f7a3a; color: white; border: none; border-radius: 14px; font-weight: 900; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 15px; }
         .alert { margin-top: 15px; padding: 12px; border-radius: 10px; font-size: 13px; font-weight: 700; }
         .alert.error { background: #fef2f2; color: #b91c1c; border: 1px solid #fee2e2; }
-        
-        .infoNote { margin-top: 16px; font-size: 12px; color: #64748b; display: flex; gap: 8px; padding: 12px; background: #f8fafc; border-radius: 12px; font-weight: 600; line-height: 1.4; }
+        .infoNote { margin-top: 16px; font-size: 12px; color: #64748b; display: flex; gap: 8px; padding: 12px; background: #f8fafc; border-radius: 12px; font-weight: 600; }
         .stack { display: flex; flex-direction: column; gap: 16px; }
         .quoteGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
       `}</style>
