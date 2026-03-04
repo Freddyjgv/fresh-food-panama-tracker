@@ -343,10 +343,44 @@ export default function AdminQuoteDetailPage() {
   letter-spacing: 0.5px;
 }
 
-        .mini-toggle { display: flex; background: #f1f5f9; padding: 2px; border-radius: 6px; width: fit-content; }
-        .mini-toggle button { border: none; background: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; color: #94a3b8; }
-        .mini-toggle button.active { background: white; color: #10b981; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        /* Asegura que el toggle tenga la misma altura que los inputs */
+.mini-toggle { 
+  display: flex; 
+  background: #f1f5f9; 
+  padding: 2px; 
+  border-radius: 6px; 
+  width: 100%;       /* Para que ocupe el ancho del s-field */
+  height: 36px;      /* Altura idéntica a los inputs */
+  box-sizing: border-box;
+}
 
+.mini-toggle button { 
+  flex: 1;           /* Los botones del toggle se reparten el ancho */
+  border: none; 
+  background: none; 
+  cursor: pointer; 
+  color: #94a3b8; 
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.2s;
+}
+
+.mini-toggle button.active { 
+  background: white; 
+  color: #10b981; 
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1); 
+}
+
+/* IMPORTANTE: Si LocationSelector es un componente externo, 
+   asegúrate de que su input interno herede los estilos o 
+   fuerza su contenedor aquí */
+.s-field :global(input), 
+.s-field :global(select) {
+  height: 36px !important;
+  box-sizing: border-box;
+}
         .analysis-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         .analysis-table th { padding: 12px; border-bottom: 2px solid #f8fafc; font-size: 10px; color: #94a3b8; text-transform: uppercase; }
         .analysis-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
