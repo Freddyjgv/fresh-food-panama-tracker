@@ -28,7 +28,6 @@ export default function ClientDetailPage() {
     'DELIVERED': { label: 'Entregado', class: 'delivered' }
   };
 
-  // 2. EXTRACCIÓN ROBUSTA DE BANDERA
   const getFlagCode = (portString: string) => {
     if (!portString || !portString.includes(',')) return null;
     const parts = portString.split(',');
@@ -129,7 +128,14 @@ export default function ClientDetailPage() {
                 <span className="status-badge active">Cliente Activo</span>
               </div>
               <div className="sub-row">
-                <span className="tax-label">Tax ID: <strong>{client.tax_id || 'Pendiente'}</strong></span>
+                {/* TAX ID EDITABLE EN HEADER */}
+                <span className="tax-label">
+                   Tax ID: {isEditing ? (
+                     <input className="header-input-small" value={editData.tax_id} onChange={e => setEditData({...editData, tax_id: e.target.value})} />
+                   ) : (
+                     <strong>{client.tax_id || 'Pendiente'}</strong>
+                   )}
+                </span>
                 <span className="geo-label"><MapPin size={12}/> {client.country}</span>
               </div>
             </div>
@@ -142,7 +148,12 @@ export default function ClientDetailPage() {
               <div className="v-divider"></div>
               <div className="h-stat">
                 <span className="h-stat-label">Incoterm</span>
-                <span className="h-stat-val">{client.default_incoterm}</span>
+                {/* INCOTERM EDITABLE EN HEADER */}
+                {isEditing ? (
+                  <input className="header-input-val" value={editData.default_incoterm} onChange={e => setEditData({...editData, default_incoterm: e.target.value})} />
+                ) : (
+                  <span className="h-stat-val">{client.default_incoterm}</span>
+                )}
               </div>
               <div className="v-divider"></div>
               <div className="h-stat">
@@ -155,7 +166,9 @@ export default function ClientDetailPage() {
           <div className="header-actions">
             {!isEditing ? (
               <>
-                <button className="btn-refine-white" onClick={() => setIsEditing(true)}><Edit3 size={14}/> Editar Perfil</button>
+                <button className="btn-refine-white" onClick={() => setIsEditing(true)}>
+                  <Edit3 size={14}/> Editar
+                </button>
                 <button className="btn-refine-green"><Plus size={14}/> Nuevo Embarque</button>
               </>
             ) : (
@@ -179,7 +192,7 @@ export default function ClientDetailPage() {
                   <thead>
                     <tr>
                       <th className="txt-center">ID</th>
-                      <th>Producto / Variedad</th>
+                      <th className="txt-center">Producto / Variedad</th>
                       <th className="txt-center">Destino</th>
                       <th className="txt-center">Cajas / Peso</th>
                       <th className="txt-center">Estado</th>
@@ -191,11 +204,15 @@ export default function ClientDetailPage() {
                       const st = statusConfig[s.status] || { label: s.status, class: '' };
                       return (
                         <tr key={s.id} className="row-hover">
-                          <td className="txt-center"><span className="id-tag">{s.code}</span></td>
-                          <td>
-                            <div className="cell-product-split">
+                          <td className="txt-center">
+                            <Link href={`/admin/shipments/${s.id}`} className="id-tag clickable">
+                              {s.code}
+                            </Link>
+                          </td>
+                          <td className="txt-center">
+                            <div className="cell-product-split-center">
                               <strong className="p-name">{s.product_name}</strong>
-                              <span className="p-variety">{s.product_variety}</span>
+                              <span className="p-variety-grey">{s.product_variety}</span>
                             </div>
                           </td>
                           <td className="txt-center">
@@ -240,7 +257,6 @@ export default function ClientDetailPage() {
                     {isEditing ? <input value={editData.phone} onChange={e => setEditData({...editData, phone: e.target.value})} /> : <span>{client.phone || 'N/A'}</span>}
                   </div>
                 </div>
-                {/* TAX ID EDITABLE RESTAURADO */}
                 <div className="contact-item">
                   <Hash size={14} className="text-green-600"/>
                   <div className="contact-data">
@@ -293,6 +309,9 @@ export default function ClientDetailPage() {
         .status-badge.active { font-size: 9px; font-weight: 800; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; background: #dcfce7; color: #166534; display: inline-block; }
         .sub-row { display: flex; gap: 15px; font-size: 12px; color: #718096; align-items: center; margin-top: 2px; }
         
+        .header-input-small { border: 1px solid #e2e8f0; border-radius: 4px; padding: 1px 4px; font-size: 11px; width: 100px; }
+        .header-input-val { border: 1px solid #e2e8f0; border-radius: 4px; padding: 2px 4px; font-size: 13px; font-weight: 800; text-align: center; width: 60px; }
+
         .header-stats { display: flex; gap: 25px; padding-left: 25px; margin-left: 10px; align-items: center; }
         .v-divider { width: 1px; height: 30px; background: #edf2f7; }
         .h-stat { display: flex; flex-direction: column; align-items: center; }
@@ -312,11 +331,13 @@ export default function ClientDetailPage() {
         .table-refine th { padding: 12px 20px; font-size: 10px; font-weight: 800; color: #a0aec0; text-transform: uppercase; background: #fcfcfd; }
         .table-refine td { padding: 12px 20px; border-bottom: 1px solid #f7fafc; font-size: 12px; vertical-align: middle; }
         .txt-center { text-align: center; }
-        .id-tag { font-family: monospace; font-size: 10px; font-weight: 700; color: #1f7a3a; background: #f0fdf4; padding: 3px 6px; border-radius: 4px; display: inline-block; }
         
-        .cell-product-split { display: flex; flex-direction: column; line-height: 1.2; }
+        .id-tag { font-family: monospace; font-size: 10px; font-weight: 700; color: #1f7a3a; background: #f0fdf4; padding: 3px 6px; border-radius: 4px; display: inline-block; text-decoration: none; }
+        .id-tag.clickable:hover { background: #dcfce7; cursor: pointer; }
+
+        .cell-product-split-center { display: flex; flex-direction: column; align-items: center; line-height: 1.2; }
         .p-name { font-size: 13px; color: #1a202c; }
-        .p-variety { font-size: 11px; color: #94a3b8; }
+        .p-variety-grey { font-size: 11px; color: #94a3b8; }
 
         .cell-center-flex { display: flex; flex-direction: column; align-items: center; gap: 4px; }
         .flag-icon { width: 20px; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
