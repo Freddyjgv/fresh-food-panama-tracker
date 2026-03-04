@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { 
   Save, Package, Loader2, Building2, Plane, Ship, 
-  DollarSign, Info, MapPin, Calculator, TrendingUp
+  DollarSign, Info, MapPin, Calculator, TrendingUp, ChevronRight
 } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { requireAdminOrRedirect } from "../../../lib/requireAdmin";
@@ -32,7 +32,6 @@ export default function AdminQuoteDetailPage() {
   const [color, setColor] = useState("2.75 - 3");
   const [brix, setBrix] = useState("> 13");
 
-  // CONCEPTOS REESTABLECIDOS
   const [costs, setCosts] = useState<any>({
     fruit: { label: "Fruta ($/Cx)", base: 13.30, margin: 15 },
     freight: { label: "Flete Internacional", base: 0, margin: 0 },
@@ -51,17 +50,28 @@ export default function AdminQuoteDetailPage() {
 
   async function loadData(quoteId: string) {
     setLoading(true);
-    const { data: quote } = await supabase
+    
+    // 1. Intento de carga con Join Relacional
+    const { data: quote, error } = await supabase
       .from("quotes")
-      .select(`
-        *,
-        clients!client_id ( name, tax_id, contact_email, country, logo_url )
-      `)
+      .select(`*, clients:client_id ( name, tax_id, logo_url, country )`)
       .eq("id", quoteId)
       .single();
 
     if (quote) {
-      setData(quote);
+      let finalQuote = { ...quote };
+
+      // 2. DEBUG: Si el join falló (clients es null), buscamos al cliente manualmente
+      if (!quote.clients && quote.client_id) {
+        const { data: clientBackup } = await supabase
+          .from("clients")
+          .select("name, tax_id, logo_url, country")
+          .eq("id", quote.client_id)
+          .single();
+        if (clientBackup) finalQuote.clients = clientBackup;
+      }
+
+      setData(finalQuote);
       setStatus(quote.status || "draft");
       setBoxes(quote.boxes || 0);
       setWeightKg(quote.weight_kg || 0);
@@ -98,7 +108,6 @@ export default function AdminQuoteDetailPage() {
 
   useEffect(() => { if (authOk && id) loadData(id as string); }, [authOk, id]);
 
-  // ANÁLISIS FINANCIERO CON LÓGICA CIRCULAR
   const analysis = useMemo(() => {
     const lines = Object.entries(costs).map(([key, val]: [string, any]) => {
       const base = Number(val.base) || 0;
@@ -106,17 +115,15 @@ export default function AdminQuoteDetailPage() {
       const sale = margin < 100 ? base / (1 - (margin / 100)) : base;
       return { key, label: val.label, base, margin, sale };
     });
-
     const totalBase = lines.reduce((acc, curr) => acc + curr.base, 0);
     const totalSale = lines.reduce((acc, curr) => acc + curr.sale, 0);
-    const totalProfit = totalSale - totalBase;
-    const avgMargin = totalSale > 0 ? (totalProfit / totalSale) * 100 : 0;
-
-    return { lines, totalBase, totalSale, totalProfit, avgMargin, perBox: totalSale };
+    const avgMargin = totalSale > 0 ? ((totalSale - totalBase) / totalSale) * 100 : 0;
+    return { lines, totalBase, totalSale, avgMargin, perBox: totalSale };
   }, [costs]);
 
-  // ACTUALIZACIÓN DE LÓGICA: editar Venta afecta Margen
-  const updateCostLine = (key: string, field: 'base' | 'margin' | 'sale', value: number) => {
+  // Lógica de edición sin restricciones de entrada (flechas eliminadas en CSS)
+  const updateCostLine = (key: string, field: 'base' | 'margin' | 'sale', valStr: string) => {
+    const value = parseFloat(valStr) || 0;
     setCosts((prev: any) => {
       const current = { ...prev[key] };
       if (field === 'base') {
@@ -124,9 +131,8 @@ export default function AdminQuoteDetailPage() {
       } else if (field === 'margin') {
         current.margin = value;
       } else if (field === 'sale') {
-        // Si edito venta: margen = (venta - costo) / venta
-        const newMargin = value > 0 ? ((value - current.base) / value) * 100 : 0;
-        current.margin = newMargin;
+        // Al editar venta, recalculamos margen
+        current.margin = value > 0 ? ((value - current.base) / value) * 100 : 0;
       }
       return { ...prev, [key]: current };
     });
@@ -146,16 +152,17 @@ export default function AdminQuoteDetailPage() {
     };
     await supabase.from("quotes").update(payload).eq("id", id as string);
     setBusy(false);
-    setToast("Cambios guardados");
-    setTimeout(() => setToast(null), 2000);
+    setToast("Cotización actualizada correctamente");
+    setTimeout(() => setToast(null), 2500);
   }
 
-  if (loading) return <AdminLayout title="Cargando..."><div className="p-10 text-center">Cargando datos...</div></AdminLayout>;
+  if (loading) return <AdminLayout title="Cargando..."><div className="p-10 text-center">Iniciando cotizador profesional...</div></AdminLayout>;
 
   return (
     <AdminLayout title={`Cotización ${data?.quote_number || '...'}`}>
       <div className="view-container">
         
+        {/* HEADER CON CLIENTE Y TAX ID GARANTIZADO */}
         <header className="header-pro">
           <div className="header-left">
             <div className="logo-holder">
@@ -163,12 +170,12 @@ export default function AdminQuoteDetailPage() {
             </div>
             <div className="client-main-info">
               <div className="title-row">
-                <h1>{data?.clients?.name || "Cliente no definido"}</h1>
-                <span className="quote-number-badge">{data?.quote_number || "S/N"}</span>
+                <h1>{data?.clients?.name || "Cliente no detectado"}</h1>
+                <span className="quote-number-badge">{data?.quote_number || "Q-2026-XXXX"}</span>
               </div>
               <div className="sub-row">
-                <span>Tax ID: <strong>{data?.clients?.tax_id || 'N/A'}</strong></span>
-                <span className="geo-label"><MapPin size={12}/> {data?.clients?.country || 'N/A'}</span>
+                <span>TAX ID: <strong>{data?.clients?.tax_id || 'PENDIENTE'}</strong></span>
+                <span className="geo-label"><MapPin size={12}/> {data?.clients?.country || 'GLOBAL'}</span>
               </div>
             </div>
             <div className="header-stats">
@@ -180,79 +187,80 @@ export default function AdminQuoteDetailPage() {
                   <option value="won">GANADA</option>
                 </select>
               </div>
-              <div className="v-divider"></div>
-              <div className="h-stat"><span className="h-stat-label">Cajas</span><span className="h-stat-val">{boxes}</span></div>
             </div>
           </div>
-          <div className="header-actions">
-            <button className="btn-save-mini" onClick={handleSave} disabled={busy}>
-              {busy ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>} Guardar
-            </button>
-          </div>
+          <button className="btn-save-mini" onClick={handleSave} disabled={busy}>
+            {busy ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>} Guardar Cotización
+          </button>
         </header>
 
-        <div className="ff-grid">
-          <div className="ff-card">
-            <div className="ff-card-label"><Package size={14}/> PRODUCTO Y CALIDAD</div>
-            <div className="ff-card-body">
+        {/* FILA 1: PRODUCTO Y CALIDAD (UNA SOLA FILA) */}
+        <div className="ff-card single-row-card">
+          <div className="row-label"><Package size={14}/> PRODUCTO</div>
+          <div className="row-body-horizontal">
+            <div className="input-group">
               <label>Fruta Base</label>
               <select className="ff-input" value={productId} onChange={e => { setProductId(e.target.value); fetchVarieties(e.target.value); }}>
                 <option value="">Seleccionar...</option>
                 {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
+            </div>
+            <div className="input-group">
               <label>Variedad</label>
               <select className="ff-input" value={variety} onChange={e => setVariety(e.target.value)}>
-                 <option value="">Seleccionar variedad...</option>
+                 <option value="">Seleccionar...</option>
                  {varieties.map((v, i) => <option key={i} value={v.name}>{v.name}</option>)}
               </select>
-              <div className="ff-row-2">
-                <div><label>Color</label><input className="ff-input" value={color} onChange={e => setColor(e.target.value)} /></div>
-                <div><label>Brix</label><input className="ff-input" value={brix} onChange={e => setBrix(e.target.value)} /></div>
-              </div>
             </div>
-          </div>
-
-          <div className="ff-card">
-            <div className="ff-card-label"><Ship size={14}/> LOGÍSTICA</div>
-            <div className="ff-card-body">
-              <div className="ff-row-between">
-                <label>Transporte</label>
-                <div className="ff-toggle">
-                   <button className={mode==='AIR'?'active':''} onClick={()=>setMode('AIR')}><Plane size={14}/></button>
-                   <button className={mode==='SEA'?'active':''} onClick={()=>setMode('SEA')}><Ship size={14}/></button>
-                </div>
-              </div>
-              <label>Destino</label>
-              <LocationSelector mode={mode} value={place} onChange={setPlace} />
-              <div className="ff-row-2">
-                <div className="ff-metric"><span>Cajas</span><input type="number" value={boxes} onChange={e=>setBoxes(Number(e.target.value))}/></div>
-                <div className="ff-metric"><span>Peso KG</span><input type="number" value={weightKg} onChange={e=>setWeightKg(Number(e.target.value))}/></div>
-              </div>
+            <div className="input-group">
+              <label>Color</label>
+              <input className="ff-input" value={color} onChange={e => setColor(e.target.value)} />
             </div>
-          </div>
-
-          <div className="ff-card">
-            <div className="ff-card-label"><DollarSign size={14}/> COSTO BASE RÁPIDO</div>
-            <div className="ff-card-body ff-costs">
-               {analysis.lines.slice(0,3).map(line => (
-                 <div className="ff-cost-item" key={line.key}>
-                   <span>{line.label}</span>
-                   <input type="number" value={line.base} onChange={e=>updateCostLine(line.key,'base', Number(e.target.value))}/>
-                 </div>
-               ))}
+            <div className="input-group">
+              <label>Brix</label>
+              <input className="ff-input" value={brix} onChange={e => setBrix(e.target.value)} />
             </div>
           </div>
         </div>
 
+        {/* FILA 2: LOGÍSTICA (UNA SOLA FILA) */}
+        <div className="ff-card single-row-card">
+          <div className="row-label"><Ship size={14}/> LOGÍSTICA</div>
+          <div className="row-body-horizontal">
+            <div className="input-group" style={{minWidth: '120px'}}>
+              <label>Transporte</label>
+              <div className="ff-toggle">
+                 <button className={mode==='AIR'?'active':''} onClick={()=>setMode('AIR')}><Plane size={14}/></button>
+                 <button className={mode==='SEA'?'active':''} onClick={()=>setMode('SEA')}><Ship size={14}/></button>
+              </div>
+            </div>
+            <div className="input-group" style={{flex: 2}}>
+              <label>Destino</label>
+              <LocationSelector mode={mode} value={place} onChange={setPlace} />
+            </div>
+            <div className="input-group">
+              <label>Cajas</label>
+              <input type="number" className="ff-input" value={boxes} onChange={e=>setBoxes(Number(e.target.value))}/>
+            </div>
+            <div className="input-group">
+              <label>Peso KG</label>
+              <input type="number" className="ff-input" value={weightKg} onChange={e=>setWeightKg(Number(e.target.value))}/>
+            </div>
+          </div>
+        </div>
+
+        {/* TABLA DE ANÁLISIS (SIN TARJETA RÁPIDA) */}
         <div className="ff-analysis-card">
-          <div className="ff-card-label" style={{border:0, padding: "0 0 15px 0"}}><Calculator size={14}/> ANÁLISIS DE VENTA</div>
+          <div className="analysis-header">
+            <Calculator size={16} /> <h2>ANÁLISIS DE COSTOS Y VENTA</h2>
+          </div>
           <table className="ff-table">
             <thead>
               <tr>
                 <th align="left">CONCEPTO</th>
-                <th align="center">COSTO BASE</th>
+                <th align="center">COSTO BASE ($)</th>
                 <th align="center">MARGEN (%)</th>
-                <th align="center">PRECIO VENTA</th>
+                <th align="center">PRECIO VENTA ($)</th>
                 <th align="right">IMPACTO</th>
               </tr>
             </thead>
@@ -260,15 +268,22 @@ export default function AdminQuoteDetailPage() {
               {analysis.lines.map((line) => (
                 <tr key={line.key}>
                   <td className="ff-concept">{line.label}</td>
-                  <td align="center"><input className="ff-td-input" type="number" value={line.base} onChange={e => updateCostLine(line.key, 'base', Number(e.target.value))}/></td>
-                  <td align="center"><input className="ff-td-input green" type="number" value={line.margin.toFixed(1)} onChange={e => updateCostLine(line.key, 'margin', Number(e.target.value))}/></td>
-                  <td align="center"><input className="ff-td-input bold" type="number" value={line.sale.toFixed(2)} onChange={e => updateCostLine(line.key, 'sale', Number(e.target.value))}/></td>
+                  <td align="center">
+                    <input className="ff-td-input" type="text" value={line.base} onChange={e => updateCostLine(line.key, 'base', e.target.value)}/>
+                  </td>
+                  <td align="center">
+                    <input className="ff-td-input green" type="text" value={line.margin.toFixed(2)} onChange={e => updateCostLine(line.key, 'margin', e.target.value)}/>
+                  </td>
+                  <td align="center">
+                    <input className="ff-td-input bold" type="text" value={line.sale.toFixed(2)} onChange={e => updateCostLine(line.key, 'sale', e.target.value)}/>
+                  </td>
                   <td align="right" className="ff-impact">{analysis.totalSale > 0 ? ((line.sale / analysis.totalSale) * 100).toFixed(0) : 0}%</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
+          {/* FOOTER CON LAS 4 PILLS SOLICITADAS */}
           <div className="footer-pills-container">
             <div className="f-pill gray">
               <span className="f-pill-lbl">COSTO TOTAL</span>
@@ -283,7 +298,7 @@ export default function AdminQuoteDetailPage() {
               <span className="f-pill-val">{analysis.avgMargin.toFixed(1)}%</span>
             </div>
             <div className="f-pill dark">
-              <span className="f-pill-lbl">VENTA POR CAJA</span>
+              <span className="f-pill-lbl">PRECIO VENTA POR CAJA</span>
               <span className="f-pill-val">USD {analysis.perBox.toFixed(2)}</span>
             </div>
           </div>
@@ -293,61 +308,60 @@ export default function AdminQuoteDetailPage() {
       </div>
 
       <style jsx>{`
-        .view-container { padding: 30px; max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; font-family: 'Inter', sans-serif; background: #fbfcfd; min-height: 100vh; }
+        .view-container { padding: 30px; max-width: 1300px; margin: 0 auto; display: flex; flex-direction: column; gap: 15px; font-family: 'Inter', sans-serif; background: #fbfcfd; }
         
+        /* HEADER */
         .header-pro { display: flex; justify-content: space-between; align-items: center; background: white; padding: 16px 24px; border-radius: 14px; border: 1px solid #eef0f2; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
         .header-left { display: flex; align-items: center; gap: 20px; }
-        .logo-holder { width: 48px; height: 48px; background: #f8fafc; border-radius: 10px; border: 1.5px solid #eef2f6; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .logo-holder { width: 48px; height: 48px; background: #f8fafc; border-radius: 10px; border: 1.5px solid #eef2f6; display: flex; align-items: center; justify-content: center; }
         .logo-holder img { width: 100%; height: 100%; object-fit: contain; }
-        .client-main-info h1 { font-size: 20px; font-weight: 800; color: #1e293b; margin: 0; letter-spacing: -0.02em; }
+        .client-main-info h1 { font-size: 20px; font-weight: 800; color: #1e293b; margin: 0; }
         .title-row { display: flex; align-items: center; gap: 10px; }
-        .quote-number-badge { background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 800; border: 1px solid #e2e8f0; }
+        .quote-number-badge { background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; }
         .sub-row { display: flex; gap: 15px; margin-top: 2px; font-size: 12px; color: #64748b; }
-        .header-stats { display: flex; gap: 20px; padding-left: 20px; border-left: 1.5px solid #f1f5f9; margin-left: 5px; }
-        .h-stat-label { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; display: block; }
-        .h-stat-val { font-size: 15px; font-weight: 800; color: #1e293b; }
-        .v-divider { width: 1px; height: 25px; background: #f1f5f9; align-self: center; }
+        .header-stats { padding-left: 20px; border-left: 1.5px solid #f1f5f9; }
         .status-pill-select { border: none; background: #dcfce7; color: #166534; font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
 
-        .ff-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-        .ff-card { background: white; border: 1px solid #eef0f2; border-radius: 12px; }
-        .ff-card-label { padding: 12px 16px; font-size: 10px; font-weight: 800; color: #166534; border-bottom: 1px solid #f8fafc; display: flex; align-items: center; gap: 8px; text-transform: uppercase; }
-        .ff-card-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-        .ff-card-body label { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: -6px; }
+        /* CARDS SINGLE ROW */
+        .single-row-card { background: white; border: 1px solid #eef0f2; border-radius: 12px; display: flex; align-items: center; padding: 0 20px; min-height: 80px; }
+        .row-label { font-size: 10px; font-weight: 800; color: #166534; display: flex; align-items: center; gap: 8px; min-width: 140px; text-transform: uppercase; }
+        .row-body-horizontal { display: flex; flex: 1; gap: 20px; align-items: flex-end; padding: 15px 0; }
+        .input-group { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+        .input-group label { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; }
         .ff-input { width: 100%; padding: 8px 12px; border: 1.5px solid #eef2f6; border-radius: 8px; font-size: 13px; font-weight: 600; outline: none; }
-        .ff-metric { background: #f8fafc; padding: 8px; border-radius: 8px; border: 1px solid #eef2f6; text-align: center; }
-        .ff-metric span { display: block; font-size: 8px; font-weight: 700; color: #94a3b8; }
-        .ff-metric input { width: 100%; background: transparent; border: none; text-align: center; font-weight: 800; font-size: 14px; outline: none; }
         .ff-toggle { background: #f1f5f9; padding: 3px; border-radius: 8px; display: flex; gap: 2px; }
-        .ff-toggle button { border: none; background: transparent; padding: 4px 10px; border-radius: 6px; cursor: pointer; color: #94a3b8; }
+        .ff-toggle button { border: none; background: transparent; padding: 5px 12px; border-radius: 6px; cursor: pointer; color: #94a3b8; }
         .ff-toggle button.active { background: white; color: #166534; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 
-        .ff-cost-item { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #f8fafc; }
-        .ff-cost-item span { font-size: 12px; font-weight: 600; color: #475569; }
-        .ff-cost-item input { width: 70px; text-align: right; border: 1.5px solid #eef2f6; border-radius: 6px; padding: 3px 6px; font-weight: 700; font-size: 12px; }
-
-        .ff-analysis-card { background: white; border: 1px solid #eef0f2; border-radius: 12px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.01); }
-        .ff-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-        .ff-table th { padding: 10px; font-size: 10px; font-weight: 800; color: #94a3b8; border-bottom: 2px solid #f8fafc; text-transform: uppercase; }
-        .ff-table td { padding: 10px; border-bottom: 1px solid #f9fafb; font-size: 13px; }
+        /* TABLE */
+        .ff-analysis-card { background: white; border: 1px solid #eef0f2; border-radius: 12px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.01); }
+        .analysis-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; color: #166534; }
+        .analysis-header h2 { font-size: 14px; font-weight: 800; margin: 0; }
+        .ff-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+        .ff-table th { padding: 12px; font-size: 10px; font-weight: 800; color: #94a3b8; border-bottom: 2px solid #f8fafc; text-transform: uppercase; }
+        .ff-table td { padding: 12px; border-bottom: 1px solid #f9fafb; font-size: 14px; }
         .ff-concept { font-weight: 600; color: #475569; }
-        .ff-td-input { width: 90px; padding: 6px; border: 1.5px solid #eef2f6; border-radius: 8px; text-align: center; font-weight: 700; outline: none; transition: 0.2s; }
+        
+        /* INPUTS SIN FLECHAS */
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .ff-td-input { width: 110px; padding: 8px; border: 1.5px solid #eef2f6; border-radius: 8px; text-align: center; font-weight: 700; outline: none; transition: 0.2s; }
         .ff-td-input:focus { border-color: #166534; background: #f0fdf4; }
         .ff-td-input.green { color: #166534; background: #f0fdf4; border-color: #dcfce7; }
         .ff-td-input.bold { font-weight: 900; color: #1e293b; background: #f8fafc; }
-        .ff-impact { color: #cbd5e1; font-weight: 800; font-size: 11px; }
+        .ff-impact { color: #cbd5e1; font-weight: 800; font-size: 12px; }
 
-        .footer-pills-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; border-top: 2px solid #f8fafc; padding-top: 20px; }
-        .f-pill { padding: 12px 20px; border-radius: 12px; display: flex; flex-direction: column; }
+        /* PILLS FOOTER */
+        .footer-pills-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; border-top: 2px solid #f8fafc; padding-top: 25px; }
+        .f-pill { padding: 15px 20px; border-radius: 14px; display: flex; flex-direction: column; }
         .f-pill.gray { background: #f8fafc; border: 1px solid #eef2f6; }
         .f-pill.green { background: #f0fdf4; border: 1px solid #dcfce7; color: #166534; }
         .f-pill.dark { background: #1e293b; color: white; }
-        .f-pill-lbl { font-size: 9px; font-weight: 800; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.05em; }
-        .f-pill-val { font-size: 18px; font-weight: 900; }
+        .f-pill-lbl { font-size: 9px; font-weight: 800; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em; }
+        .f-pill-val { font-size: 20px; font-weight: 900; margin-top: 4px; }
 
-        .btn-save-mini { background: #166534; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+        .btn-save-mini { background: #166534; color: white; border: none; padding: 12px 24px; border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
         .btn-save-mini:hover { background: #0f4a25; transform: translateY(-1px); }
-        .ff-toast { position: fixed; bottom: 25px; right: 25px; background: #1e293b; color: white; padding: 12px 24px; border-radius: 10px; font-weight: 700; box-shadow: 0 10px 30px rgba(0,0,0,0.2); z-index: 1000; }
+        .ff-toast { position: fixed; bottom: 30px; right: 30px; background: #1e293b; color: white; padding: 15px 30px; border-radius: 12px; font-weight: 700; box-shadow: 0 10px 30px rgba(0,0,0,0.2); z-index: 1000; }
       `}</style>
     </AdminLayout>
   );
