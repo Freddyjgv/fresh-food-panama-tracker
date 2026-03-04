@@ -52,12 +52,6 @@ export default function AdminQuoteDetailPage() {
     })();
   }, []);
 
-  async function fetchVarieties(pId: string) {
-    if (!pId) return;
-    const { data: p } = await supabase.from("products").select("varieties").eq("id", pId).single();
-    if (p?.varieties) setVarieties(p.varieties);
-  }
-
   async function loadData(quoteId: string) {
     setLoading(true);
     const { data: quote } = await supabase.from("quotes").select("*").eq("id", quoteId).single();
@@ -97,6 +91,12 @@ export default function AdminQuoteDetailPage() {
     const { data: pList } = await supabase.from("products").select("*");
     if (pList) setProducts(pList);
     setLoading(false);
+  }
+
+  async function fetchVarieties(pId: string) {
+    if (!pId) return;
+    const { data: p } = await supabase.from("products").select("varieties").eq("id", pId).single();
+    if (p?.varieties) setVarieties(p.varieties);
   }
 
   useEffect(() => { if (authOk && id) loadData(id as string); }, [authOk, id]);
@@ -144,17 +144,17 @@ export default function AdminQuoteDetailPage() {
 
   return (
     <AdminLayout title={`Cotización ${data?.quote_number || id?.slice(0,8)}`}>
-      <div className="ff-content ff-content--wide printable-area">
+      <div className="ff-content ff-content--wide">
         
-        {/* HEADER CON CLIENTE Y TAX ID */}
-        <div className="ff-card ff-card-pad header-flex no-print">
+        {/* HEADER RESTAURADO */}
+        <div className="ff-card ff-card-pad header-flex">
           <div className="client-brand">
             <div className="avatar-box"><Building2 size={22} /></div>
             <div className="client-info-stack">
               <h2 className="client-name">{data?.client_snapshot?.name || "Cliente no definido"}</h2>
               <div className="client-meta">
-                <span className="meta-item"><FileText size={12}/> {data?.client_snapshot?.tax_id || "Sin Tax ID"}</span>
-                <span className="meta-item"><Globe size={12}/> {data?.client_snapshot?.contact_email || "N/A"}</span>
+                <span className="meta-item"><FileText size={12}/> {data?.client_snapshot?.tax_id || "Sin TAX ID"}</span>
+                <span className="meta-item"><Globe size={12}/> {data?.client_snapshot?.contact_email || "Sin email"}</span>
               </div>
             </div>
           </div>
@@ -167,8 +167,8 @@ export default function AdminQuoteDetailPage() {
                </select>
                <ChevronDown size={14} className="pill-icon"/>
             </div>
-            <button className="ff-btn ff-btn-secondary" onClick={() => window.print()}>
-              <Download size={16}/> <span>PDF</span>
+            <button className="ff-btn ff-btn-secondary pdf-btn" onClick={() => alert('Generando PDF...')}>
+              <Download size={16}/> <span>Exportar PDF</span>
             </button>
             <button className="ff-btn ff-btn-primary save-btn" onClick={handleSave} disabled={busy}>
               {busy ? <Loader2 size={16} className="spin"/> : <Save size={16}/>} <span>Guardar</span>
@@ -176,8 +176,8 @@ export default function AdminQuoteDetailPage() {
           </div>
         </div>
 
-        <div className="config-row no-print">
-          {/* Producto */}
+        {/* FILA DE CONFIGURACION 3 COLUMNAS */}
+        <div className="config-row">
           <div className="ff-card config-card">
             <div className="card-label"><Package size={14}/> Producto y Calidad</div>
             <div className="config-grid">
@@ -200,12 +200,11 @@ export default function AdminQuoteDetailPage() {
             </div>
           </div>
 
-          {/* Logistica */}
           <div className="ff-card config-card">
-            <div className="card-label"><Ship size={14}/> Logística</div>
+            <div className="card-label"><Ship size={14}/> Configuración Logística</div>
             <div className="config-grid">
               <div className="field full flex-between">
-                <label>Transporte</label>
+                <label>Modo de Transporte</label>
                 <div className="mini-toggle">
                   <button className={mode==='AIR'?'active':''} onClick={()=>setMode('AIR')}><Plane size={12}/></button>
                   <button className={mode==='SEA'?'active':''} onClick={()=>setMode('SEA')}><Ship size={12}/></button>
@@ -217,22 +216,21 @@ export default function AdminQuoteDetailPage() {
                   <option value="CIP">CIP</option><option value="CIF">CIF</option><option value="FOB">FOB</option><option value="DDP">DDP</option>
                 </select>
               </div>
-              <div className="field full"><label>Destino</label><LocationSelector mode={mode} value={place} onChange={setPlace} /></div>
+              <div className="field full"><label>Destino (Place)</label><LocationSelector mode={mode} value={place} onChange={setPlace} /></div>
               <div className="mini-stats">
                  <div className="ms-item"><span>Cajas</span><input type="number" value={boxes} onChange={e=>setBoxes(Number(e.target.value))}/></div>
                  <div className="ms-item"><span>Pallets</span><input type="number" value={pallets} onChange={e=>setPallets(Number(e.target.value))}/></div>
-                 <div className="ms-item"><span>KG Total</span><input type="number" value={weightKg} onChange={e=>setWeightKg(Number(e.target.value))}/></div>
+                 <div className="ms-item"><span>Peso (KG)</span><input type="number" value={weightKg} onChange={e=>setWeightKg(Number(e.target.value))}/></div>
               </div>
             </div>
           </div>
 
-          {/* Costos */}
           <div className="ff-card config-card">
-            <div className="card-label"><DollarSign size={14}/> Costos Base</div>
+            <div className="card-label"><DollarSign size={14}/> Estructura de Costos Base</div>
             <div className="costs-entry-list">
-               <div className="ce-item"><span>Fruta ($/u)</span><input type="number" step="0.01" value={costs.fruit.base} onChange={e=>updateCostLine('fruit','base', Number(e.target.value))}/></div>
+               <div className="ce-item"><span>Fruta ($/caja)</span><input type="number" step="0.01" value={costs.fruit.base} onChange={e=>updateCostLine('fruit','base', Number(e.target.value))}/></div>
                <div className="ce-item"><span>Flete Int.</span><input type="number" value={costs.freight.base} onChange={e=>updateCostLine('freight','base', Number(e.target.value))}/></div>
-               <div className="ce-item"><span>Origen</span><input type="number" value={costs.origin.base} onChange={e=>updateCostLine('origin','base', Number(e.target.value))}/></div>
+               <div className="ce-item"><span>Gastos Origen</span><input type="number" value={costs.origin.base} onChange={e=>updateCostLine('origin','base', Number(e.target.value))}/></div>
                <div className="ce-item"><span>Aduana</span><input type="number" value={costs.aduana.base} onChange={e=>updateCostLine('aduana','base', Number(e.target.value))}/></div>
                <div className="ce-item"><span>Otros</span><input type="number" value={costs.other.base} onChange={e=>updateCostLine('other','base', Number(e.target.value))}/></div>
             </div>
@@ -240,16 +238,16 @@ export default function AdminQuoteDetailPage() {
         </div>
 
         {/* ANALISIS FINANCIERO 100% ANCHO */}
-        <div className="ff-card analysis-card full-width">
+        <div className="ff-card analysis-card">
           <div className="analysis-header">
             <div className="ah-left">
               <Calculator size={20} className="text-green"/>
-              <h3>Resumen Financiero y Análisis</h3>
+              <h3>Resumen Financiero y Análisis de Venta</h3>
             </div>
-            <div className="mini-badges no-print">
+            <div className="mini-badges">
               <div className="m-badge">Costo: <b>${analysis.totalCost.toLocaleString()}</b></div>
               <div className="m-badge green">Venta: <b>${analysis.totalSale.toLocaleString()}</b></div>
-              <div className="m-badge utility">Profit: <b>${analysis.profit.toLocaleString()}</b></div>
+              <div className="m-badge utility">Utilidad: <b>${analysis.profit.toLocaleString()}</b></div>
             </div>
           </div>
 
@@ -257,10 +255,10 @@ export default function AdminQuoteDetailPage() {
             <thead>
               <tr>
                 <th style={{textAlign:'left'}}>CONCEPTO</th>
-                <th style={{textAlign:'right'}}>BASE (USD)</th>
-                <th style={{textAlign:'center'}}>MARGEN %</th>
-                <th style={{textAlign:'right'}}>VENTA</th>
-                <th style={{textAlign:'right'}}>IMP. %</th>
+                <th style={{textAlign:'right'}}>COSTO BASE (USD)</th>
+                <th style={{textAlign:'center'}}>MARGEN (%)</th>
+                <th style={{textAlign:'right'}}>PRECIO VENTA</th>
+                <th style={{textAlign:'right'}}>IMPACTO (%)</th>
               </tr>
             </thead>
             <tbody>
@@ -268,22 +266,22 @@ export default function AdminQuoteDetailPage() {
                 <tr key={line.key}>
                   <td className="capitalize">{line.key === 'fruit' ? 'Fruta (Total)' : line.key}</td>
                   <td className="text-right">
-                    <input className="table-input no-print" type="number" value={costs[line.key].base} onChange={e => updateCostLine(line.key, 'base', Number(e.target.value))}/>
-                    <span className="print-only">${costs[line.key].base.toLocaleString()}</span>
+                    <input className="table-input" type="number" value={costs[line.key].base} onChange={e => updateCostLine(line.key, 'base', Number(e.target.value))}/>
                   </td>
                   <td className="text-center">
-                    <input className="table-input center no-print" type="number" value={line.margin} onChange={e => updateCostLine(line.key, 'margin', Number(e.target.value))}/>
-                    <span className="print-only">{line.margin}%</span>
+                    <input className="table-input center" type="number" value={line.margin} onChange={e => updateCostLine(line.key, 'margin', Number(e.target.value))}/>
                   </td>
-                  <td className="text-right font-bold">${line.sale.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                  <td className="text-right impact-tag">{analysis.totalSale > 0 ? ((line.sale/analysis.totalSale)*100).toFixed(1) : 0}%</td>
+                  <td className="text-right font-bold">USD {line.sale.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                  <td className="text-right impact-tag">
+                    {analysis.totalSale > 0 ? ((line.sale / analysis.totalSale) * 100).toFixed(1) : 0}%
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
 
           <div className="footer-flex">
-            <div className="info-box"><Info size={14}/> <span>Precios calculados sobre embarque total.</span></div>
+            <div className="info-box"><Info size={14}/> <span>Precios editables. Los cambios en margen afectan la utilidad final.</span></div>
             <div className="final-price-pill">
                <span className="fp-label">PRECIO FINAL POR CAJA</span>
                <span className="fp-value">USD {analysis.perBox.toFixed(2)}</span>
@@ -295,55 +293,83 @@ export default function AdminQuoteDetailPage() {
       </div>
 
       <style jsx>{`
-        .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding: 16px 24px; }
         .client-brand { display: flex; gap: 16px; align-items: center; }
-        .avatar-box { background: #f0fdf4; color: var(--ff-green); width: 44px; height: 44px; display: grid; place-items: center; border-radius: 10px; border: 1px solid rgba(0,0,0,0.05); }
-        .client-name { margin: 0; font-size: 19px; font-weight: 800; color: #1e293b; }
+        .avatar-box { background: #f0fdf4; color: var(--ff-green); width: 44px; height: 44px; display: grid; place-items: center; border-radius: 10px; border: 1px solid rgba(31,122,58,0.1); }
+        .client-name { margin: 0; font-size: 19px; font-weight: 800; color: #1e293b; letter-spacing: -0.5px; }
         .client-meta { display: flex; gap: 15px; margin-top: 2px; }
-        .meta-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #64748b; }
+        .meta-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; font-weight: 500; }
 
         .actions-cluster { display: flex; gap: 12px; align-items: center; }
         .status-pill-container { position: relative; display: flex; align-items: center; }
+        .pill-icon { position: absolute; right: 12px; pointer-events: none; color: inherit; opacity: 0.7; }
+        
         .status-pill-select { 
-          appearance: none; border-radius: 100px; padding: 0 35px 0 18px; 
-          font-weight: 800; font-size: 11px; height: 38px; cursor: pointer; border: 1px solid transparent;
+          appearance: none; border: 1px solid transparent; border-radius: 100px; 
+          padding: 0 35px 0 18px; font-weight: 800; font-size: 11px; height: 38px; cursor: pointer; 
+          transition: all 0.2s; letter-spacing: 0.5px;
         }
         .status-pill-select.draft { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
         .status-pill-select.sent { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
         .status-pill-select.won { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
-        .pill-icon { position: absolute; right: 12px; pointer-events: none; opacity: 0.7; }
-        
+
+        .pdf-btn { height: 38px; font-weight: 700; background: #fff; border: 1px solid #e2e8f0; color: #64748b; }
+        .save-btn { height: 38px; padding: 0 20px; font-weight: 700; display: flex; gap: 8px; border-radius: 10px; }
+
         .config-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
         .config-card { padding: 20px; }
-        .full-width { width: 100% !important; }
+        .card-label { font-size: 11px; font-weight: 900; text-transform: uppercase; color: var(--ff-green); display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+        
+        .config-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+        .field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 45%; min-width: 0; }
+        .field.full { flex: 1 1 100%; }
+        .flex-between { flex-direction: row !important; justify-content: space-between; align-items: center; }
+        .field label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; }
 
-        .analysis-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .analysis-table th { padding: 12px; border-bottom: 2px solid #f8fafc; font-size: 11px; color: #94a3b8; }
-        .analysis-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; }
-        .table-input { width: 85px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px; text-align: right; font-weight: 700; }
-        .table-input.center { text-align: center; width: 60px; color: var(--ff-green); }
+        .mini-toggle { display: flex; background: #f1f5f9; padding: 3px; border-radius: 8px; }
+        .mini-toggle button { border: none; background: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; color: #94a3b8; }
+        .mini-toggle button.active { background: #fff; color: var(--ff-green); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 
-        .footer-flex { display: flex; justify-content: space-between; align-items: center; padding-top: 20px; border-top: 1px solid #f1f5f9; }
-        .final-price-pill { background: #f8fafc; border: 2px solid var(--ff-green); padding: 8px 18px; border-radius: 12px; text-align: right; }
-        .fp-label { display: block; font-size: 9px; font-weight: 800; color: var(--ff-green); }
-        .fp-value { font-size: 22px; font-weight: 900; color: #1e293b; }
+        .mini-stats { display: flex; gap: 8px; width: 100%; margin-top: 8px; }
+        .ms-item { flex: 1; background: #f8fafc; padding: 8px; border-radius: 8px; text-align: center; border: 1px solid #e2e8f0; }
+        .ms-item span { display: block; font-size: 9px; font-weight: 800; color: #94a3b8; margin-bottom: 2px; }
+        .ms-item input { width: 100%; border: none; background: transparent; text-align: center; font-weight: 900; font-size: 13px; outline: none; }
+
+        .costs-entry-list { display: flex; flex-direction: column; gap: 10px; }
+        .ce-item { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9; }
+        .ce-item span { font-size: 13px; font-weight: 600; color: #475569; }
+        .ce-item input { width: 90px; text-align: right; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 8px; font-weight: 700; }
+
+        .analysis-card { padding: 30px; }
+        .analysis-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .ah-left { display: flex; align-items: center; gap: 12px; }
+        .ah-left h3 { margin: 0; font-size: 20px; font-weight: 800; color: #1e293b; }
+        
+        .mini-badges { display: flex; gap: 12px; }
+        .m-badge { background: #f8fafc; padding: 8px 16px; border-radius: 12px; font-size: 12px; border: 1px solid #e2e8f0; }
+        .m-badge.green { background: #f0fdf4; color: var(--ff-green); border-color: #dcfce7; }
+        .m-badge.utility { background: #eff6ff; color: #2563eb; border-color: #dbeafe; }
+
+        .analysis-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+        .analysis-table th { padding: 12px; border-bottom: 2px solid #f8fafc; font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+        .analysis-table td { padding: 14px 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        .table-input { width: 100px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; font-weight: 700; text-align: right; }
+        .table-input.center { text-align: center; color: var(--ff-green); width: 70px; }
+
+        .footer-flex { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 20px; }
+        .info-box { display: flex; align-items: center; gap: 8px; color: #94a3b8; font-size: 12px; font-style: italic; }
+        .final-price-pill { background: #f8fafc; border: 2px solid var(--ff-green); padding: 10px 24px; border-radius: 12px; text-align: right; }
+        .fp-label { display: block; font-size: 10px; font-weight: 800; color: var(--ff-green); }
+        .fp-value { font-size: 26px; font-weight: 900; color: #1e293b; letter-spacing: -1px; }
 
         .text-green { color: var(--ff-green); }
+        .capitalize { text-transform: capitalize; }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
-        .capitalize { text-transform: capitalize; }
         .font-bold { font-weight: 700; }
-        .ff-toast { position: fixed; bottom: 24px; right: 24px; background: var(--ff-green); color: white; padding: 12px 24px; border-radius: 8px; font-weight: 800; z-index: 9999; }
+        .ff-toast { position: fixed; bottom: 24px; right: 24px; background: var(--ff-green); color: white; padding: 14px 28px; border-radius: 10px; font-weight: 800; z-index: 1000; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-        @media print {
-          .no-print { display: none !important; }
-          .print-only { display: inline !important; }
-          .printable-area { padding: 0; }
-          .ff-card { border: none; box-shadow: none; }
-        }
-        .print-only { display: none; }
       `}</style>
     </AdminLayout>
   );
