@@ -132,7 +132,7 @@ export default function AdminQuoteDetailPage() {
         c_tax: costs.tax.base, c_other: costs.other.base,
         m_freight: costs.freight.margin, m_origin: costs.origin.margin, m_aduana: costs.aduana.margin
       },
-      totals: { total: analysis.totalSale, profit: analysis.profit, per_box: analysis.perBox, meta: { incoterm, pallets, place } }
+      totals: { total: analysis.totalSale, profit: analysis.profit, per_box: analysis.per_box, meta: { incoterm, pallets, place } }
     };
     const { error } = await supabase.from("quotes").update(payload).eq("id", id);
     setBusy(false);
@@ -145,34 +145,33 @@ export default function AdminQuoteDetailPage() {
     <AdminLayout title={`Cotización ${data?.quote_number || id?.slice(0,8)}`}>
       <div className="ff-content ff-content--wide">
         
-        {/* HEADER RECUPERADO */}
+        {/* HEADER CON CLIENTE Y TAX ID RECUPERADOS */}
         <div className="ff-card ff-card-pad header-flex">
           <div className="client-brand">
-            <div className="avatar-box"><Building2 size={20} /></div>
-            <div>
-              <h2 className="client-name">{data?.client_snapshot?.name || "Cliente no definido"}</h2>
+            <div className="avatar-box"><Building2 size={22} /></div>
+            <div className="client-info-stack">
+              <h2 className="client-name">{data?.client_snapshot?.name || "Cargando cliente..."}</h2>
               <div className="client-meta">
-                <span><FileText size={12}/> {data?.client_snapshot?.tax_id || "Sin TAX ID"}</span>
-                <span><Globe size={12}/> {data?.client_snapshot?.contact_email || "Sin email"}</span>
+                <span className="meta-item"><FileText size={12}/> {data?.client_snapshot?.tax_id || "Sin TAX ID"}</span>
+                <span className="meta-item"><Globe size={12}/> {data?.client_snapshot?.contact_email || "Sin email"}</span>
               </div>
             </div>
           </div>
           <div className="actions-cluster">
-            <div className="status-container">
-               <select className={`status-pill ${status}`} value={status} onChange={e => setStatus(e.target.value)}>
+            <div className="status-pill-container">
+               <select className={`status-pill-select ${status}`} value={status} onChange={e => setStatus(e.target.value)}>
                  <option value="draft">BORRADOR</option>
                  <option value="sent">ENVIADA</option>
                  <option value="won">GANADA</option>
                </select>
-               <ChevronDown size={14} className="select-icon"/>
+               <ChevronDown size={14} className="pill-icon"/>
             </div>
-            <button className="ff-btn ff-btn-primary" onClick={handleSave} disabled={busy}>
-              {busy ? <Loader2 size={16} className="spin"/> : <Save size={16}/>} Guardar
+            <button className="ff-btn ff-btn-primary save-btn" onClick={handleSave} disabled={busy}>
+              {busy ? <Loader2 size={16} className="spin"/> : <Save size={16}/>} <span>Guardar</span>
             </button>
           </div>
         </div>
 
-        {/* TOP CONFIGURATION (33% cada uno) */}
         <div className="config-row">
           <div className="ff-card config-card">
             <div className="card-label"><Package size={14}/> Producto y Calidad</div>
@@ -233,8 +232,8 @@ export default function AdminQuoteDetailPage() {
           </div>
         </div>
 
-        {/* RESUMEN FINANCIERO (100% Ancho) */}
-        <div className="ff-card analysis-card">
+        {/* RESUMEN FINANCIERO AL 100% DE ANCHO */}
+        <div className="ff-card analysis-card full-width">
           <div className="analysis-header">
             <div className="ah-left">
               <Calculator size={20} className="text-green"/>
@@ -286,9 +285,9 @@ export default function AdminQuoteDetailPage() {
           </table>
 
           <div className="footer-flex">
-            <div className="info-box"><Info size={14}/> <span>Precios editables. El cambio en margen afecta la utilidad final.</span></div>
-            <div className="final-price-badge">
-               <span className="fp-label">PRECIO FINAL / CAJA</span>
+            <div className="info-box"><Info size={14}/> <span>Cálculo basado en el total del embarque. Peso manual.</span></div>
+            <div className="final-price-pill">
+               <span className="fp-label">PRECIO FINAL SUGERIDO / CAJA</span>
                <span className="fp-value">USD {analysis.perBox.toFixed(2)}</span>
             </div>
           </div>
@@ -298,77 +297,55 @@ export default function AdminQuoteDetailPage() {
       </div>
 
       <style jsx>{`
-        .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-        .client-brand { display: flex; gap: 14px; align-items: center; }
-        .avatar-box { background: #f0fdf4; color: var(--ff-green); padding: 10px; border-radius: 10px; border: 1px solid rgba(31,122,58,0.1); }
-        .client-name { margin: 0; font-size: 18px; font-weight: 800; color: var(--ff-text); }
-        .client-meta { display: flex; gap: 12px; font-size: 11px; color: var(--ff-muted); margin-top: 2px; }
-        .client-meta span { display: flex; align-items: center; gap: 4px; }
+        .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding: 16px 24px; }
+        .client-brand { display: flex; gap: 16px; align-items: center; }
+        .avatar-box { background: #f0fdf4; color: var(--ff-green); width: 44px; height: 44px; display: grid; place-items: center; border-radius: 10px; border: 1px solid rgba(31,122,58,0.1); }
+        .client-name { margin: 0; font-size: 19px; font-weight: 800; color: #1e293b; letter-spacing: -0.5px; }
+        .client-meta { display: flex; gap: 15px; margin-top: 2px; }
+        .meta-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; font-weight: 500; }
 
         .actions-cluster { display: flex; gap: 12px; align-items: center; }
-        .status-container { position: relative; display: flex; align-items: center; }
-        .select-icon { position: absolute; right: 10px; pointer-events: none; color: currentColor; opacity: 0.5; }
+        .status-pill-container { position: relative; display: flex; align-items: center; }
+        .pill-icon { position: absolute; right: 12px; pointer-events: none; color: inherit; opacity: 0.7; }
         
-        .status-pill { appearance: none; border: 1px solid var(--ff-border); border-radius: 8px; padding: 0 30px 0 15px; font-weight: 800; font-size: 11px; height: 38px; cursor: pointer; transition: all 0.2s; }
-        .status-pill.draft { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
-        .status-pill.sent { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
-        .status-pill.won { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+        .status-pill-select { 
+          appearance: none; 
+          border: 1px solid transparent; 
+          border-radius: 100px; 
+          padding: 0 35px 0 18px; 
+          font-weight: 800; 
+          font-size: 11px; 
+          height: 38px; 
+          cursor: pointer; 
+          transition: all 0.2s; 
+          letter-spacing: 0.5px;
+        }
+        .status-pill-select.draft { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
+        .status-pill-select.sent { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+        .status-pill-select.won { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+        .save-btn { height: 38px; padding: 0 20px; font-weight: 700; display: flex; gap: 8px; border-radius: 10px; }
 
         .config-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
         .config-card { padding: 20px; }
-        .card-label { font-size: 11px; font-weight: 900; text-transform: uppercase; color: var(--ff-green); display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
-        .config-grid { display: flex; flex-wrap: wrap; gap: 12px; }
-        .field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 45%; min-width: 0; }
-        .field.full { flex: 1 1 100%; }
-        .flex-between { flex-direction: row !important; justify-content: space-between; align-items: center; }
-        .field label { font-size: 10px; font-weight: 800; color: var(--ff-muted); text-transform: uppercase; }
+        .full-width { width: 100% !important; margin-bottom: 40px; }
 
-        .mini-toggle { display: flex; background: var(--ff-bg); padding: 3px; border-radius: 8px; border: 1px solid var(--ff-border); }
-        .mini-toggle button { border: none; background: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; color: #94a3b8; }
-        .mini-toggle button.active { background: #fff; color: var(--ff-green); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .analysis-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+        .analysis-table th { padding: 12px; border-bottom: 2px solid #f8fafc; font-size: 11px; color: #94a3b8; }
+        .analysis-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+        .table-input { width: 90px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 8px; font-weight: 700; text-align: right; }
+        .table-input.center { text-align: center; color: var(--ff-green); width: 70px; }
 
-        .mini-stats { display: flex; gap: 8px; width: 100%; margin-top: 8px; }
-        .ms-item { flex: 1; background: var(--ff-bg); padding: 8px; border-radius: 8px; text-align: center; border: 1px solid var(--ff-border); }
-        .ms-item span { display: block; font-size: 9px; font-weight: 800; color: var(--ff-muted); margin-bottom: 2px; }
-        .ms-item input { width: 100%; border: none; background: transparent; text-align: center; font-weight: 900; font-size: 13px; outline: none; color: var(--ff-text); }
-
-        .costs-entry-list { display: flex; flex-direction: column; gap: 8px; }
-        .ce-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9; }
-        .ce-item span { font-size: 12px; font-weight: 600; color: #475569; }
-        .ce-item input { width: 85px; text-align: right; border: 1px solid var(--ff-border); border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 800; }
-
-        .analysis-card { padding: 30px; border-top: 4px solid var(--ff-green); }
-        .analysis-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-        .ah-left { display: flex; align-items: center; gap: 12px; }
-        .ah-left h3 { margin: 0; font-size: 20px; font-weight: 800; }
-        
-        .mini-badges { display: flex; gap: 12px; }
-        .m-badge { background: #f8fafc; padding: 8px 16px; border-radius: 12px; font-size: 12px; border: 1px solid var(--ff-border); }
-        .m-badge.green { background: #f0fdf4; color: var(--ff-green); border-color: #dcfce7; }
-        .m-badge.utility { background: #eff6ff; color: #2563eb; border-color: #dbeafe; }
-
-        .analysis-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-        .analysis-table th { font-size: 11px; font-weight: 900; color: var(--ff-muted); padding: 12px; border-bottom: 2px solid var(--ff-bg); }
-        .analysis-table td { padding: 14px 12px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
-        .table-input { width: 100px; border: 1px solid var(--ff-border); border-radius: 6px; padding: 6px 10px; font-size: 13px; font-weight: 800; font-family: inherit; }
-        .table-input.center { text-align: center; width: 70px; color: var(--ff-green); }
-        .impact-tag { color: var(--ff-muted); font-weight: 700; font-size: 11px; }
-        .sale-total { font-weight: 900; color: var(--ff-green); font-size: 16px; }
-        
-        .analysis-table tfoot td { font-weight: 900; padding: 20px 12px; background: #f8fafc; }
-
-        .footer-flex { display: flex; justify-content: space-between; align-items: center; }
-        .info-box { display: flex; align-items: center; gap: 8px; color: var(--ff-muted); font-size: 12px; }
-        .final-price-badge { background: var(--ff-green); color: #fff; padding: 12px 24px; border-radius: 12px; display: flex; flex-direction: column; align-items: flex-end; }
-        .fp-label { font-size: 10px; font-weight: 800; opacity: 0.9; }
-        .fp-value { font-size: 24px; font-weight: 900; letter-spacing: -1px; }
+        .footer-flex { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 20px; }
+        .final-price-pill { background: #f8fafc; border: 2px solid var(--ff-green); padding: 8px 18px; border-radius: 12px; text-align: right; }
+        .fp-label { display: block; font-size: 9px; font-weight: 800; color: var(--ff-green); }
+        .fp-value { font-size: 20px; font-weight: 900; color: #1e293b; }
 
         .text-green { color: var(--ff-green); }
         .capitalize { text-transform: capitalize; }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
         .font-bold { font-weight: 700; }
-        .ff-toast { position: fixed; bottom: 24px; right: 24px; background: var(--ff-green); color: white; padding: 14px 28px; border-radius: 10px; font-weight: 800; box-shadow: var(--ff-shadow); z-index: 1000; }
+        .ff-toast { position: fixed; bottom: 24px; right: 24px; background: var(--ff-green); color: white; padding: 14px 28px; border-radius: 10px; font-weight: 800; z-index: 1000; }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
