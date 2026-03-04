@@ -1,21 +1,11 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
 import { 
-  Plus, X, Mail, Phone, Trash2, Edit3, Loader2, Send, Search, Copy, User, Globe, Building2
+  Plus, X, Mail, Phone, Edit3, Loader2, Search, Building2, 
+  Globe, CreditCard, MapPin, ExternalLink, Trash2
 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import { AdminLayout, notify } from "../../components/AdminLayout";
-
-// --- HELPERS SENIOR ---
-const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-const generateColor = (name: string) => {
-  const colors = ['#eff6ff', '#f0fdf4', '#fff7ed', '#faf5ff', '#fdf2f8'];
-  const textColors = ['#1e40af', '#166534', '#9a3412', '#6b21a8', '#9d174d'];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  const index = Math.abs(hash % colors.length);
-  return { bg: colors[index], text: textColors[index] };
-};
 
 export default function AdminUsersPage() {
   const router = useRouter();
@@ -24,9 +14,7 @@ export default function AdminUsersPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [dataList, setDataList] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState(""); // Filtro real-time
-  const [invitingId, setInvitingId] = useState<string | null>(null);
-  const tokenRef = useRef<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const initialForm = {
     id: null, name: "", legal_name: "", tax_id: "", email_corp: "", phone_corp: "", 
@@ -37,55 +25,28 @@ export default function AdminUsersPage() {
   
   const [f, setF] = useState(initialForm);
 
-  // --- LÓGICA DE DATOS ---
   const loadData = async () => {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
       const endpoint = activeTab === 'clients' ? '/.netlify/functions/listClients' : '/.netlify/functions/listUsers';
-      const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${session?.access_token}` } });
       const data = await res.json();
       setDataList(data.items || []);
-    } catch (e) { notify("Error al cargar datos", "error"); }
+    } catch (e) { notify("Error de carga", "error"); }
     finally { setLoading(false); }
   };
 
   useEffect(() => { loadData(); }, [activeTab]);
 
-  // Filtro dinámico optimizado
   const filteredData = useMemo(() => {
     return dataList.filter(item => {
-      const search = searchQuery.toLowerCase();
+      const s = searchQuery.toLowerCase();
       const name = (item.name || item.full_name || "").toLowerCase();
       const email = (item.contact_email || item.email || "").toLowerCase();
-      const ruc = (item.tax_id || "").toLowerCase();
-      return name.includes(search) || email.includes(search) || ruc.includes(search);
+      return name.includes(s) || email.includes(s);
     });
   }, [dataList, searchQuery]);
-
-  // --- ACCIONES ---
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    notify("Copiado al portapapeles", "success");
-  };
-
-  const handleActivateProspect = async (item: any) => {
-    const email = item.contact_email || item.email;
-    if (!email) return notify("Email no encontrado", "error");
-    setInvitingId(item.id);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/.netlify/functions/inviteUser', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ email, full_name: item.name, role: 'client', client_id: item.id })
-      });
-      if (res.ok) { notify("Acceso activado correctamente", "success"); loadData(); }
-      else { notify("Error al activar", "error"); }
-    } catch (e) { notify("Error de red", "error"); }
-    finally { setInvitingId(null); }
-  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,6 +54,7 @@ export default function AdminUsersPage() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const endpoint = activeTab === 'clients' ? "/.netlify/functions/manageClient" : "/.netlify/functions/inviteUser";
+      
       const payload = activeTab === 'clients' 
         ? { ...f, shipping_addresses: f.shipping_addresses.filter((a: any) => a.address.trim() !== "") }
         : { email: f.staff_email, full_name: f.staff_name, role: f.staff_role, id: f.id };
@@ -102,231 +64,254 @@ export default function AdminUsersPage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify(payload)
       });
-      if (res.ok) { notify("Registro actualizado", "success"); setIsDrawerOpen(false); loadData(); }
-      else { notify("Error al guardar", "error"); }
-    } catch (err) { notify("Error de red", "error"); }
+
+      if (res.ok) {
+        notify("Registro actualizado", "success");
+        setIsDrawerOpen(false);
+        loadData();
+      } else {
+        const err = await res.json();
+        notify(err.message, "error");
+      }
+    } catch (err) { notify("Error de servidor", "error"); }
     finally { setIsSaving(false); }
   };
 
   return (
-    <AdminLayout title="Directorio" subtitle="Gestión centralizada de identidades">
+    <AdminLayout title="Directorio" subtitle="Gestión de identidades y accesos">
       
-      {/* HEADER TOOLS: Estilo Stripe */}
       <div className="directory-header">
-        <div className="tabs-container">
-          <div className="tabs">
-            <button className={activeTab === 'clients' ? 'active' : ''} onClick={() => setActiveTab('clients')}>
-              Clientes <span className="tab-count">{activeTab === 'clients' ? filteredData.length : '...'}</span>
-            </button>
-            <button className={activeTab === 'staff' ? 'active' : ''} onClick={() => setActiveTab('staff')}>
-              Staff Interno <span className="tab-count">{activeTab === 'staff' ? filteredData.length : '...'}</span>
-            </button>
-          </div>
+        <div className="tab-switcher">
+          <button className={activeTab === 'clients' ? 'active' : ''} onClick={() => setActiveTab('clients')}>Clientes</button>
+          <button className={activeTab === 'staff' ? 'active' : ''} onClick={() => setActiveTab('staff')}>Equipo</button>
         </div>
         
-        <div className="actions-bar">
-          <div className="search-wrapper">
-            <Search size={16} className="search-icon" />
-            <input 
-              type="text" 
-              placeholder={`Buscar en ${activeTab}...`} 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        <div className="top-actions">
+          <div className="search-bar-slim">
+            <Search size={14} />
+            <input placeholder="Filtrar por nombre o email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
-          <button className="ff-btn ff-btn-primary shadow-sm" onClick={() => { setF(initialForm); setIsDrawerOpen(true); }}>
-            <Plus size={18} /> {activeTab === 'clients' ? 'Nuevo Cliente' : 'Añadir Staff'}
+          <button className="btn-create-main" onClick={() => { setF(initialForm); setIsDrawerOpen(true); }}>
+            <Plus size={16} /> Nuevo {activeTab === 'clients' ? 'Cliente' : 'Miembro'}
           </button>
         </div>
       </div>
 
-      <div className="ff-card overflow-hidden border-none shadow-md">
-        <table className="pro-table modern">
+      <div className="table-wrapper">
+        <table className="ff-table-pro">
           <thead>
             {activeTab === 'clients' ? (
-              <tr><th>IDENTIDAD</th><th>DETALLES DE CONTACTO</th><th>ESTADO</th><th className="txt-right">ACCIONES</th></tr>
+              <tr><th>Cliente / RUC</th><th>Contacto</th><th>Ubicación</th><th>Estado</th><th className="txt-right">Acciones</th></tr>
             ) : (
-              <tr><th>COLABORADOR</th><th>EMAIL INSTITUCIONAL</th><th>ROL</th><th>ACCESO</th></tr>
+              <tr><th>Colaborador</th><th>Email</th><th>Rol</th><th>Estatus</th></tr>
             )}
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={4} className="loading-td"><Loader2 className="animate-spin" /></td></tr>
-            ) : filteredData.length === 0 ? (
-              <tr><td colSpan={4} className="empty-td text-center py-10">No se encontraron registros.</td></tr>
-            ) : filteredData.map(item => {
-              const name = item.name || item.full_name || "Sin nombre";
-              const style = generateColor(name);
-              return (
-                <tr key={item.id} className="row-hover">
-                  {activeTab === 'clients' ? (
-                    <>
-                      <td onClick={() => router.push(`/admin/clients/${item.id}`)} className="ptr">
-                        <div className="identity-cell">
-                          <div className="avatar" style={{ backgroundColor: style.bg, color: style.text }}>{getInitials(name)}</div>
-                          <div className="info">
-                            <span className="name-link">{name}</span>
-                            <small className="tax-id">{item.tax_id || 'ID NO ASIGNADO'}</small>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="contact-details">
-                          <div className="detail-item clickable" onClick={() => copyToClipboard(item.contact_email)}>
-                            <Mail size={12}/> {item.contact_email}
-                          </div>
-                          <div className="detail-item">
-                            <Phone size={12}/> {item.phone || 'N/A'}
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <span className={item.has_platform_access ? "badge-pro active" : "badge-pro prospect"}>
-                          {item.has_platform_access ? "Activo" : "Prospecto"}
-                        </span>
-                      </td>
-                      <td className="actions txt-right">
-                        <div className="flex-end gap-2">
-                          {!item.has_platform_access && (
-                             <button className="btn-icon-label" onClick={() => handleActivateProspect(item)} disabled={invitingId === item.id}>
-                               {invitingId === item.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                               <span>Activar</span>
-                             </button>
-                          )}
-                          <button className="btn-circle" onClick={() => { setF({...initialForm, ...item, email_corp: item.contact_email}); setIsDrawerOpen(true); }}>
-                            <Edit3 size={15}/>
-                          </button>
-                        </div>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td>
-                        <div className="identity-cell">
-                          <div className="avatar" style={{ backgroundColor: style.bg, color: style.text }}>{getInitials(name)}</div>
-                          <strong>{name}</strong>
-                        </div>
-                      </td>
-                      <td>{item.email}</td>
-                      <td><span className="role-pill">{item.role}</span></td>
-                      <td>{item.confirmed_at ? <span className="status-dot online">Activo</span> : <span className="status-dot offline">Pendiente</span>}</td>
-                    </>
-                  )}
-                </tr>
-              );
-            })}
+              <tr><td colSpan={5} className="td-loading"><Loader2 className="spin" /></td></tr>
+            ) : filteredData.map(item => (
+              <tr key={item.id} className="tr-interactive">
+                {activeTab === 'clients' ? (
+                  <>
+                    <td onClick={() => router.push(`/admin/clients/${item.id}`)}>
+                      <div className="cell-identity">
+                        <strong>{item.name}</strong>
+                        <code>{item.tax_id || 'SIN RUC'}</code>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="cell-contact">
+                        <span><Mail size={10}/> {item.contact_email}</span>
+                        <span><Phone size={10}/> {item.phone || '---'}</span>
+                      </div>
+                    </td>
+                    <td><div className="cell-geo"><Globe size={10}/> {item.country || 'Panamá'}</div></td>
+                    <td>
+                      <span className={item.has_platform_access ? "tag-active" : "tag-prospect"}>
+                        {item.has_platform_access ? "Activo" : "Prospecto"}
+                      </span>
+                    </td>
+                    <td className="txt-right">
+                       <button className="btn-icon-edit" onClick={(e) => { e.stopPropagation(); setF({...f, ...item, email_corp: item.contact_email}); setIsDrawerOpen(true); }}>
+                          <Edit3 size={14}/>
+                       </button>
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td><strong>{item.full_name}</strong></td>
+                    <td className="txt-muted">{item.email}</td>
+                    <td><span className="role-badge">{item.role}</span></td>
+                    <td><div className={item.confirmed_at ? "dot-online" : "dot-offline"} /></td>
+                  </>
+                )}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
 
-      {/* DRAWER OPTIMIZADO */}
+      {/* DRAWER RECONSTRUIDO CON TODOS TUS CAMPOS */}
       {isDrawerOpen && (
         <>
-          <div className="overlay" onClick={() => setIsDrawerOpen(false)} />
-          <div className="drawer modern-drawer">
-            <div className="d-header">
-              <div className="d-title">
-                <Building2 size={20} className="text-muted" />
-                <h3>{f.id ? 'Editar Perfil' : 'Nuevo Registro'}</h3>
+          <div className="ff-backdrop" onClick={() => setIsDrawerOpen(false)} />
+          <div className="ff-drawer-right">
+            <div className="drawer-head">
+              <div className="title-area">
+                <Building2 size={16} className="text-green" />
+                <h3>{f.id ? 'Expediente Cliente' : 'Nuevo Cliente'}</h3>
               </div>
-              <button className="btn-close" onClick={() => setIsDrawerOpen(false)}><X size={20}/></button>
+              <button className="btn-close" onClick={() => setIsDrawerOpen(false)}><X size={18}/></button>
             </div>
 
-            <form className="d-body" onSubmit={handleSave}>
-              <div className="form-grid">
-                <div className="group full">
-                  <label>INFORMACIÓN GENERAL</label>
-                  <input required placeholder="Nombre Comercial" value={f.name} onChange={e=>setF({...f, name:e.target.value})} />
-                  <div className="input-row">
-                    <input placeholder="Razón Social" value={f.legal_name} onChange={e=>setF({...f, legal_name:e.target.value})} />
-                    <input placeholder="RUC / Tax ID" value={f.tax_id} onChange={e=>setF({...f, tax_id:e.target.value})} />
+            <form className="drawer-content" onSubmit={handleSave}>
+              <div className="form-group-sec">
+                <label>Identificación Legal</label>
+                <input required placeholder="Nombre Comercial" value={f.name} onChange={e=>setF({...f, name:e.target.value})} />
+                <input placeholder="Razón Social (Legal)" value={f.legal_name} onChange={e=>setF({...f, legal_name:e.target.value})} />
+                <div className="grid-2">
+                  <div className="sub-group">
+                    <label>RUC / Tax ID</label>
+                    <input placeholder="8-XXX-XXXX" value={f.tax_id} onChange={e=>setF({...f, tax_id:e.target.value})} />
                   </div>
-                </div>
-
-                <div className="group">
-                  <label>DATOS DE CONTACTO</label>
-                  <div className="input-with-icon">
-                    <Mail size={14} />
-                    <input required type="email" placeholder="Email Corporativo" value={f.email_corp} onChange={e=>setF({...f, email_corp:e.target.value})} />
+                  <div className="sub-group">
+                    <label>País</label>
+                    <input placeholder="Panamá" value={f.country_origin} onChange={e=>setF({...f, country_origin:e.target.value})} />
                   </div>
-                  <div className="input-with-icon">
-                    <Phone size={14} />
-                    <input placeholder="Teléfono" value={f.phone_corp} onChange={e=>setF({...f, phone_corp:e.target.value})} />
-                  </div>
-                </div>
-
-                <div className="group">
-                  <label>CONDICIONES</label>
-                  <select value={f.payment_condition} onChange={e=>setF({...f, payment_condition:e.target.value})}>
-                    <option value="Prepagado">Prepagado</option>
-                    <option value="Crédito 15 días">Crédito 15 días</option>
-                    <option value="Crédito 30 días">Crédito 30 días</option>
-                  </select>
                 </div>
               </div>
 
-              <button className="ff-btn ff-btn-primary btn-submit" disabled={isSaving}>
-                {isSaving ? <Loader2 className="animate-spin" /> : "Guardar Registro"}
-              </button>
+              <div className="form-group-sec">
+                <label>Canales de Contacto</label>
+                <div className="input-with-icon">
+                  <Mail size={12} />
+                  <input required type="email" placeholder="email@empresa.com" value={f.email_corp} onChange={e=>setF({...f, email_corp:e.target.value})} />
+                </div>
+                <div className="input-with-icon">
+                  <Phone size={12} />
+                  <input placeholder="+507 0000-0000" value={f.phone_corp} onChange={e=>setF({...f, phone_corp:e.target.value})} />
+                </div>
+                <div className="input-with-icon">
+                  <ExternalLink size={12} />
+                  <input placeholder="www.website.com" value={f.website} onChange={e=>setF({...f, website:e.target.value})} />
+                </div>
+              </div>
+
+              <div className="form-group-sec">
+                <label>Logística y Pagos</label>
+                <select value={f.payment_condition} onChange={e=>setF({...f, payment_condition:e.target.value})}>
+                  <option value="Prepagado">Prepagado</option>
+                  <option value="Crédito 15 días">Crédito 15 días</option>
+                  <option value="Crédito 30 días">Crédito 30 días</option>
+                </select>
+                <textarea placeholder="Dirección de Facturación" value={f.billing_address} onChange={e=>setF({...f, billing_address:e.target.value})} />
+              </div>
+
+              <div className="form-group-sec">
+                <div className="label-row">
+                  <label>Puntos de Entrega</label>
+                  <button type="button" className="btn-mini" onClick={() => setF({...f, shipping_addresses: [...f.shipping_addresses, {id: Date.now(), address: ""}]})}>
+                    <Plus size={10}/> Añadir
+                  </button>
+                </div>
+                {f.shipping_addresses.map((addr: any, idx: number) => (
+                  <div key={addr.id} className="input-row-del">
+                    <input placeholder={`Dirección ${idx + 1}`} value={addr.address} onChange={e => {
+                      const newAddrs = [...f.shipping_addresses];
+                      newAddrs[idx].address = e.target.value;
+                      setF({...f, shipping_addresses: newAddrs});
+                    }} />
+                    {f.shipping_addresses.length > 1 && (
+                      <button type="button" className="btn-del" onClick={() => setF({...f, shipping_addresses: f.shipping_addresses.filter((_, i) => i !== idx)})}>
+                        <Trash2 size={12}/>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="drawer-actions-fixed">
+                <button type="button" className="btn-cancel-flat" onClick={() => setIsDrawerOpen(false)}>Descartar</button>
+                <button type="submit" className="btn-save-main" disabled={isSaving}>
+                  {isSaving ? <Loader2 className="spin" size={14} /> : (f.id ? "Guardar Cambios" : "Crear Cliente")}
+                </button>
+              </div>
             </form>
           </div>
         </>
       )}
 
       <style jsx>{`
-        /* LAYOUT & TABS */
-        .directory-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; gap: 20px; flex-wrap: wrap; }
-        .tabs { display: flex; gap: 8px; background: #f1f5f9; padding: 4px; border-radius: 10px; }
-        .tabs button { padding: 8px 16px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; color: #64748b; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 8px; }
-        .tabs button.active { background: white; color: #1e293b; shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .tab-count { font-size: 10px; background: #e2e8f0; padding: 2px 6px; border-radius: 6px; color: #475569; }
-
-        /* SEARCH & ACTIONS */
-        .actions-bar { display: flex; gap: 12px; align-items: center; }
-        .search-wrapper { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0 12px; display: flex; align-items: center; width: 300px; }
-        .search-icon { color: #94a3b8; }
-        .search-wrapper input { border: none; padding: 10px; font-size: 13px; width: 100%; outline: none; }
-
-        /* TABLE MODERN */
-        .pro-table.modern th { text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; padding: 16px 20px; background: #fafafa; }
-        .pro-table.modern td { padding: 16px 20px; vertical-align: middle; }
-        .identity-cell { display: flex; align-items: center; gap: 12px; }
-        .avatar { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; font-size: 12px; }
-        .name-link { font-weight: 700; color: #1e293b; display: block; }
-        .name-link:hover { color: var(--ff-green); }
-        .tax-id { font-size: 11px; color: #94a3b8; font-family: monospace; }
+        .directory-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         
-        .contact-details { display: flex; flex-direction: column; gap: 4px; }
-        .detail-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; }
-        .detail-item.clickable:hover { color: var(--ff-green); cursor: pointer; text-decoration: underline; }
+        .tab-switcher { display: flex; background: #f1f5f9; padding: 3px; border-radius: 10px; }
+        .tab-switcher button { border: none; background: none; padding: 6px 16px; font-size: 12px; font-weight: 700; color: #64748b; cursor: pointer; border-radius: 8px; transition: 0.2s; }
+        .tab-switcher button.active { background: white; color: #1f7a3a; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 
-        /* BADGES PRO */
-        .badge-pro { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; }
-        .badge-pro.active { background: #dcfce7; color: #15803d; }
-        .badge-pro.prospect { background: #f1f5f9; color: #475569; }
+        .top-actions { display: flex; gap: 12px; }
+        .search-bar-slim { display: flex; align-items: center; gap: 8px; background: white; border: 1px solid #e2e8f0; padding: 0 12px; border-radius: 10px; width: 280px; }
+        .search-bar-slim input { border: none; padding: 8px 0; font-size: 12px; outline: none; width: 100%; }
+        .search-bar-slim :global(svg) { color: #94a3b8; }
+
+        .btn-create-main { background: #1f7a3a; color: white; border: none; padding: 0 16px; height: 36px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+
+        .table-wrapper { background: white; border-radius: 16px; border: 1px solid #f1f5f9; overflow: hidden; }
+        .ff-table-pro { width: 100%; border-collapse: collapse; }
+        .ff-table-pro th { background: #fcfcfc; text-align: left; padding: 12px 20px; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid #f1f5f9; }
+        .ff-table-pro td { padding: 14px 20px; font-size: 12px; border-bottom: 1px solid #f8fafc; color: #1e293b; }
+        .tr-interactive:hover { background: #fafafa; cursor: pointer; }
+
+        .cell-identity { display: flex; flex-direction: column; gap: 2px; }
+        .cell-identity strong { font-weight: 700; font-size: 13px; }
+        .cell-identity code { font-size: 10px; color: #94a3b8; background: #f1f5f9; padding: 1px 4px; border-radius: 4px; width: fit-content; }
+
+        .cell-contact { display: flex; flex-direction: column; gap: 3px; }
+        .cell-contact span { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #64748b; }
         
-        .status-dot { display: flex; align-items: center; gap: 6px; font-weight: 600; }
-        .status-dot::before { content:''; width: 8px; height: 8px; border-radius: 50%; }
-        .status-dot.online::before { background: #22c55e; }
-        .status-dot.offline::before { background: #cbd5e1; }
+        .tag-active { background: #dcfce7; color: #166534; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 800; }
+        .tag-prospect { background: #f1f5f9; color: #64748b; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 800; }
 
-        /* DRAWER & FORMS */
-        .modern-drawer { width: 500px; }
-        .d-title { display: flex; align-items: center; gap: 10px; }
-        .form-grid { display: flex; flex-direction: column; gap: 20px; }
-        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .input-with-icon { position: relative; display: flex; align-items: center; }
-        .input-with-icon :global(svg) { position: absolute; left: 12px; color: #94a3b8; }
-        .input-with-icon input { padding-left: 36px !important; width: 100%; }
-        .btn-submit { margin-top: 20px; height: 48px; font-size: 14px; }
+        /* DRAWER SENIOR */
+        .ff-backdrop { position: fixed; inset: 0; background: rgba(2, 6, 23, 0.4); backdrop-filter: blur(3px); z-index: 9000; }
+        .ff-drawer-right { position: fixed; top: 0; right: 0; bottom: 0; width: 450px; background: white; z-index: 9001; display: flex; flex-direction: column; animation: slideRight 0.3s ease-out; }
+        @keyframes slideRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
 
-        /* UI UTILS */
+        .drawer-head { padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+        .title-area { display: flex; align-items: center; gap: 12px; }
+        .title-area h3 { font-size: 15px; font-weight: 800; margin: 0; }
+        .btn-close { background: none; border: none; color: #94a3b8; cursor: pointer; }
+
+        .drawer-content { padding: 24px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 28px; padding-bottom: 100px; }
+        .form-group-sec { display: flex; flex-direction: column; gap: 12px; }
+        .form-group-sec label { font-size: 10px; font-weight: 800; color: #1f7a3a; text-transform: uppercase; letter-spacing: 0.05em; }
+        
+        .label-row { display: flex; justify-content: space-between; align-items: center; }
+        .btn-mini { background: #f0fdf4; border: 1px solid #dcfce7; color: #166534; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; cursor: pointer; }
+
+        input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 12px; outline: none; transition: 0.2s; }
+        input:focus, select:focus, textarea:focus { border-color: #1f7a3a; box-shadow: 0 0 0 3px rgba(31,122,58,0.08); }
+        
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .sub-group { display: flex; flex-direction: column; gap: 6px; }
+
+        .input-with-icon { position: relative; }
+        .input-with-icon :global(svg) { position: absolute; left: 12px; top: 11px; color: #94a3b8; }
+        .input-with-icon input { padding-left: 35px; }
+
+        .input-row-del { display: flex; gap: 8px; align-items: center; }
+        .btn-del { background: #fff1f2; color: #e11d48; border: none; padding: 10px; border-radius: 8px; cursor: pointer; }
+
+        .drawer-actions-fixed { position: absolute; bottom: 0; left: 0; right: 0; padding: 20px 24px; background: white; border-top: 1px solid #f1f5f9; display: flex; gap: 12px; }
+        .btn-cancel-flat { flex: 1; border: none; background: #f8fafc; color: #64748b; padding: 12px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; }
+        .btn-save-main { flex: 2; background: #1f7a3a; color: white; border: none; padding: 12px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(31,122,58,0.2); }
+
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .txt-right { text-align: right; }
-        .flex-end { display: flex; justify-content: flex-end; }
-        .btn-circle { background: white; border: 1px solid #e2e8f0; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #64748b; }
-        .btn-circle:hover { border-color: var(--ff-green); color: var(--ff-green); background: #f0fdf4; }
-        .btn-icon-label { display: flex; align-items: center; gap: 6px; background: #eff6ff; color: #2563eb; border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; }
-        .btn-icon-label:hover { background: #dbeafe; }
+        .txt-muted { color: #94a3b8; }
+        .role-badge { background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+        .dot-online { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; margin: 0 auto; }
+        .dot-offline { width: 8px; height: 8px; background: #cbd5e1; border-radius: 50%; margin: 0 auto; }
       `}</style>
     </AdminLayout>
   );
