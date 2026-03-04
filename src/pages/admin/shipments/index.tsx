@@ -12,7 +12,7 @@ import { labelStatus } from "../../../lib/shipmentFlow";
 import { requireAdminOrRedirect } from "../../../lib/requireAdmin";
 import { AdminLayout } from "../../../components/AdminLayout";
 
-// --- HELPERS DEL DRAWER ---
+// --- HELPERS ---
 const getFlag = (code: string) => {
   if (!code) return '🌐';
   const codePoints = code.toUpperCase().split('').map(char => 127397 + char.charCodeAt(0));
@@ -22,9 +22,6 @@ const getFlag = (code: string) => {
 const MASTER_PLACES = [
   { code: 'MAD', name: 'Madrid-Barajas', country: 'ES' },
   { code: 'BCN', name: 'Puerto de Barcelona', country: 'ES' },
-  { code: 'RTM', name: 'Puerto de Rotterdam', country: 'NL' },
-  { code: 'ANR', name: 'Puerto de Amberes', country: 'BE' },
-  { code: 'GDN', name: 'Puerto de Gdansk', country: 'PL' },
   { code: 'MIA', name: 'Miami International', country: 'US' },
 ];
 
@@ -53,29 +50,20 @@ export default function AdminShipments() {
   const [authOk, setAuthOk] = useState(false);
   const [showModal, setShowModal] = useState(false);
   
-  // Estados de Datos
   const [items, setItems] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [allVarieties, setAllVarieties] = useState<any[]>([]);
   const [loadingList, setLoadingList] = useState(true);
 
-  // Estados del Formulario (Copia fiel del Drawer)
+  // FORM STATE
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [mode, setMode] = useState<'Marítima' | 'Aérea'>('Marítima');
+  const [mode, setMode] = useState<'Marítima' | 'Aérea'>('Aérea'); // Preseleccionado Aérea
   const [formData, setFormData] = useState({
-    client_id: '',
-    product_id: '',
-    variety_id: '',
-    calibre: '',
-    color: '',
-    brix_grade: '>13',
-    boxes: '',
-    pallets: '',
-    estimated_weight: '',
-    incoterm: 'FOB',
-    destination: '',
+    client_id: '', product_id: '', variety_id: '', calibre: '', color: '',
+    brix_grade: '>13', boxes: '', pallets: '', estimated_weight: '',
+    incoterm: 'FOB', destination: '',
   });
 
   const [toast, setToast] = useState<{show: boolean, msg: string} | null>(null);
@@ -94,7 +82,6 @@ export default function AdminShipments() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
-    // Cargar Lista de Embarques
     const params = new URLSearchParams({ mode: 'admin', q: q.trim(), dir });
     const res = await fetch(`/.netlify/functions/listShipments?${params.toString()}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
@@ -104,7 +91,6 @@ export default function AdminShipments() {
       setItems(json.items || []);
     }
 
-    // Cargar Catálogos (Clientes, Productos, Variedades)
     const { data: c } = await supabase.from('clients').select('id, name').order('name');
     const { data: p } = await supabase.from('products').select('*').order('name');
     const { data: v } = await supabase.from('product_varieties').select('*').order('name');
@@ -124,7 +110,7 @@ export default function AdminShipments() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting || !formData.client_id) return;
+    if (submitting) return;
     setSubmitting(true);
 
     try {
@@ -159,13 +145,11 @@ export default function AdminShipments() {
       const result = await response.json();
       if (result.ok) {
         setSuccess(true);
-        setToast({ show: true, msg: "Embarque Creado. Redirigiendo..." });
+        setToast({ show: true, msg: "Éxito. Redirigiendo..." });
         setTimeout(() => {
           router.push(`/admin/shipments/${result.shipmentId || result.id}`);
-        }, 1500);
-      } else {
-        throw new Error(result.message);
-      }
+        }, 1200);
+      } else throw new Error(result.message);
     } catch (err: any) {
       alert("Error: " + err.message);
       setSubmitting(false);
@@ -181,7 +165,7 @@ export default function AdminShipments() {
         </div>
       )}
 
-      {/* DASHBOARD HEADER */}
+      {/* HEADER ACTIONS */}
       <div className="stats-bar">
         <div className="stat-card action" onClick={() => setShowModal(true)}>
           <div className="card-icon green"><Plus size={20} /></div>
@@ -193,6 +177,7 @@ export default function AdminShipments() {
         </div>
       </div>
 
+      {/* FILTER BAR */}
       <div className="filter-area">
         <div className="search-pill">
           <Search size={18} />
@@ -203,7 +188,7 @@ export default function AdminShipments() {
         </button>
       </div>
 
-      {/* LISTADO TIPO TABLA */}
+      {/* LIST */}
       <div className="list-stack">
         {loadingList ? <div className="loading-state">Cargando logística...</div> : 
           items.map((s) => (
@@ -233,7 +218,7 @@ export default function AdminShipments() {
         ))}
       </div>
 
-      {/* POPUP: COPIA FIEL DEL DRAWER */}
+      {/* POPUP MODAL */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -246,9 +231,9 @@ export default function AdminShipments() {
             </header>
 
             <form onSubmit={handleCreate} className="modal-form">
-              {/* SECCIÓN CLIENTE (Única adición al Drawer) */}
+              
               <section className="form-section">
-                <h3><Users size={16} /> ENTIDAD EXPORTADORA</h3>
+                <h3><Users size={16} /> DATOS DEL CLIENTE</h3>
                 <div className="input-group full-width">
                   <label>Seleccionar Cliente</label>
                   <select required value={formData.client_id} onChange={e => setFormData({...formData, client_id: e.target.value})}>
@@ -310,9 +295,9 @@ export default function AdminShipments() {
                 
                 <div className="input-group full-width">
                   <label>Lugar de Destino</label>
-                  <input list="places-list-admin" required placeholder="Nombre del puerto o aeropuerto..." value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} />
+                  <input list="places-list-admin" required placeholder="Puerto o aeropuerto..." value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} />
                   <datalist id="places-list-admin">
-                    {MASTER_PLACES.map(p => <option key={p.code} value={`${getFlag(p.country)} ${p.name} (${p.code})`} />)}
+                    {MASTER_PLACES.map(p => <option key={p.code} value={`${getFlag(p.country)} ${p.name}`} />)}
                   </datalist>
                 </div>
               </section>
@@ -321,7 +306,7 @@ export default function AdminShipments() {
                 <button type="button" onClick={() => setShowModal(false)} className="btn-abort">Cancelar</button>
                 <button type="submit" disabled={submitting || success} className={`btn-submit ${success ? 'success' : ''}`}>
                   {submitting ? <Loader2 className="spin" size={20} /> : success ? <CheckCircle size={20} /> : <Save size={20} />}
-                  <span>{success ? 'Creado con éxito' : 'Crear Embarque'}</span>
+                  <span>{success ? 'Registro Exitoso' : 'Crear Embarque'}</span>
                 </button>
               </footer>
             </form>
@@ -330,62 +315,77 @@ export default function AdminShipments() {
       )}
 
       <style jsx>{`
-        /* TOAST & LAYOUT */
         .toast-container { position: fixed; top: 24px; right: 24px; z-index: 3000; animation: slideIn 0.3s ease; }
-        .toast-card { background: white; padding: 12px 20px; border-radius: 12px; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-left: 4px solid #1f7a3a; font-weight: 700; color: #1e293b; }
+        .toast-card { background: white; padding: 12px 24px; border-radius: 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); border-left: 5px solid #1f7a3a; font-weight: 700; color: #1e293b; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-        .stats-bar { display: grid; grid-template-columns: repeat(2, 280px); gap: 16px; margin-bottom: 24px; }
-        .stat-card { background: white; padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 14px; border: 1px solid #f1f5f9; cursor: pointer; }
+        .stats-bar { display: grid; grid-template-columns: repeat(2, 280px); gap: 16px; margin-bottom: 32px; }
+        .stat-card { background: white; padding: 18px; border-radius: 18px; display: flex; align-items: center; gap: 16px; border: 1px solid #f1f5f9; cursor: pointer; transition: 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
         .stat-card.action { background: #1f7a3a; color: white; border: none; }
-        .card-icon { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; }
+        .card-icon { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; }
         .card-icon.green { background: rgba(255,255,255,0.2); }
         .card-icon.blue { background: #eff6ff; color: #2563eb; }
-        .card-label { font-size: 9px; font-weight: 800; color: #94a3b8; margin: 0; }
+        .card-label { font-size: 10px; font-weight: 800; color: #94a3b8; margin: 0; }
         .action .card-label { color: rgba(255,255,255,0.7); }
-        .card-val { font-size: 14px; margin: 0; }
+        .card-val { font-size: 15px; margin: 0; }
 
-        /* LISTA */
-        .filter-area { display: flex; gap: 12px; margin-bottom: 20px; }
-        .search-pill { flex: 1; display: flex; align-items: center; gap: 10px; background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0 16px; height: 46px; }
+        .filter-area { display: flex; gap: 12px; margin-bottom: 24px; }
+        .search-pill { flex: 1; display: flex; align-items: center; gap: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 0 18px; height: 50px; }
         .search-pill input { border: none; outline: none; width: 100%; font-size: 14px; }
-        .sort-pill { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0 16px; height: 46px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        .sort-pill { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 0 18px; height: 50px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 10px; cursor: pointer; }
 
-        .list-stack { display: flex; flex-direction: column; gap: 8px; }
-        .s-row { background: white; border: 1px solid #f1f5f9; border-radius: 14px; padding: 16px 20px; display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; align-items: center; cursor: pointer; transition: 0.2s; }
-        .s-row:hover { border-color: #1f7a3a; transform: translateY(-1px); }
-        
+        .list-stack { display: flex; flex-direction: column; gap: 10px; }
+        .s-row { background: white; border: 1px solid #f1f5f9; border-radius: 16px; padding: 18px 24px; display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; align-items: center; cursor: pointer; transition: 0.2s; }
+        .s-row:hover { border-color: #1f7a3a; box-shadow: 0 4px 20px rgba(0,0,0,0.04); }
         .status-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
         .pill-green { background: #f0fdf4; color: #166534; }
         .pill-blue { background: #eff6ff; color: #1e40af; }
         .pill-gray { background: #f8fafc; color: #475569; }
 
-        /* MODAL (ESTILOS CLONADOS DEL DRAWER PERO PARA POPUP) */
-        .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 2000; }
-        .modal-content { background: white; width: 550px; border-radius: 24px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
-        .modal-header { padding: 24px 32px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: flex-start; }
-        .header-info h2 { margin: 0; font-size: 20px; font-weight: 800; color: #0f172a; }
-        .id-badge { display: inline-block; background: #f0fdf4; color: #166534; padding: 4px 10px; border-radius: 6px; font-family: monospace; font-size: 11px; font-weight: 700; border: 1px solid #dcfce7; margin-top: 8px; }
-        .modal-form { padding: 32px; background: #fcfcfd; }
-        .form-section { margin-bottom: 28px; }
-        .form-section h3 { font-size: 10px; color: #1f7a3a; letter-spacing: 0.1em; margin-bottom: 18px; font-weight: 900; display: flex; align-items: center; gap: 8px; border-left: 3px solid #1f7a3a; padding-left: 10px; }
+        /* MODAL OPTIMIZADO */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 20px; }
+        .modal-content { background: white; width: 600px; border-radius: 28px; max-height: 95vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+        .modal-header { padding: 32px 40px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: flex-start; }
+        .header-info h2 { margin: 0; font-size: 22px; font-weight: 900; color: #0f172a; }
+        .id-badge { display: inline-block; background: #f0fdf4; color: #166534; padding: 5px 12px; border-radius: 8px; font-family: monospace; font-size: 11px; font-weight: 800; border: 1px solid #dcfce7; margin-top: 10px; }
+        .modal-form { padding: 40px; background: #fcfcfd; }
+        .form-section { margin-bottom: 35px; }
+        .form-section h3 { font-size: 11px; color: #1f7a3a; letter-spacing: 0.12em; margin-bottom: 22px; font-weight: 900; display: flex; align-items: center; gap: 10px; border-left: 4px solid #1f7a3a; padding-left: 12px; }
         
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-        .logistic-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 15px; margin-bottom: 15px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .logistic-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
         
-        .input-group label { display: flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase; }
-        input, select { width: 100%; padding: 11px 14px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; color: #0f172a; background: white; }
-        input:focus, select:focus { border-color: #1f7a3a; outline: none; }
+        .input-group label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; color: #64748b; margin-bottom: 8px; text-transform: uppercase; }
         
-        .mode-selector { display: flex; background: #f1f5f9; padding: 4px; border-radius: 10px; gap: 4px; }
-        .mode-selector button { flex: 1; border: none; padding: 8px; border-radius: 7px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; color: #64748b; background: transparent; }
-        .mode-selector button.active { background: white; color: #1f7a3a; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        /* UNIFICACIÓN DE INPUTS Y SELECTS */
+        input, select, .mode-selector { 
+          width: 100%; 
+          box-sizing: border-box; 
+          height: 46px; /* Altura unificada */
+          border: 1.5px solid #e2e8f0; 
+          border-radius: 12px; 
+          font-size: 14px; 
+          color: #0f172a; 
+          background: white; 
+          padding: 0 14px;
+        }
         
-        .modal-footer { display: flex; gap: 12px; margin-top: 20px; }
-        .btn-submit { flex: 2; background: #1f7a3a; color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; }
-        .btn-submit.success { background: #16a34a; }
-        .btn-abort { flex: 1; background: #f1f5f9; border: none; border-radius: 12px; color: #64748b; font-weight: 600; cursor: pointer; }
+        input:focus, select:focus { border-color: #1f7a3a; outline: none; box-shadow: 0 0 0 3px rgba(31,122,58,0.05); }
+        
+        /* MODE SELECTOR CONSISTENCIA */
+        .mode-selector { display: flex; background: #f1f5f9; padding: 4px; border: none; height: 48px; }
+        .mode-selector button { 
+          flex: 1; border: none; border-radius: 10px; font-size: 12px; font-weight: 800; 
+          cursor: pointer; display: flex; align-items: center; justify-content: center; 
+          gap: 8px; color: #64748b; background: transparent; transition: 0.2s; 
+        }
+        .mode-selector button.active { background: white; color: #1f7a3a; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        
+        .modal-footer { display: flex; gap: 15px; margin-top: 25px; }
+        .btn-submit { flex: 2; background: #1f7a3a; color: white; border: none; padding: 16px; border-radius: 14px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 12px; }
+        .btn-abort { flex: 1; background: #f1f5f9; border: none; border-radius: 14px; color: #64748b; font-weight: 700; cursor: pointer; }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
