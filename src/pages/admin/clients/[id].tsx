@@ -1,11 +1,11 @@
 import { useRouter } from 'next/router';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
-import { AdminLayout } from '../../../components/AdminLayout';
+import { AdminLayout, notify } from '../../../components/AdminLayout';
 import { 
   Building2, MapPin, Ship, Mail, Phone, ArrowLeft, 
   Edit3, Loader2, Plus, FileText, 
-  Globe, Package, Clock, CheckCircle2, User, Info, FileUp, Save, X, Shield, ExternalLink, Hash
+  Globe, Package, Clock, CheckCircle2, User, Info, FileUp, Save, X, Shield, ExternalLink, Hash, Copy
 } from 'lucide-react';
 import Link from 'next/link';
 import ShipmentDrawer from '../../../components/ShipmentDrawer';
@@ -20,26 +20,19 @@ export default function ClientDetailPage() {
   const [shipments, setShipments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [openAcc, setOpenAcc] = useState<string | null>('fact');
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<any>({});
 
-  // ✅ Mejora: Función de carga optimizada para ser llamada desde el Drawer
   const fetchData = useCallback(async (clientId: string) => {
     try {
       const { data: clientData, error: cErr } = await supabase
         .from('clients').select('*').eq('id', clientId).maybeSingle();
-
       if (cErr) throw cErr;
 
       const { data: shipsRes, error: sErr } = await supabase
-        .from('shipments')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('created_at', { ascending: false });
-
+        .from('shipments').select('*').eq('client_id', clientId).order('created_at', { ascending: false });
       if (sErr) throw sErr;
 
       const fullClient = { 
@@ -53,7 +46,7 @@ export default function ClientDetailPage() {
       setEditData(fullClient);
       setShipments(shipsRes || []);
     } catch (e: any) {
-      console.error("Error fetching data:", e.message);
+      notify("Error cargando expediente", "error");
     } finally {
       setLoading(false);
     }
@@ -63,9 +56,9 @@ export default function ClientDetailPage() {
     if (router.isReady && id) fetchData(id as string);
   }, [id, router.isReady, fetchData]);
 
-  // ✅ Mejora: Handler para éxito del Drawer
   const handleShipmentSuccess = () => {
-    if (id) fetchData(id as string); // Refresco automático de la tabla
+    notify("Nuevo embarque creado", "success");
+    if (id) fetchData(id as string);
   };
 
   const handleLogoUpload = async (e: any) => {
@@ -73,21 +66,19 @@ export default function ClientDetailPage() {
       setUploading(true);
       const file = e.target.files[0];
       const fileExt = file.name.split('.').pop();
-      const fileName = `${id}-${Math.random()}.${fileExt}`;
+      const fileName = `${id}-${Date.now()}.${fileExt}`;
       const filePath = `logos/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('client-logos').upload(filePath, file);
-
+      const { error: uploadError } = await supabase.storage.from('client-logos').upload(filePath, file);
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('client-logos').getPublicUrl(filePath);
-
+      const { data: { publicUrl } } = supabase.storage.from('client-logos').getPublicUrl(filePath);
       await supabase.from('clients').update({ logo_url: publicUrl }).eq('id', id);
+      
       setClient({ ...client, logo_url: publicUrl });
+      notify("Logo actualizado", "success");
     } catch (err: any) {
-      alert("Error subiendo logo: " + err.message);
+      notify("Error subiendo imagen", "error");
     } finally {
       setUploading(false);
     }
@@ -95,218 +86,263 @@ export default function ClientDetailPage() {
 
   const saveClientData = async () => {
     try {
-      const payload = {
-        contact_email: editData.contact_email || '',
-        phone: editData.phone || '',
-        tax_id: editData.tax_id || '',
-        billing_address: editData.billing_address || '',
-        consignee_info: {
-            name: editData.consignee_info?.name || '',
-            address: editData.consignee_info?.address || ''
-        },
-        notify_party: {
-            name: editData.notify_party?.name || '',
-            address: editData.notify_party?.address || ''
-        },
-        default_incoterm: editData.default_incoterm || 'FOB'
-      };
-
-      const { error } = await supabase.from('clients').update(payload).eq('id', id);
+      const { error } = await supabase.from('clients').update({
+        contact_email: editData.contact_email,
+        phone: editData.phone,
+        tax_id: editData.tax_id,
+        billing_address: editData.billing_address,
+        consignee_info: editData.consignee_info,
+        notify_party: editData.notify_party,
+        default_incoterm: editData.default_incoterm
+      }).eq('id', id);
+      
       if (error) throw error;
-
       setClient({...editData});
       setIsEditing(false);
+      notify("Expediente actualizado", "success");
     } catch (err: any) {
-      alert("Error actualizando: " + err.message);
+      notify("Error al guardar cambios", "error");
     }
+  };
+
+  const copyId = () => {
+    navigator.clipboard.writeText(id as string);
+    notify("ID de cliente copiado", "success");
   };
 
   if (loading) return (
     <AdminLayout title="Cargando...">
-      <div className="loader-full"><Loader2 className="spin" size={40} /><p>Cargando expediente...</p></div>
+      <div className="loader-container">
+        <Loader2 className="spin-pro" size={48} />
+        <p>Sincronizando expediente...</p>
+      </div>
     </AdminLayout>
   );
 
   return (
-    <AdminLayout title={client?.name || "Detalle de Cliente"}>
-      <div className="page-wrapper">
+    <AdminLayout title={client?.name}>
+      <div className="view-container">
         
-        <header className="ops-header">
-          <div className="header-left">
-            <div className="avatar-wrapper">
-              {client.logo_url ? (
-                <img src={client.logo_url} alt="Logo" className="avatar-img" />
-              ) : (
-                <div className="avatar-placeholder"><Building2 size={32}/></div>
-              )}
-              <label className="avatar-edit-overlay">
-                <FileUp size={16}/>
-                <input type="file" hidden onChange={handleLogoUpload} accept="image/*" />
-              </label>
+        {/* TOP BAR: Contexto de Navegación */}
+        <div className="breadcrumb-nav">
+          <Link href="/admin/users" className="btn-back">
+            <ArrowLeft size={16} /> Volver al directorio
+          </Link>
+          <div className="quick-actions">
+            <button className="btn-ghost" onClick={copyId}><Copy size={14}/> ID: {String(id).slice(0,8)}</button>
+          </div>
+        </div>
+
+        {/* PROFILE HEADER */}
+        <header className="profile-header">
+          <div className="profile-main">
+            <div className="profile-logo-area">
+              <div className={`logo-box ${uploading ? 'is-uploading' : ''}`}>
+                {client.logo_url ? <img src={client.logo_url} alt="Logo" /> : <Building2 size={32} className="text-muted" />}
+                <label className="logo-overlay">
+                  {uploading ? <Loader2 className="spin-pro" /> : <FileUp size={20} />}
+                  <input type="file" hidden onChange={handleLogoUpload} accept="image/*" />
+                </label>
+              </div>
             </div>
-            <div className="client-titles">
-              <Link href="/admin/users" className="back-btn"><ArrowLeft size={16} /> Volver</Link>
-              <h1>{client.name} <span className="id-pill">RUC: {client.tax_id || '---'}</span></h1>
+            <div className="profile-info">
+              <div className="name-row">
+                <h1>{client.name}</h1>
+                <span className={`status-pill-lg ${shipments.length > 0 ? 'active' : 'new'}`}>
+                  {shipments.length > 0 ? 'Cliente Activo' : 'Nuevo Prospecto'}
+                </span>
+              </div>
+              <div className="meta-row">
+                <div className="meta-item"><Hash size={14}/> <span>RUC: {client.tax_id || 'Pendiente'}</span></div>
+                <div className="meta-item"><Globe size={14}/> <span>{client.country || 'Panamá'}</span></div>
+              </div>
             </div>
           </div>
+          
           <div className="header-actions">
             {!isEditing ? (
               <>
-                <button className="btn-secondary" onClick={() => setIsEditing(true)}><Edit3 size={16}/> Editar Perfil</button>
-                <button className="btn-primary" onClick={() => setIsDrawerOpen(true)}><Plus size={16}/> Nuevo Embarque</button>
+                <button className="ff-btn-white" onClick={() => setIsEditing(true)}><Edit3 size={16}/> Editar Perfil</button>
+                <button className="ff-btn ff-btn-primary shadow-lg" onClick={() => setIsDrawerOpen(true)}><Plus size={16}/> Nuevo Embarque</button>
               </>
             ) : (
-              <>
-                <button className="btn-cancel" onClick={() => setIsEditing(false)}><X size={16}/> Cancelar</button>
-                <button className="btn-save" onClick={saveClientData}><Save size={16}/> Guardar Cambios</button>
-              </>
+              <div className="editing-actions">
+                <button className="btn-text-danger" onClick={() => setIsEditing(false)}>Descartar</button>
+                <button className="ff-btn ff-btn-primary px-8" onClick={saveClientData}><Save size={16}/> Guardar Expediente</button>
+              </div>
             )}
           </div>
         </header>
 
-        <div className="kpi-grid">
-          <div className="kpi-card">
-            <div className="kpi-icon blue"><Package size={20}/></div>
-            <div className="kpi-data"><span>Embarques</span><strong>{shipments.length} Registrados</strong></div>
+        {/* KPI DASHBOARD */}
+        <div className="stats-strip">
+          <div className="stat-card">
+            <div className="stat-icon purple"><Package size={20}/></div>
+            <div className="stat-label">Total Embarques</div>
+            <div className="stat-value">{shipments.length}</div>
           </div>
-          <div className="kpi-card">
-            <div className="kpi-icon green"><Shield size={20}/></div>
-            <div className="kpi-data"><span>Incoterm Base</span><strong>{client.default_incoterm || 'FOB'}</strong></div>
+          <div className="stat-card">
+            <div className="stat-icon green"><Shield size={20}/></div>
+            <div className="stat-label">Incoterm Base</div>
+            <div className="stat-value">{client.default_incoterm}</div>
           </div>
-          <div className="kpi-card">
-            <div className="kpi-icon orange"><Clock size={20}/></div>
-            <div className="kpi-data"><span>Último Envío</span><strong>{shipments[0] ? new Date(shipments[0].created_at).toLocaleDateString() : 'N/A'}</strong></div>
+          <div className="stat-card">
+            <div className="stat-icon orange"><Clock size={20}/></div>
+            <div className="stat-label">Último Despacho</div>
+            <div className="stat-value">{shipments[0] ? new Date(shipments[0].created_at).toLocaleDateString() : '--/--/--'}</div>
           </div>
         </div>
 
-        <div className="main-grid">
-          <aside className="info-column">
-            <section className="glass-card">
-              <div className="card-label">Contacto y Fiscal</div>
-              <div className="form-group">
-                <label>Email</label>
-                <input disabled={!isEditing} value={isEditing ? editData.contact_email : client.contact_email} 
-                  onChange={e => setEditData({...editData, contact_email: e.target.value})} />
+        <div className="content-layout">
+          {/* LEFT COLUMN: Contacto */}
+          <section className="side-column">
+            <div className="glass-panel">
+              <h3 className="panel-title">Información de Contacto</h3>
+              <div className="field-group">
+                <label>Correo Electrónico</label>
+                <div className="input-box">
+                  <Mail size={14}/>
+                  <input disabled={!isEditing} value={isEditing ? editData.contact_email : client.contact_email} 
+                    onChange={e => setEditData({...editData, contact_email: e.target.value})} />
+                </div>
               </div>
-              <div className="form-group">
-                <label>Teléfono</label>
-                <input disabled={!isEditing} value={isEditing ? editData.phone : client.phone} 
-                  onChange={e => setEditData({...editData, phone: e.target.value})} />
+              <div className="field-group">
+                <label>Teléfono de Enlace</label>
+                <div className="input-box">
+                  <Phone size={14}/>
+                  <input disabled={!isEditing} value={isEditing ? editData.phone : client.phone} 
+                    onChange={e => setEditData({...editData, phone: e.target.value})} />
+                </div>
               </div>
-              <div className="form-group">
+              <div className="field-group">
                 <label>Incoterm Predeterminado</label>
-                <select 
-                  disabled={!isEditing} 
-                  value={isEditing ? editData.default_incoterm : client.default_incoterm}
-                  onChange={e => setEditData({...editData, default_incoterm: e.target.value})}
-                  className="select-custom"
-                >
+                <select disabled={!isEditing} value={isEditing ? editData.default_incoterm : client.default_incoterm}
+                  onChange={e => setEditData({...editData, default_incoterm: e.target.value})}>
                   {INCOTERMS.map(inc => <option key={inc} value={inc}>{inc}</option>)}
                 </select>
               </div>
-            </section>
+            </div>
 
-            <section className="glass-card mt-20">
-              <div className="card-label">Documentos Legales</div>
-              <div className="doc-list">
-                <div className="doc-item"><FileText size={14}/> <span>Aviso de Operación</span></div>
-                <div className="doc-item"><FileText size={14}/> <span>Pacto Social</span></div>
-                <button className="upload-btn"><FileUp size={12}/> Subir Archivo</button>
+            <div className="glass-panel mt-4">
+              <h3 className="panel-title">Documentación KYC</h3>
+              <div className="file-stack">
+                <div className="file-row"><FileText size={16} className="text-blue"/> <span>Registro Fiscal.pdf</span></div>
+                <div className="file-row"><FileText size={16} className="text-blue"/> <span>Pacto Social.pdf</span></div>
+                <button className="btn-add-file"><Plus size={14}/> Adjuntar documento</button>
               </div>
-            </section>
-          </aside>
+            </div>
+          </section>
 
-          <main className="table-column">
-            <div className="table-container">
-              <div className="table-header">
-                <h3>Últimos 5 Movimientos</h3>
-                <Link href={`/admin/shipments?client=${id}`} className="view-all-link">Ver todos <ExternalLink size={12}/></Link>
+          {/* CENTRAL COLUMN: Actividad */}
+          <main className="center-column">
+            <div className="data-panel">
+              <div className="panel-header">
+                <h3>Actividad Reciente</h3>
+                <Link href={`/admin/shipments?client=${id}`} className="link-pro">Ver historial completo <ExternalLink size={14}/></Link>
               </div>
-              <table className="pro-table">
-                <thead>
-                  <tr>
-                    <th>Código</th>
-                    <th>Producto / Variedad</th>
-                    <th>Destino</th>
-                    <th>Carga</th>
-                    <th>Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shipments.slice(0, 5).map(s => (
-                    <Link key={s.id} href={`/admin/shipments/${s.id}`} legacyBehavior>
-                        <tr className="clickable-row">
-                          <td className="bold text-green">{s.code}</td>
-                          <td>
-                            <div className="product-cell">
-                              <strong>{s.product_name}</strong>
-                              <span>{s.product_variety} {s.calibre && <small className="cal-tag">Cal: {s.calibre}</small>}</span>
-                            </div>
-                          </td>
-                          <td className="text-muted">{s.destination_port}</td>
-                          <td>
-                             <div className="charge-cell">
-                                <span>{s.boxes || 0} CX</span>
-                                <small>{s.weight || 0} Kg</small>
-                             </div>
-                          </td>
-                          <td><span className="status-pill">{s.status}</span></td>
-                        </tr>
-                    </Link>
-                  ))}
-                </tbody>
-              </table>
-              {shipments.length === 0 && <p className="empty-state">No hay embarques registrados.</p>}
+              
+              <div className="table-responsive">
+                <table className="pro-table-v2">
+                  <thead>
+                    <tr>
+                      <th>Embarque</th>
+                      <th>Producto</th>
+                      <th>Destino</th>
+                      <th className="txt-right">Volumen</th>
+                      <th>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shipments.slice(0, 5).map(s => (
+                      <tr key={s.id} onClick={() => router.push(`/admin/shipments/${s.id}`)} className="row-link">
+                        <td><span className="code-tag">{s.code}</span></td>
+                        <td>
+                          <div className="prod-info">
+                            <strong>{s.product_name}</strong>
+                            <small>{s.product_variety}</small>
+                          </div>
+                        </td>
+                        <td><div className="dest-info"><MapPin size={12}/> {s.destination_port}</div></td>
+                        <td className="txt-right">
+                          <div className="vol-info">
+                            <strong>{s.boxes || 0} CX</strong>
+                            <small>{s.weight || 0} KG</small>
+                          </div>
+                        </td>
+                        <td><span className={`status-pill-sm ${s.status.toLowerCase()}`}>{s.status}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {shipments.length === 0 && (
+                  <div className="empty-state-v2">
+                    <Ship size={40} />
+                    <p>No hay actividad registrada para este cliente</p>
+                    <button className="ff-btn ff-btn-primary btn-sm" onClick={() => setIsDrawerOpen(true)}>Crear primer embarque</button>
+                  </div>
+                )}
+              </div>
             </div>
           </main>
 
-          <aside className="info-column">
-             <div className="glass-card">
-                <div className="card-label">Datos Logísticos Fijos</div>
-                <div className={`accordion ${openAcc === 'fact' ? 'active' : ''}`}>
-                   <button onClick={() => setOpenAcc('fact')}><Building2 size={14}/> Facturación</button>
-                   <div className="acc-body">
-                      {isEditing ? (
-                        <textarea value={editData.billing_address} onChange={e => setEditData({...editData, billing_address: e.target.value})} />
-                      ) : ( <p>{client.billing_address || 'No definida'}</p> )}
-                   </div>
+          {/* RIGHT COLUMN: Logística */}
+          <section className="side-column">
+            <div className="glass-panel logistics-panel">
+              <h3 className="panel-title">Instrucciones Logísticas</h3>
+              
+              {/* Facturación */}
+              <div className={`acc-item ${openAcc === 'fact' ? 'is-open' : ''}`}>
+                <button className="acc-trigger" onClick={() => setOpenAcc(openAcc === 'fact' ? null : 'fact')}>
+                  <Building2 size={16}/> Facturación
+                </button>
+                <div className="acc-content">
+                  {isEditing ? (
+                    <textarea placeholder="Dirección legal..." value={editData.billing_address} onChange={e => setEditData({...editData, billing_address: e.target.value})} />
+                  ) : ( <p>{client.billing_address || 'Sin dirección registrada'}</p> )}
                 </div>
+              </div>
 
-                <div className={`accordion ${openAcc === 'cons' ? 'active' : ''}`}>
-                   <button onClick={() => setOpenAcc('cons')}><User size={14}/> Consignatario</button>
-                   <div className="acc-body">
-                      {isEditing ? (
-                        <div className="edit-substack">
-                          <input value={editData.consignee_info?.name || ''} onChange={e => setEditData({...editData, consignee_info: {...editData.consignee_info, name: e.target.value}})} placeholder="Nombre..." />
-                          <textarea value={editData.consignee_info?.address || ''} onChange={e => setEditData({...editData, consignee_info: {...editData.consignee_info, address: e.target.value}})} placeholder="Dirección..." />
-                        </div>
-                      ) : (
-                        <div className="view-sub">
-                          <strong>{client.consignee_info?.name || 'Falta Nombre'}</strong>
-                          <p>{client.consignee_info?.address || 'Falta Dirección'}</p>
-                        </div>
-                      )}
-                   </div>
+              {/* Consignatario */}
+              <div className={`acc-item ${openAcc === 'cons' ? 'is-open' : ''}`}>
+                <button className="acc-trigger" onClick={() => setOpenAcc(openAcc === 'cons' ? null : 'cons')}>
+                  <User size={16}/> Consignatario
+                </button>
+                <div className="acc-content">
+                  {isEditing ? (
+                    <div className="edit-box-sm">
+                      <input placeholder="Nombre..." value={editData.consignee_info?.name} onChange={e => setEditData({...editData, consignee_info: {...editData.consignee_info, name: e.target.value}})} />
+                      <textarea placeholder="Dirección..." value={editData.consignee_info?.address} onChange={e => setEditData({...editData, consignee_info: {...editData.consignee_info, address: e.target.value}})} />
+                    </div>
+                  ) : (
+                    <div className="view-box-sm">
+                      <strong>{client.consignee_info?.name || 'Pendiente'}</strong>
+                      <p>{client.consignee_info?.address || 'Pendiente'}</p>
+                    </div>
+                  )}
                 </div>
+              </div>
 
-                <div className={`accordion ${openAcc === 'notify' ? 'active' : ''}`}>
-                   <button onClick={() => setOpenAcc('notify')}><Info size={14}/> Notify Party</button>
-                   <div className="acc-body">
-                      {isEditing ? (
-                        <div className="edit-substack">
-                          <input value={editData.notify_party?.name || ''} onChange={e => setEditData({...editData, notify_party: {...editData.notify_party, name: e.target.value}})} placeholder="Nombre..." />
-                          <textarea value={editData.notify_party?.address || ''} onChange={e => setEditData({...editData, notify_party: {...editData.notify_party, address: e.target.value}})} placeholder="Dirección..." />
-                        </div>
-                      ) : (
-                        <div className="view-sub">
-                          <strong>{client.notify_party?.name || '---'}</strong>
-                          <p>{client.notify_party?.address || '---'}</p>
-                        </div>
-                      )}
-                   </div>
+              {/* Notify Party */}
+              <div className={`acc-item ${openAcc === 'notify' ? 'is-open' : ''}`}>
+                <button className="acc-trigger" onClick={() => setOpenAcc(openAcc === 'notify' ? null : 'notify')}>
+                  <Info size={16}/> Notify Party
+                </button>
+                <div className="acc-content">
+                  {isEditing ? (
+                    <div className="edit-box-sm">
+                      <input placeholder="Nombre..." value={editData.notify_party?.name} onChange={e => setEditData({...editData, notify_party: {...editData.notify_party, name: e.target.value}})} />
+                      <textarea placeholder="Dirección..." value={editData.notify_party?.address} onChange={e => setEditData({...editData, notify_party: {...editData.notify_party, address: e.target.value}})} />
+                    </div>
+                  ) : (
+                    <div className="view-box-sm">
+                      <strong>{client.notify_party?.name || 'Mismo que consignatario'}</strong>
+                      <p>{client.notify_party?.address || '---'}</p>
+                    </div>
+                  )}
                 </div>
-             </div>
-          </aside>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
 
@@ -315,71 +351,98 @@ export default function ClientDetailPage() {
         onClose={() => setIsDrawerOpen(false)}
         clientId={id as string} 
         clientName={client.name}
-        onSuccess={handleShipmentSuccess} // ✅ Refresco automático al crear
+        onSuccess={handleShipmentSuccess}
         defaultIncoterm={client.default_incoterm}
       />
 
       <style jsx>{`
-        .page-wrapper { padding: 25px; max-width: 1440px; margin: 0 auto; background: #f8fafc; min-height: 100vh; }
-        .ops-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-        .header-left { display: flex; align-items: center; gap: 20px; }
-        .avatar-wrapper { position: relative; width: 85px; height: 85px; border-radius: 22px; background: white; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; }
-        .avatar-img { width: 100%; height: 100%; object-fit: contain; padding: 10px; }
-        .avatar-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #cbd5e1; }
-        .avatar-edit-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.4); color: white; display: flex; align-items: center; justify-content: center; opacity: 0; transition: 0.2s; cursor: pointer; }
-        .avatar-wrapper:hover .avatar-edit-overlay { opacity: 1; }
-        .client-titles h1 { font-size: 26px; font-weight: 800; margin: 0; color: #0f172a; }
-        .id-pill { font-size: 12px; font-weight: 600; color: #64748b; background: #f1f5f9; padding: 3px 10px; border-radius: 6px; margin-left: 10px; }
-        .back-btn { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #94a3b8; text-decoration: none; margin-bottom: 5px; }
-        .header-actions { display: flex; gap: 10px; }
-        .btn-primary { background: #1f7a3a; color: white; border: none; padding: 12px 20px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-        .btn-secondary { background: white; border: 1px solid #e2e8f0; padding: 12px 20px; border-radius: 12px; font-weight: 600; color: #475569; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-        .btn-save { background: #1f7a3a; color: white; border: none; padding: 12px 20px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-        .btn-cancel { background: #fff1f2; color: #e11d48; border: none; padding: 12px 20px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-        .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 25px; }
-        .kpi-card { background: white; padding: 18px; border-radius: 18px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 15px; }
-        .kpi-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
-        .kpi-icon.blue { background: #eff6ff; color: #2563eb; }
-        .kpi-icon.green { background: #f0fdf4; color: #16a34a; }
-        .kpi-icon.orange { background: #fff7ed; color: #ea580c; }
-        .kpi-data span { font-size: 11px; color: #94a3b8; font-weight: 700; text-transform: uppercase; }
-        .kpi-data strong { display: block; font-size: 15px; color: #0f172a; }
-        .main-grid { display: grid; grid-template-columns: 300px 1fr 300px; gap: 20px; }
-        .glass-card { background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 22px; }
-        .card-label { font-size: 11px; font-weight: 800; color: #1f7a3a; text-transform: uppercase; margin-bottom: 20px; letter-spacing: 0.05em; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 5px; }
-        input, textarea, .select-custom { width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; background: ${isEditing ? '#fff' : '#f8fafc'}; }
-        textarea { min-height: 80px; resize: none; }
-        .mt-20 { margin-top: 20px; }
-        .doc-list { display: flex; flex-direction: column; gap: 10px; }
-        .doc-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #475569; padding: 8px; background: #f8fafc; border-radius: 6px; }
-        .upload-btn { border: 1px dashed #cbd5e1; background: #f8fafc; color: #64748b; padding: 8px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
-        .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .view-all-link { font-size: 12px; color: #1f7a3a; font-weight: 600; display: flex; align-items: center; gap: 4px; text-decoration: none; }
-        .pro-table { width: 100%; border-collapse: collapse; }
-        .pro-table th { text-align: left; padding: 12px 15px; font-size: 11px; color: #94a3b8; text-transform: uppercase; border-bottom: 1px solid #f1f5f9; }
-        .pro-table td { padding: 15px; border-bottom: 1px solid #f8fafc; font-size: 13px; }
-        .clickable-row { cursor: pointer; transition: 0.2s; }
-        .clickable-row:hover { background: #f0fdf4; }
-        .product-cell { display: flex; flex-direction: column; }
-        .product-cell strong { color: #0f172a; }
-        .product-cell span { font-size: 11px; color: #64748b; }
-        .cal-tag { background: #f1f5f9; padding: 1px 4px; border-radius: 4px; color: #475569; font-weight: 700; }
-        .charge-cell { display: flex; flex-direction: column; }
-        .charge-cell span { font-weight: 700; color: #1e293b; }
-        .charge-cell small { font-size: 10px; color: #94a3b8; }
-        .status-pill { background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 20px; font-weight: 700; font-size: 11px; }
-        .empty-state { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
-        .accordion { border-bottom: 1px solid #f1f5f9; }
-        .accordion button { width: 100%; padding: 14px 0; border: none; background: none; display: flex; align-items: center; gap: 10px; font-weight: 700; color: #334155; cursor: pointer; text-align: left; font-size: 13px; }
-        .acc-body { max-height: 0; overflow: hidden; transition: 0.3s; color: #64748b; font-size: 12px; }
-        .accordion.active .acc-body { max-height: 250px; padding-bottom: 15px; }
-        .edit-substack { display: flex; flex-direction: column; gap: 8px; }
-        .view-sub strong { color: #0f172a; display: block; margin-bottom: 4px; }
-        .loader-full { height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; }
-        .spin { animation: spin 1s linear infinite; color: #1f7a3a; }
+        .view-container { padding: 30px; max-width: 1600px; margin: 0 auto; color: #1e293b; }
+        
+        /* NAVIGATION */
+        .breadcrumb-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .btn-back { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #64748b; text-decoration: none; transition: 0.2s; }
+        .btn-back:hover { color: #1f7a3a; }
+        .btn-ghost { background: #f1f5f9; border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; color: #64748b; cursor: pointer; }
+
+        /* HEADER */
+        .profile-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 35px; background: white; padding: 25px; border-radius: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; }
+        .profile-main { display: flex; align-items: center; gap: 25px; }
+        .logo-box { width: 90px; height: 90px; background: #f8fafc; border-radius: 20px; border: 1px solid #e2e8f0; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        .logo-box img { width: 100%; height: 100%; object-fit: contain; padding: 12px; }
+        .logo-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); color: white; display: flex; align-items: center; justify-content: center; opacity: 0; transition: 0.2s; cursor: pointer; }
+        .logo-box:hover .logo-overlay { opacity: 1; }
+        .is-uploading .logo-overlay { opacity: 1; background: rgba(255,255,255,0.8); color: #1f7a3a; }
+
+        .name-row { display: flex; align-items: center; gap: 15px; margin-bottom: 8px; }
+        .name-row h1 { font-size: 28px; font-weight: 900; margin: 0; letter-spacing: -0.02em; }
+        .status-pill-lg { font-size: 11px; font-weight: 800; padding: 4px 12px; border-radius: 20px; text-transform: uppercase; }
+        .status-pill-lg.active { background: #dcfce7; color: #15803d; }
+        .status-pill-lg.new { background: #eff6ff; color: #1d4ed8; }
+        
+        .meta-row { display: flex; gap: 20px; }
+        .meta-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #64748b; font-weight: 500; }
+
+        /* STATS */
+        .stats-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: white; padding: 20px; border-radius: 20px; border: 1px solid #f1f5f9; display: flex; flex-direction: column; gap: 4px; position: relative; overflow: hidden; }
+        .stat-icon { position: absolute; right: 20px; top: 20px; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+        .stat-icon.purple { background: #faf5ff; color: #7e22ce; }
+        .stat-icon.green { background: #f0fdf4; color: #15803d; }
+        .stat-icon.orange { background: #fff7ed; color: #c2410c; }
+        .stat-label { font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+        .stat-value { font-size: 24px; font-weight: 900; color: #1e293b; }
+
+        /* CONTENT LAYOUT */
+        .content-layout { display: grid; grid-template-columns: 320px 1fr 320px; gap: 25px; }
+        .glass-panel { background: white; border: 1px solid #f1f5f9; border-radius: 24px; padding: 24px; }
+        .panel-title { font-size: 13px; font-weight: 800; color: #1f7a3a; text-transform: uppercase; margin-bottom: 20px; display: flex; justify-content: space-between; }
+        
+        .field-group { margin-bottom: 18px; }
+        .field-group label { display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 6px; text-transform: uppercase; }
+        .input-box { display: flex; align-items: center; gap: 10px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 0 12px; border-radius: 10px; transition: 0.2s; }
+        .input-box:focus-within { border-color: #1f7a3a; background: white; box-shadow: 0 0 0 3px rgba(31,122,58,0.1); }
+        .input-box input { border: none; background: transparent; padding: 10px 0; font-size: 13px; font-weight: 600; width: 100%; outline: none; }
+        .input-box :global(svg) { color: #94a3b8; }
+        
+        select { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 13px; font-weight: 600; outline: none; }
+
+        /* TABLE ACTIVIDAD */
+        .data-panel { background: white; border-radius: 24px; border: 1px solid #f1f5f9; overflow: hidden; }
+        .panel-header { padding: 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; }
+        .panel-header h3 { font-size: 16px; font-weight: 800; margin: 0; }
+        .link-pro { font-size: 12px; font-weight: 700; color: #1f7a3a; text-decoration: none; display: flex; align-items: center; gap: 6px; }
+
+        .pro-table-v2 { width: 100%; border-collapse: collapse; }
+        .pro-table-v2 th { text-align: left; padding: 15px 24px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; background: #fafafa; }
+        .pro-table-v2 td { padding: 18px 24px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+        .row-link { cursor: pointer; transition: 0.2s; }
+        .row-link:hover { background: #f8fafc; }
+
+        .code-tag { background: #f1f5f9; padding: 4px 8px; border-radius: 6px; font-family: monospace; font-weight: 800; color: #1f7a3a; }
+        .prod-info { display: flex; flex-direction: column; }
+        .prod-info strong { color: #1e293b; }
+        .prod-info small { color: #64748b; font-size: 11px; }
+        .dest-info { display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 12px; font-weight: 500; }
+        .status-pill-sm { padding: 4px 10px; border-radius: 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+        .status-pill-sm.confirmado { background: #dcfce7; color: #166534; }
+
+        /* LOGISTICS ACCORDION */
+        .acc-item { border-bottom: 1px solid #f1f5f9; }
+        .acc-trigger { width: 100%; padding: 15px 0; border: none; background: none; display: flex; align-items: center; gap: 12px; font-weight: 700; color: #475569; cursor: pointer; font-size: 14px; }
+        .acc-content { max-height: 0; overflow: hidden; transition: 0.3s; color: #64748b; font-size: 13px; }
+        .is-open .acc-content { max-height: 300px; padding-bottom: 20px; }
+        
+        textarea { width: 100%; min-height: 80px; padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 13px; resize: none; outline: none; }
+        .edit-box-sm { display: flex; flex-direction: column; gap: 10px; }
+        .edit-box-sm input { padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 13px; }
+        
+        /* UTILS */
+        .loader-container { height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
+        .spin-pro { animation: spin 1s linear infinite; color: #1f7a3a; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .btn-text-danger { background: none; border: none; color: #e11d48; font-weight: 700; font-size: 14px; cursor: pointer; padding: 0 20px; }
+        .empty-state-v2 { padding: 60px 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 15px; color: #cbd5e1; }
+        .empty-state-v2 p { color: #94a3b8; font-weight: 500; }
       `}</style>
     </AdminLayout>
   );

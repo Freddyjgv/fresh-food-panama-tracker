@@ -1,10 +1,21 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/router";
 import { 
-  Plus, X, Mail, Phone, Trash2, CheckCircle, Edit3, Loader2, Send
+  Plus, X, Mail, Phone, Trash2, Edit3, Loader2, Send, Search, Copy, User, Globe, Building2
 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
-import { AdminLayout, notify } from "../../components/AdminLayout"; // ✅ Importamos notify
+import { AdminLayout, notify } from "../../components/AdminLayout";
+
+// --- HELPERS SENIOR ---
+const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+const generateColor = (name: string) => {
+  const colors = ['#eff6ff', '#f0fdf4', '#fff7ed', '#faf5ff', '#fdf2f8'];
+  const textColors = ['#1e40af', '#166534', '#9a3412', '#6b21a8', '#9d174d'];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  const index = Math.abs(hash % colors.length);
+  return { bg: colors[index], text: textColors[index] };
+};
 
 export default function AdminUsersPage() {
   const router = useRouter();
@@ -13,256 +24,249 @@ export default function AdminUsersPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [dataList, setDataList] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState(""); // Filtro real-time
   const [invitingId, setInvitingId] = useState<string | null>(null);
   const tokenRef = useRef<string | null>(null);
 
   const initialForm = {
-    id: null,
-    name: "", 
-    legal_name: "", 
-    tax_id: "", 
-    email_corp: "", 
-    phone_corp: "", 
-    country_origin: "Panamá", 
-    payment_condition: "Prepagado", 
-    billing_address: "",
-    website: "",
-    shipping_addresses: [{ id: Date.now(), address: "" }],
-    staff_name: "", 
-    staff_email: "", 
-    staff_role: "admin"
+    id: null, name: "", legal_name: "", tax_id: "", email_corp: "", phone_corp: "", 
+    country_origin: "Panamá", payment_condition: "Prepagado", billing_address: "",
+    website: "", shipping_addresses: [{ id: Date.now(), address: "" }],
+    staff_name: "", staff_email: "", staff_role: "admin"
   };
   
   const [f, setF] = useState(initialForm);
 
-  const getAuthToken = async () => {
-    if (tokenRef.current) return tokenRef.current;
-    const { data: { session } } = await supabase.auth.getSession();
-    tokenRef.current = session?.access_token || null;
-    return tokenRef.current;
-  };
-
+  // --- LÓGICA DE DATOS ---
   const loadData = async () => {
     setLoading(true);
     try {
-      const token = await getAuthToken();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
       const endpoint = activeTab === 'clients' ? '/.netlify/functions/listClients' : '/.netlify/functions/listUsers';
       const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       setDataList(data.items || []);
-    } catch (e) { console.error("Error:", e); }
-    setLoading(false);
+    } catch (e) { notify("Error al cargar datos", "error"); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => { loadData(); }, [activeTab]);
 
-  const handleActivateProspect = async (item: any) => {
-    const email = item.contact_email || item.email;
-    if (!email) return notify("El cliente no tiene un email asignado", "error");
+  // Filtro dinámico optimizado
+  const filteredData = useMemo(() => {
+    return dataList.filter(item => {
+      const search = searchQuery.toLowerCase();
+      const name = (item.name || item.full_name || "").toLowerCase();
+      const email = (item.contact_email || item.email || "").toLowerCase();
+      const ruc = (item.tax_id || "").toLowerCase();
+      return name.includes(search) || email.includes(search) || ruc.includes(search);
+    });
+  }, [dataList, searchQuery]);
 
-    if (!confirm(`¿Activar acceso para ${item.name}?`)) return;
-
-    setInvitingId(item.id);
-    try {
-      const token = await getAuthToken();
-      const res = await fetch('/.netlify/functions/inviteUser', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ email, full_name: item.name, role: 'client', client_id: item.id })
-      });
-
-      if (res.ok) {
-        notify(`Invitación enviada a ${email}`, "success");
-        loadData();
-      } else {
-        const err = await res.json();
-        notify(err.message, "error");
-      }
-    } catch (e) { notify("Error de conexión", "error"); }
-    finally { setInvitingId(null); }
+  // --- ACCIONES ---
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    notify("Copiado al portapapeles", "success");
   };
 
-  const openEdit = (item: any) => {
-    setF({
-      ...initialForm,
-      id: item.id,
-      name: item.name || "",
-      legal_name: item.legal_name || "",
-      tax_id: item.tax_id || "",
-      email_corp: item.contact_email || item.email || "",
-      phone_corp: item.phone || "",
-      country_origin: item.country || "Panamá",
-      payment_condition: item.payment_condition || "Prepagado",
-      billing_address: item.billing_address || "",
-      website: item.website || "",
-      shipping_addresses: (item.shipping_addresses?.length > 0)
-        ? item.shipping_addresses.map((sa: any) => ({ id: sa.id, address: sa.address }))
-        : [{ id: Date.now(), address: "" }],
-      staff_name: item.full_name || "",
-      staff_email: item.email || "",
-      staff_role: item.role || "admin"
-    });
-    setIsDrawerOpen(true);
+  const handleActivateProspect = async (item: any) => {
+    const email = item.contact_email || item.email;
+    if (!email) return notify("Email no encontrado", "error");
+    setInvitingId(item.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/.netlify/functions/inviteUser', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ email, full_name: item.name, role: 'client', client_id: item.id })
+      });
+      if (res.ok) { notify("Acceso activado correctamente", "success"); loadData(); }
+      else { notify("Error al activar", "error"); }
+    } catch (e) { notify("Error de red", "error"); }
+    finally { setInvitingId(null); }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      const token = await getAuthToken();
+      const { data: { session } } = await supabase.auth.getSession();
       const endpoint = activeTab === 'clients' ? "/.netlify/functions/manageClient" : "/.netlify/functions/inviteUser";
-      
       const payload = activeTab === 'clients' 
         ? { ...f, shipping_addresses: f.shipping_addresses.filter((a: any) => a.address.trim() !== "") }
         : { email: f.staff_email, full_name: f.staff_name, role: f.staff_role, id: f.id };
 
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify(payload)
       });
-
-      if (res.ok) {
-        notify(f.id ? "Cambios guardados" : "Registro creado con éxito", "success");
-        setIsDrawerOpen(false);
-        loadData();
-      } else {
-        const err = await res.json();
-        notify(err.message, "error");
-      }
-    } catch (err) { notify("Error al guardar", "error"); }
+      if (res.ok) { notify("Registro actualizado", "success"); setIsDrawerOpen(false); loadData(); }
+      else { notify("Error al guardar", "error"); }
+    } catch (err) { notify("Error de red", "error"); }
     finally { setIsSaving(false); }
   };
 
   return (
-    <AdminLayout title="Directorio" subtitle="Administración de Clientes y Equipo">
+    <AdminLayout title="Directorio" subtitle="Gestión centralizada de identidades">
       
-      <div className="tabs">
-        <button className={activeTab === 'clients' ? 'active' : ''} onClick={() => setActiveTab('clients')}>Clientes</button>
-        <button className={activeTab === 'staff' ? 'active' : ''} onClick={() => setActiveTab('staff')}>Staff Interno</button>
+      {/* HEADER TOOLS: Estilo Stripe */}
+      <div className="directory-header">
+        <div className="tabs-container">
+          <div className="tabs">
+            <button className={activeTab === 'clients' ? 'active' : ''} onClick={() => setActiveTab('clients')}>
+              Clientes <span className="tab-count">{activeTab === 'clients' ? filteredData.length : '...'}</span>
+            </button>
+            <button className={activeTab === 'staff' ? 'active' : ''} onClick={() => setActiveTab('staff')}>
+              Staff Interno <span className="tab-count">{activeTab === 'staff' ? filteredData.length : '...'}</span>
+            </button>
+          </div>
+        </div>
+        
+        <div className="actions-bar">
+          <div className="search-wrapper">
+            <Search size={16} className="search-icon" />
+            <input 
+              type="text" 
+              placeholder={`Buscar en ${activeTab}...`} 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <button className="ff-btn ff-btn-primary shadow-sm" onClick={() => { setF(initialForm); setIsDrawerOpen(true); }}>
+            <Plus size={18} /> {activeTab === 'clients' ? 'Nuevo Cliente' : 'Añadir Staff'}
+          </button>
+        </div>
       </div>
 
-      <div className="toolbar">
-        <button className="ff-btn ff-btn-primary" onClick={() => { setF(initialForm); setIsDrawerOpen(true); }}>
-          <Plus size={18} /> {activeTab === 'clients' ? 'Nuevo Cliente' : 'Invitar Staff'}
-        </button>
-      </div>
-
-      <div className="ff-card">
-        <table className="pro-table">
+      <div className="ff-card overflow-hidden border-none shadow-md">
+        <table className="pro-table modern">
           <thead>
             {activeTab === 'clients' ? (
-              <tr><th>CLIENTE</th><th>CONTACTO</th><th>ESTADO</th><th>ACCIONES</th></tr>
+              <tr><th>IDENTIDAD</th><th>DETALLES DE CONTACTO</th><th>ESTADO</th><th className="txt-right">ACCIONES</th></tr>
             ) : (
-              <tr><th>NOMBRE</th><th>EMAIL</th><th>ROL</th><th>ESTADO</th></tr>
+              <tr><th>COLABORADOR</th><th>EMAIL INSTITUCIONAL</th><th>ROL</th><th>ACCESO</th></tr>
             )}
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={4} className="loading-td"><Loader2 className="animate-spin" /> Cargando...</td></tr>
-            ) : dataList.map(item => (
-              <tr key={item.id} className="row-hover">
-                {activeTab === 'clients' ? (
-                  <>
-                    <td onClick={() => router.push(`/admin/clients/${item.id}`)} className="ptr">
-                      <div className="client-cell">
-                        <strong>{item.name}</strong>
-                        <small>{item.tax_id || 'PROSPECTO'}</small>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="contact-info">
-                        <span><Mail size={12}/> {item.contact_email}</span>
-                        <span><Phone size={12}/> {item.phone || '---'}</span>
-                      </div>
-                    </td>
-                    <td>
-                      {item.has_platform_access ? 
-                        <span className="badge-ok">Activo</span> : 
-                        <span className="badge-wait">Prospecto</span>
-                      }
-                    </td>
-                    <td className="actions">
-                      <div className="action-row">
-                        {!item.has_platform_access && (
-                           <button 
-                             className="btn-activate" 
-                             onClick={(e) => { e.stopPropagation(); handleActivateProspect(item); }}
-                             disabled={invitingId === item.id}
-                           >
-                             {invitingId === item.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                             <span>{invitingId === item.id ? "" : "Activar"}</span>
-                           </button>
-                        )}
-                        <button className="btnEdit" onClick={(e) => { e.stopPropagation(); openEdit(item); }}>
-                          <Edit3 size={16}/>
-                        </button>
-                      </div>
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td><strong>{item.full_name}</strong></td>
-                    <td>{item.email}</td>
-                    <td><span className="role-tag">{item.role}</span></td>
-                    <td>{item.confirmed_at ? <span className="badge-ok">Activo</span> : <span className="badge-wait">Pendiente</span>}</td>
-                  </>
-                )}
-              </tr>
-            ))}
+              <tr><td colSpan={4} className="loading-td"><Loader2 className="animate-spin" /></td></tr>
+            ) : filteredData.length === 0 ? (
+              <tr><td colSpan={4} className="empty-td text-center py-10">No se encontraron registros.</td></tr>
+            ) : filteredData.map(item => {
+              const name = item.name || item.full_name || "Sin nombre";
+              const style = generateColor(name);
+              return (
+                <tr key={item.id} className="row-hover">
+                  {activeTab === 'clients' ? (
+                    <>
+                      <td onClick={() => router.push(`/admin/clients/${item.id}`)} className="ptr">
+                        <div className="identity-cell">
+                          <div className="avatar" style={{ backgroundColor: style.bg, color: style.text }}>{getInitials(name)}</div>
+                          <div className="info">
+                            <span className="name-link">{name}</span>
+                            <small className="tax-id">{item.tax_id || 'ID NO ASIGNADO'}</small>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="contact-details">
+                          <div className="detail-item clickable" onClick={() => copyToClipboard(item.contact_email)}>
+                            <Mail size={12}/> {item.contact_email}
+                          </div>
+                          <div className="detail-item">
+                            <Phone size={12}/> {item.phone || 'N/A'}
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span className={item.has_platform_access ? "badge-pro active" : "badge-pro prospect"}>
+                          {item.has_platform_access ? "Activo" : "Prospecto"}
+                        </span>
+                      </td>
+                      <td className="actions txt-right">
+                        <div className="flex-end gap-2">
+                          {!item.has_platform_access && (
+                             <button className="btn-icon-label" onClick={() => handleActivateProspect(item)} disabled={invitingId === item.id}>
+                               {invitingId === item.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                               <span>Activar</span>
+                             </button>
+                          )}
+                          <button className="btn-circle" onClick={() => { setF({...initialForm, ...item, email_corp: item.contact_email}); setIsDrawerOpen(true); }}>
+                            <Edit3 size={15}/>
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td>
+                        <div className="identity-cell">
+                          <div className="avatar" style={{ backgroundColor: style.bg, color: style.text }}>{getInitials(name)}</div>
+                          <strong>{name}</strong>
+                        </div>
+                      </td>
+                      <td>{item.email}</td>
+                      <td><span className="role-pill">{item.role}</span></td>
+                      <td>{item.confirmed_at ? <span className="status-dot online">Activo</span> : <span className="status-dot offline">Pendiente</span>}</td>
+                    </>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
+      {/* DRAWER OPTIMIZADO */}
       {isDrawerOpen && (
         <>
           <div className="overlay" onClick={() => setIsDrawerOpen(false)} />
-          <div className="drawer">
+          <div className="drawer modern-drawer">
             <div className="d-header">
-              <h3>{f.id ? 'Editar Registro' : 'Nuevo Registro'}</h3>
-              <X className="ptr" onClick={() => setIsDrawerOpen(false)} />
+              <div className="d-title">
+                <Building2 size={20} className="text-muted" />
+                <h3>{f.id ? 'Editar Perfil' : 'Nuevo Registro'}</h3>
+              </div>
+              <button className="btn-close" onClick={() => setIsDrawerOpen(false)}><X size={20}/></button>
             </div>
 
             <form className="d-body" onSubmit={handleSave}>
-              {activeTab === 'clients' ? (
-                <>
-                  <div className="group">
-                    <label>DATOS FISCALES</label>
-                    <input required placeholder="Nombre Comercial" value={f.name} onChange={e=>setF({...f, name:e.target.value})} />
+              <div className="form-grid">
+                <div className="group full">
+                  <label>INFORMACIÓN GENERAL</label>
+                  <input required placeholder="Nombre Comercial" value={f.name} onChange={e=>setF({...f, name:e.target.value})} />
+                  <div className="input-row">
                     <input placeholder="Razón Social" value={f.legal_name} onChange={e=>setF({...f, legal_name:e.target.value})} />
                     <input placeholder="RUC / Tax ID" value={f.tax_id} onChange={e=>setF({...f, tax_id:e.target.value})} />
                   </div>
-                  <div className="group">
-                    <label>CONTACTO CORPORATIVO</label>
-                    <input required type="email" placeholder="Email" value={f.email_corp} onChange={e=>setF({...f, email_corp:e.target.value})} />
+                </div>
+
+                <div className="group">
+                  <label>DATOS DE CONTACTO</label>
+                  <div className="input-with-icon">
+                    <Mail size={14} />
+                    <input required type="email" placeholder="Email Corporativo" value={f.email_corp} onChange={e=>setF({...f, email_corp:e.target.value})} />
+                  </div>
+                  <div className="input-with-icon">
+                    <Phone size={14} />
                     <input placeholder="Teléfono" value={f.phone_corp} onChange={e=>setF({...f, phone_corp:e.target.value})} />
                   </div>
-                  <div className="group">
-                    <label>SHIPPING (DIRECCIONES)</label>
-                    {f.shipping_addresses.map((s: any, i: number) => (
-                      <div key={s.id} className="row-input">
-                        <input placeholder={`Dirección #${i+1}`} value={s.address} onChange={e => {
-                          const ns = [...f.shipping_addresses]; ns[i].address = e.target.value; setF({...f, shipping_addresses: ns});
-                        }} />
-                        <button type="button" onClick={() => setF({...f, shipping_addresses: f.shipping_addresses.filter((x:any)=>x.id!==s.id)})} className="btnDel"><Trash2 size={14}/></button>
-                      </div>
-                    ))}
-                    <button type="button" className="btn-add" onClick={() => setF({...f, shipping_addresses: [...f.shipping_addresses, {id:Date.now(), address:""}]})}>+ Añadir</button>
-                  </div>
-                </>
-              ) : (
+                </div>
+
                 <div className="group">
-                  <label>DATOS STAFF</label>
-                  <input required placeholder="Nombre" value={f.staff_name} onChange={e=>setF({...f, staff_name:e.target.value})} />
-                  <input required placeholder="Email" value={f.staff_email} onChange={e=>setF({...f, staff_email:e.target.value})} />
-                  <select value={f.staff_role} onChange={e=>setF({...f, staff_role:e.target.value})}>
-                    <option value="admin">Admin</option>
-                    <option value="operaciones">Operaciones</option>
+                  <label>CONDICIONES</label>
+                  <select value={f.payment_condition} onChange={e=>setF({...f, payment_condition:e.target.value})}>
+                    <option value="Prepagado">Prepagado</option>
+                    <option value="Crédito 15 días">Crédito 15 días</option>
+                    <option value="Crédito 30 días">Crédito 30 días</option>
                   </select>
                 </div>
-              )}
-              <button className="ff-btn ff-btn-primary" style={{height:'45px', justifyContent:'center'}} disabled={isSaving}>
-                {isSaving ? <Loader2 className="animate-spin" size={18} /> : (f.id ? "Guardar Cambios" : "Crear Registro")}
+              </div>
+
+              <button className="ff-btn ff-btn-primary btn-submit" disabled={isSaving}>
+                {isSaving ? <Loader2 className="animate-spin" /> : "Guardar Registro"}
               </button>
             </form>
           </div>
@@ -270,40 +274,59 @@ export default function AdminUsersPage() {
       )}
 
       <style jsx>{`
-        .tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--ff-border); margin-bottom: 20px; }
-        .tabs button { padding: 10px; background: none; border: none; cursor: pointer; font-weight: 700; color: var(--ff-muted); }
-        .tabs button.active { color: var(--ff-green); border-bottom: 2px solid var(--ff-green); }
-        .toolbar { margin-bottom: 15px; }
-        .pro-table { width: 100%; border-collapse: collapse; }
-        .pro-table th { background: #f8fafc; text-align: left; padding: 12px; font-size: 11px; color: var(--ff-muted); border-bottom: 1px solid var(--ff-border); }
-        .pro-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
-        .row-hover:hover { background: #f8fafc; }
-        .client-cell strong { color: var(--ff-green); text-decoration: underline; }
-        .contact-info { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--ff-muted); }
-        .badge-ok { background: #dcfce7; color: #166534; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 800; }
-        .badge-wait { background: #f1f5f9; color: var(--ff-muted); padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 800; }
-        .action-row { display: flex; gap: 8px; align-items: center; }
-        .btn-activate { 
-          display: flex; align-items: center; gap: 6px; 
-          background: #eff6ff; color: #2563eb; border: 1px solid #dbeafe; 
-          padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; cursor: pointer;
-        }
-        .btn-activate:hover { background: #2563eb; color: #fff; }
-        .btnEdit { background: white; border: 1px solid var(--ff-border); padding: 6px; border-radius: 6px; cursor: pointer; color: var(--ff-muted); }
-        .btnEdit:hover { border-color: var(--ff-green); color: var(--ff-green); }
-        .drawer { position: fixed; right: 0; top: 0; width: 420px; height: 100%; background: white; z-index: 1001; box-shadow: -5px 0 15px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
-        .d-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
-        .d-body { padding: 20px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
-        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; backdrop-filter: blur(2px); }
-        .group { background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid var(--ff-border); display: flex; flex-direction: column; gap: 10px; }
-        .group label { font-size: 10px; font-weight: 800; color: var(--ff-green); }
-        input, select { padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
-        .row-input { display: flex; gap: 5px; }
-        .btnDel { background: #fee2e2; color: #ef4444; border: none; padding: 8px; border-radius: 8px; cursor: pointer; }
-        .btn-add { background: none; border: 1px dashed #cbd5e1; padding: 10px; border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--ff-muted); }
-        .ptr { cursor: pointer; }
-        .animate-spin { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        /* LAYOUT & TABS */
+        .directory-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; gap: 20px; flex-wrap: wrap; }
+        .tabs { display: flex; gap: 8px; background: #f1f5f9; padding: 4px; border-radius: 10px; }
+        .tabs button { padding: 8px 16px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; color: #64748b; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 8px; }
+        .tabs button.active { background: white; color: #1e293b; shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .tab-count { font-size: 10px; background: #e2e8f0; padding: 2px 6px; border-radius: 6px; color: #475569; }
+
+        /* SEARCH & ACTIONS */
+        .actions-bar { display: flex; gap: 12px; align-items: center; }
+        .search-wrapper { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0 12px; display: flex; align-items: center; width: 300px; }
+        .search-icon { color: #94a3b8; }
+        .search-wrapper input { border: none; padding: 10px; font-size: 13px; width: 100%; outline: none; }
+
+        /* TABLE MODERN */
+        .pro-table.modern th { text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; padding: 16px 20px; background: #fafafa; }
+        .pro-table.modern td { padding: 16px 20px; vertical-align: middle; }
+        .identity-cell { display: flex; align-items: center; gap: 12px; }
+        .avatar { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; font-size: 12px; }
+        .name-link { font-weight: 700; color: #1e293b; display: block; }
+        .name-link:hover { color: var(--ff-green); }
+        .tax-id { font-size: 11px; color: #94a3b8; font-family: monospace; }
+        
+        .contact-details { display: flex; flex-direction: column; gap: 4px; }
+        .detail-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; }
+        .detail-item.clickable:hover { color: var(--ff-green); cursor: pointer; text-decoration: underline; }
+
+        /* BADGES PRO */
+        .badge-pro { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+        .badge-pro.active { background: #dcfce7; color: #15803d; }
+        .badge-pro.prospect { background: #f1f5f9; color: #475569; }
+        
+        .status-dot { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+        .status-dot::before { content:''; width: 8px; height: 8px; border-radius: 50%; }
+        .status-dot.online::before { background: #22c55e; }
+        .status-dot.offline::before { background: #cbd5e1; }
+
+        /* DRAWER & FORMS */
+        .modern-drawer { width: 500px; }
+        .d-title { display: flex; align-items: center; gap: 10px; }
+        .form-grid { display: flex; flex-direction: column; gap: 20px; }
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .input-with-icon { position: relative; display: flex; align-items: center; }
+        .input-with-icon :global(svg) { position: absolute; left: 12px; color: #94a3b8; }
+        .input-with-icon input { padding-left: 36px !important; width: 100%; }
+        .btn-submit { margin-top: 20px; height: 48px; font-size: 14px; }
+
+        /* UI UTILS */
+        .txt-right { text-align: right; }
+        .flex-end { display: flex; justify-content: flex-end; }
+        .btn-circle { background: white; border: 1px solid #e2e8f0; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #64748b; }
+        .btn-circle:hover { border-color: var(--ff-green); color: var(--ff-green); background: #f0fdf4; }
+        .btn-icon-label { display: flex; align-items: center; gap: 6px; background: #eff6ff; color: #2563eb; border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; }
+        .btn-icon-label:hover { background: #dbeafe; }
       `}</style>
     </AdminLayout>
   );
