@@ -290,10 +290,58 @@ export default function AdminQuoteDetailPage() {
         .row-strip { display: flex; align-items: center; padding: 12px 20px; gap: 30px; }
         .strip-label { width: 100px; font-size: 11px; font-weight: 900; color: #10b981; border-right: 1px solid #f1f5f9; }
         .strip-content { display: flex; flex: 1; gap: 20px; align-items: flex-end; }
-        .s-field { display: flex; flex-direction: column; gap: 4px; flex: 1; }
-        .s-field.small { flex: 0 0 80px; }
-        .s-field label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; }
-        .s-field input, .s-field select { border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; font-size: 13px; font-weight: 600; outline: none; }
+       /* 1. Contenedor de la fila con alineación central */
+.strip-content { 
+  display: flex; 
+  flex: 1; 
+  gap: 16px; 
+  align-items: flex-end; /* Alinea todos los inputs por la base */
+}
+
+/* 2. El campo individual */
+.s-field { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 6px; 
+  flex: 1; 
+  min-width: 0; /* Evita que el contenido rompa el layout */
+}
+
+/* 3. Campos pequeños con ancho fijo */
+.s-field.small { 
+  flex: 0 0 90px; 
+}
+
+/* 4. Estandarización total de Inputs y Selects */
+.s-field input, 
+.s-field select { 
+  width: 100%;
+  height: 36px; /* Altura idéntica para ambos */
+  padding: 0 10px;
+  border: 1px solid #e2e8f0; 
+  border-radius: 6px; 
+  font-size: 13px; 
+  font-weight: 600; 
+  outline: none;
+  background-color: #ffffff;
+  box-sizing: border-box; /* Fundamental para que el padding no ensanche el campo */
+  transition: border-color 0.2s;
+}
+
+.s-field input:focus, 
+.s-field select:focus {
+  border-color: #10b981;
+}
+
+/* 5. Etiquetas consistentes */
+.s-field label { 
+  font-size: 10px; 
+  font-weight: 800; 
+  color: #94a3b8; 
+  text-transform: uppercase;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+}
 
         .mini-toggle { display: flex; background: #f1f5f9; padding: 2px; border-radius: 6px; width: fit-content; }
         .mini-toggle button { border: none; background: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; color: #94a3b8; }
