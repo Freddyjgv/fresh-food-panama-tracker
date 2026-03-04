@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { 
-  Save, FileText, Package, Loader2, Building2, Plane, Ship, Boxes, Weight, 
-  Globe, DollarSign, Thermometer, Droplets, Info, TrendingUp, Calculator
+  Save, FileText, Package, Loader2, Building2, Plane, Ship, 
+  Globe, DollarSign, Thermometer, Droplets, Info, Calculator, ChevronDown
 } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { requireAdminOrRedirect } from "../../../lib/requireAdmin";
@@ -19,8 +19,9 @@ export default function AdminQuoteDetailPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [data, setData] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
+  const [varieties, setVarieties] = useState<string[]>([]);
 
-  // --- ESTADOS DE CONFIGURACIÓN ---
+  // --- ESTADOS ---
   const [status, setStatus] = useState("draft");
   const [boxes, setBoxes] = useState(0);
   const [weightKg, setWeightKg] = useState(0);
@@ -33,11 +34,9 @@ export default function AdminQuoteDetailPage() {
   const [color, setColor] = useState("2.75 - 3");
   const [brix, setBrix] = useState("> 13");
 
-  // --- ESTADOS DE COSTOS Y MÁRGENES ---
-  // Inicializamos márgenes individuales para el análisis detallado
   const [costs, setCosts] = useState({
     fruit: { base: 13.30, margin: 15 },
-    freight: { base: 0, margin: 10 },
+    freight: { base: 0, margin: 0 },
     origin: { base: 0, margin: 0 },
     aduana: { base: 0, margin: 0 },
     insp: { base: 0, margin: 0 },
@@ -72,7 +71,6 @@ export default function AdminQuoteDetailPage() {
       setBrix(p.brix || "> 13");
 
       const c = quote.costs || {};
-      // Mapeo dinámico para mantener la estructura de la tabla
       setCosts({
         fruit: { base: c.c_fruit || 13.30, margin: quote.margin_markup || 15 },
         freight: { base: c.c_freight || 0, margin: c.m_freight || 0 },
@@ -87,15 +85,21 @@ export default function AdminQuoteDetailPage() {
       const m = quote.totals?.meta || {};
       setIncoterm(m.incoterm || "CIP");
       setPallets(m.pallets || 0);
+      
+      if (quote.product_id) fetchVarieties(quote.product_id);
     }
     const { data: pList } = await supabase.from("products").select("*");
     if (pList) setProducts(pList);
     setLoading(false);
   }
 
+  async function fetchVarieties(pId: string) {
+    const { data: p } = await supabase.from("products").select("varieties").eq("id", pId).single();
+    if (p?.varieties) setVarieties(p.varieties);
+  }
+
   useEffect(() => { if (authOk && id) loadData(id as string); }, [authOk, id]);
 
-  // --- LÓGICA DE CÁLCULO ANALÍTICO ---
   const analysis = useMemo(() => {
     const lines = Object.entries(costs).map(([key, val]) => {
       const baseTotal = key === 'fruit' ? val.base * boxes : val.base;
@@ -103,113 +107,116 @@ export default function AdminQuoteDetailPage() {
       const sale = marginFact < 1 ? baseTotal / (1 - marginFact) : baseTotal;
       return { key, baseTotal, sale, margin: val.margin };
     });
-
     const totalCost = lines.reduce((acc, curr) => acc + curr.baseTotal, 0);
     const totalSale = lines.reduce((acc, curr) => acc + curr.sale, 0);
-    const profit = totalSale - totalCost;
-
     return {
-      lines,
-      totalCost,
-      totalSale,
-      profit,
+      lines, totalCost, totalSale,
+      profit: totalSale - totalCost,
       perBox: boxes > 0 ? totalSale / boxes : 0
     };
   }, [costs, boxes]);
 
   const updateCostLine = (key: string, field: 'base' | 'margin', value: number) => {
-    setCosts(prev => ({
-      ...prev,
-      [key]: { ...prev[key as keyof typeof costs], [field]: value }
-    }));
+    setCosts(prev => ({ ...prev, [key]: { ...prev[key as keyof typeof costs], [field]: value } }));
   };
 
   async function handleSave() {
     setBusy(true);
     const payload = {
       status, boxes, weight_kg: weightKg, mode, destination: place, product_id: productId,
-      margin_markup: costs.fruit.margin, // Mantenemos el principal para compatibilidad
+      margin_markup: costs.fruit.margin,
       product_details: { variety, color, brix },
       costs: { 
         c_fruit: costs.fruit.base, c_freight: costs.freight.base, c_origin: costs.origin.base, 
         c_aduana: costs.aduana.base, c_insp: costs.insp.base, c_doc: costs.doc.base, 
         c_tax: costs.tax.base, c_other: costs.other.base,
-        // Guardamos los márgenes individuales
         m_freight: costs.freight.margin, m_origin: costs.origin.margin, m_aduana: costs.aduana.margin
       },
       totals: { total: analysis.totalSale, profit: analysis.profit, per_box: analysis.perBox, meta: { incoterm, pallets, place } }
     };
     const { error } = await supabase.from("quotes").update(payload).eq("id", id);
     setBusy(false);
-    if (!error) { setToast("Cotización actualizada"); setTimeout(() => setToast(null), 2000); }
+    if (!error) { setToast("Cambios guardados"); setTimeout(() => setToast(null), 2000); }
   }
 
+  if (loading) return <AdminLayout title="Cargando..."><div className="ff-card-pad">Cargando datos de cotización...</div></AdminLayout>;
+
   return (
-    <AdminLayout title={`Cotización ${data?.quote_number || '...'}`}>
+    <AdminLayout title={`Cotización ${data?.quote_number || id?.slice(0,8)}`}>
       <div className="ff-content ff-content--wide">
         
-        {/* BARRA SUPERIOR ESTATICA */}
+        {/* HEADER RECUPERADO */}
         <div className="ff-card ff-card-pad header-flex">
           <div className="client-brand">
-            <div className="avatar-box"><Building2 size={18} /></div>
+            <div className="avatar-box"><Building2 size={20} /></div>
             <div>
-              <h2 className="client-name">{data?.client_snapshot?.name || "Cargando..."}</h2>
+              <h2 className="client-name">{data?.client_snapshot?.name || "Cliente no definido"}</h2>
               <div className="client-meta">
-                <span><FileText size={12}/> {data?.client_snapshot?.tax_id || "N/A"}</span>
-                <span><Globe size={12}/> {data?.client_snapshot?.contact_email}</span>
+                <span><FileText size={12}/> {data?.client_snapshot?.tax_id || "Sin TAX ID"}</span>
+                <span><Globe size={12}/> {data?.client_snapshot?.contact_email || "Sin email"}</span>
               </div>
             </div>
           </div>
           <div className="actions-cluster">
-            <select className={`status-pill ${status}`} value={status} onChange={e => setStatus(e.target.value)}>
-              <option value="draft">BORRADOR</option>
-              <option value="sent">ENVIADA</option>
-              <option value="won">GANADA</option>
-            </select>
+            <div className="status-container">
+               <select className={`status-pill ${status}`} value={status} onChange={e => setStatus(e.target.value)}>
+                 <option value="draft">BORRADOR</option>
+                 <option value="sent">ENVIADA</option>
+                 <option value="won">GANADA</option>
+               </select>
+               <ChevronDown size={14} className="select-icon"/>
+            </div>
             <button className="ff-btn ff-btn-primary" onClick={handleSave} disabled={busy}>
               {busy ? <Loader2 size={16} className="spin"/> : <Save size={16}/>} Guardar
             </button>
           </div>
         </div>
 
-        {/* FILA DE CONFIGURACION: 3 COLUMNAS (33% cada una) */}
+        {/* TOP CONFIGURATION (33% cada uno) */}
         <div className="config-row">
           <div className="ff-card config-card">
             <div className="card-label"><Package size={14}/> Producto y Calidad</div>
             <div className="config-grid">
               <div className="field full">
-                <label>Producto Base</label>
-                <select className="ff-input" value={productId} onChange={e => setProductId(e.target.value)}>
+                <label>Producto</label>
+                <select className="ff-input" value={productId} onChange={e => { setProductId(e.target.value); fetchVarieties(e.target.value); }}>
                   <option value="">Seleccionar...</option>
                   {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
-              <div className="field full"><label>Variedad</label><input className="ff-input" value={variety} onChange={e => setVariety(e.target.value)} /></div>
-              <div className="field"><label>Color</label><input className="ff-input" value={color} onChange={e => setColor(e.target.value)} /></div>
-              <div className="field"><label>Brix</label><input className="ff-input" value={brix} onChange={e => setBrix(e.target.value)} /></div>
+              <div className="field full">
+                <label>Variedad</label>
+                <select className="ff-input" value={variety} onChange={e => setVariety(e.target.value)}>
+                   <option value="">Seleccionar variedad...</option>
+                   {varieties.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+              </div>
+              <div className="field"><label><Thermometer size={10}/> Color</label><input className="ff-input" value={color} onChange={e => setColor(e.target.value)} /></div>
+              <div className="field"><label><Droplets size={10}/> Brix</label><input className="ff-input" value={brix} onChange={e => setBrix(e.target.value)} /></div>
             </div>
           </div>
 
           <div className="ff-card config-card">
             <div className="card-label"><Ship size={14}/> Configuración Logística</div>
             <div className="config-grid">
-              <div className="field full" style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center'}}>
-                <label>Modo</label>
+              <div className="field full flex-between">
+                <label>Modo de Transporte</label>
                 <div className="mini-toggle">
                   <button className={mode==='AIR'?'active':''} onClick={()=>setMode('AIR')}><Plane size={12}/></button>
                   <button className={mode==='SEA'?'active':''} onClick={()=>setMode('SEA')}><Ship size={12}/></button>
                 </div>
               </div>
-              <div className="field"><label>Incoterm</label>
+              <div className="field full">
+                <label>Incoterm</label>
                 <select className="ff-input" value={incoterm} onChange={e => setIncoterm(e.target.value)}>
                   <option value="CIP">CIP</option><option value="CIF">CIF</option><option value="FOB">FOB</option><option value="DDP">DDP</option>
                 </select>
               </div>
-              <div className="field full"><label>Destino</label><LocationSelector mode={mode} value={place} onChange={setPlace} /></div>
+              <div className="field full"><label>Destino (Place)</label><LocationSelector mode={mode} value={place} onChange={setPlace} /></div>
               <div className="mini-stats">
                  <div className="ms-item"><span>Cajas</span><input type="number" value={boxes} onChange={e=>setBoxes(Number(e.target.value))}/></div>
                  <div className="ms-item"><span>Pallets</span><input type="number" value={pallets} onChange={e=>setPallets(Number(e.target.value))}/></div>
-                 <div className="ms-item"><span>Peso KG</span><input type="number" value={weightKg} onChange={e=>setWeightKg(Number(e.target.value))}/></div>
+                 <div className="ms-item"><span>Peso (KG)</span><input type="number" value={weightKg} onChange={e=>setWeightKg(Number(e.target.value))}/></div>
               </div>
             </div>
           </div>
@@ -226,72 +233,63 @@ export default function AdminQuoteDetailPage() {
           </div>
         </div>
 
-        {/* RESUMEN ANALITICO INFERIOR (CENTRADO 75%) */}
-        <div className="analysis-container">
-          <div className="ff-card analysis-card">
-            <div className="analysis-header">
-              <div className="ah-title">
-                <Calculator size={20}/>
-                <h3>Resumen Financiero y Análisis de Venta</h3>
-              </div>
-              <div className="mini-badges">
-                <div className="m-badge">Costo: <b>${analysis.totalCost.toLocaleString()}</b></div>
-                <div className="m-badge green">Venta: <b>${analysis.totalSale.toLocaleString()}</b></div>
-                <div className="m-badge alt">Utilidad: <b>${analysis.profit.toLocaleString()}</b></div>
-              </div>
+        {/* RESUMEN FINANCIERO (100% Ancho) */}
+        <div className="ff-card analysis-card">
+          <div className="analysis-header">
+            <div className="ah-left">
+              <Calculator size={20} className="text-green"/>
+              <h3>Resumen Financiero y Análisis de Venta</h3>
             </div>
+            <div className="mini-badges">
+              <div className="m-badge">Costo: <b>${analysis.totalCost.toLocaleString()}</b></div>
+              <div className="m-badge green">Venta: <b>${analysis.totalSale.toLocaleString()}</b></div>
+              <div className="m-badge utility">Utilidad: <b>${analysis.profit.toLocaleString()}</b></div>
+            </div>
+          </div>
 
-            <table className="analysis-table">
-              <thead>
-                <tr>
-                  <th>CONCEPTO</th>
-                  <th className="text-right">COSTO BASE (USD)</th>
-                  <th className="text-center">MARGEN (%)</th>
-                  <th className="text-right">PRECIO VENTA</th>
-                  <th className="text-right">IMPACTO</th>
+          <table className="analysis-table">
+            <thead>
+              <tr>
+                <th style={{textAlign:'left'}}>CONCEPTO</th>
+                <th style={{textAlign:'right'}}>COSTO BASE (USD)</th>
+                <th style={{textAlign:'center'}}>MARGEN (%)</th>
+                <th style={{textAlign:'right'}}>PRECIO VENTA</th>
+                <th style={{textAlign:'right'}}>IMPACTO (%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {analysis.lines.map((line) => (
+                <tr key={line.key}>
+                  <td className="capitalize">{line.key === 'fruit' ? 'Fruta (Total)' : line.key.replace('insp','Inspección').replace('doc','Documentación')}</td>
+                  <td className="text-right">
+                    <input className="table-input" type="number" value={costs[line.key as keyof typeof costs].base} onChange={e => updateCostLine(line.key, 'base', Number(e.target.value))}/>
+                  </td>
+                  <td className="text-center">
+                    <input className="table-input center" type="number" value={line.margin} onChange={e => updateCostLine(line.key, 'margin', Number(e.target.value))}/>
+                  </td>
+                  <td className="text-right font-bold">USD {line.sale.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                  <td className="text-right impact-tag">
+                    {analysis.totalSale > 0 ? ((line.sale / analysis.totalSale) * 100).toFixed(1) : 0}%
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {analysis.lines.map((line) => (
-                  <tr key={line.key}>
-                    <td className="capitalize">{line.key === 'fruit' ? 'Fruta (Total Cajas)' : line.key}</td>
-                    <td className="text-right">
-                      <input 
-                        className="table-input" 
-                        type="number" 
-                        value={costs[line.key as keyof typeof costs].base} 
-                        onChange={e => updateCostLine(line.key, 'base', Number(e.target.value))}
-                      />
-                    </td>
-                    <td className="text-center">
-                      <input 
-                        className="table-input center" 
-                        type="number" 
-                        value={line.margin} 
-                        onChange={e => updateCostLine(line.key, 'margin', Number(e.target.value))}
-                      />
-                    </td>
-                    <td className="text-right font-bold">USD {line.sale.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                    <td className="text-right impact-text">
-                      {analysis.totalSale > 0 ? ((line.sale / analysis.totalSale) * 100).toFixed(1) : 0}%
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td>TOTALES</td>
-                  <td className="text-right">USD {analysis.totalCost.toLocaleString()}</td>
-                  <td className="text-center">-</td>
-                  <td className="text-right sale-total">USD {analysis.totalSale.toLocaleString()}</td>
-                  <td className="text-right">100%</td>
-                </tr>
-              </tfoot>
-            </table>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>TOTALES</td>
+                <td className="text-right">USD {analysis.totalCost.toLocaleString()}</td>
+                <td className="text-center">-</td>
+                <td className="text-right sale-total">USD {analysis.totalSale.toLocaleString()}</td>
+                <td className="text-right">100%</td>
+              </tr>
+            </tfoot>
+          </table>
 
-            <div className="final-unit-badge">
-               <div className="sub">PRECIO FINAL POR CAJA SUGERIDO</div>
-               <div className="val">USD {analysis.perBox.toFixed(2)}</div>
+          <div className="footer-flex">
+            <div className="info-box"><Info size={14}/> <span>Precios editables. El cambio en margen afecta la utilidad final.</span></div>
+            <div className="final-price-badge">
+               <span className="fp-label">PRECIO FINAL / CAJA</span>
+               <span className="fp-value">USD {analysis.perBox.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -301,67 +299,76 @@ export default function AdminQuoteDetailPage() {
 
       <style jsx>{`
         .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-        .client-brand { display: flex; gap: 12px; align-items: center; }
-        .avatar-box { background: var(--ff-bg); color: var(--ff-green); padding: 8px; border-radius: 8px; border: 1px solid var(--ff-border); }
-        .client-name { margin: 0; font-size: 16px; font-weight: 800; }
-        .client-meta { display: flex; gap: 10px; font-size: 11px; color: var(--ff-muted); margin-top: 2px; }
+        .client-brand { display: flex; gap: 14px; align-items: center; }
+        .avatar-box { background: #f0fdf4; color: var(--ff-green); padding: 10px; border-radius: 10px; border: 1px solid rgba(31,122,58,0.1); }
+        .client-name { margin: 0; font-size: 18px; font-weight: 800; color: var(--ff-text); }
+        .client-meta { display: flex; gap: 12px; font-size: 11px; color: var(--ff-muted); margin-top: 2px; }
         .client-meta span { display: flex; align-items: center; gap: 4px; }
+
+        .actions-cluster { display: flex; gap: 12px; align-items: center; }
+        .status-container { position: relative; display: flex; align-items: center; }
+        .select-icon { position: absolute; right: 10px; pointer-events: none; color: currentColor; opacity: 0.5; }
         
-        /* FILA SUPERIOR */
+        .status-pill { appearance: none; border: 1px solid var(--ff-border); border-radius: 8px; padding: 0 30px 0 15px; font-weight: 800; font-size: 11px; height: 38px; cursor: pointer; transition: all 0.2s; }
+        .status-pill.draft { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
+        .status-pill.sent { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+        .status-pill.won { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+
         .config-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
-        .config-card { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-        .card-label { font-size: 11px; font-weight: 900; text-transform: uppercase; color: var(--ff-green); display: flex; align-items: center; gap: 6px; }
-        .config-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+        .config-card { padding: 20px; }
+        .card-label { font-size: 11px; font-weight: 900; text-transform: uppercase; color: var(--ff-green); display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+        .config-grid { display: flex; flex-wrap: wrap; gap: 12px; }
         .field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 45%; min-width: 0; }
         .field.full { flex: 1 1 100%; }
-        .field label { font-size: 10px; font-weight: 700; color: var(--ff-muted); }
+        .flex-between { flex-direction: row !important; justify-content: space-between; align-items: center; }
+        .field label { font-size: 10px; font-weight: 800; color: var(--ff-muted); text-transform: uppercase; }
+
+        .mini-toggle { display: flex; background: var(--ff-bg); padding: 3px; border-radius: 8px; border: 1px solid var(--ff-border); }
+        .mini-toggle button { border: none; background: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; color: #94a3b8; }
+        .mini-toggle button.active { background: #fff; color: var(--ff-green); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+
+        .mini-stats { display: flex; gap: 8px; width: 100%; margin-top: 8px; }
+        .ms-item { flex: 1; background: var(--ff-bg); padding: 8px; border-radius: 8px; text-align: center; border: 1px solid var(--ff-border); }
+        .ms-item span { display: block; font-size: 9px; font-weight: 800; color: var(--ff-muted); margin-bottom: 2px; }
+        .ms-item input { width: 100%; border: none; background: transparent; text-align: center; font-weight: 900; font-size: 13px; outline: none; color: var(--ff-text); }
+
+        .costs-entry-list { display: flex; flex-direction: column; gap: 8px; }
+        .ce-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9; }
+        .ce-item span { font-size: 12px; font-weight: 600; color: #475569; }
+        .ce-item input { width: 85px; text-align: right; border: 1px solid var(--ff-border); border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 800; }
+
+        .analysis-card { padding: 30px; border-top: 4px solid var(--ff-green); }
+        .analysis-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .ah-left { display: flex; align-items: center; gap: 12px; }
+        .ah-left h3 { margin: 0; font-size: 20px; font-weight: 800; }
         
-        .mini-toggle { display: flex; background: var(--ff-bg); padding: 2px; border-radius: 6px; }
-        .mini-toggle button { border: none; background: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; color: #94a3b8; }
-        .mini-toggle button.active { background: #fff; color: var(--ff-green); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-
-        .mini-stats { display: flex; gap: 8px; width: 100%; margin-top: 4px; }
-        .ms-item { flex: 1; background: var(--ff-bg); padding: 6px; border-radius: 6px; text-align: center; border: 1px solid var(--ff-border); }
-        .ms-item span { display: block; font-size: 9px; font-weight: 700; color: var(--ff-muted); }
-        .ms-item input { width: 100%; border: none; background: transparent; text-align: center; font-weight: 800; font-size: 12px; outline: none; }
-
-        .costs-entry-list { display: flex; flex-direction: column; gap: 6px; }
-        .ce-item { display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f1f5f9; }
-        .ce-item span { font-weight: 600; color: #475569; }
-        .ce-item input { width: 80px; text-align: right; border: 1px solid var(--ff-border); border-radius: 4px; padding: 2px 6px; font-size: 11px; font-weight: 700; }
-
-        /* ANALISIS INFERIOR */
-        .analysis-container { display: flex; justify-content: center; padding-bottom: 40px; }
-        .analysis-card { width: 75%; padding: 24px; border-top: 4px solid var(--ff-green); }
-        .analysis-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-        .ah-title { display: flex; align-items: center; gap: 12px; color: var(--ff-text); }
-        .ah-title h3 { margin: 0; font-size: 18px; font-weight: 800; }
-        
-        .mini-badges { display: flex; gap: 10px; }
-        .m-badge { background: #f8fafc; padding: 6px 12px; border-radius: 20px; font-size: 11px; border: 1px solid var(--ff-border); }
+        .mini-badges { display: flex; gap: 12px; }
+        .m-badge { background: #f8fafc; padding: 8px 16px; border-radius: 12px; font-size: 12px; border: 1px solid var(--ff-border); }
         .m-badge.green { background: #f0fdf4; color: var(--ff-green); border-color: #dcfce7; }
-        .m-badge.alt { background: #eff6ff; color: #2563eb; border-color: #dbeafe; }
+        .m-badge.utility { background: #eff6ff; color: #2563eb; border-color: #dbeafe; }
 
-        .analysis-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
-        .analysis-table th { font-size: 10px; font-weight: 800; color: var(--ff-muted); padding: 10px; border-bottom: 2px solid var(--ff-bg); text-align: left; }
-        .analysis-table td { padding: 12px 10px; font-size: 12px; border-bottom: 1px solid #f1f5f9; }
-        .table-input { width: 90px; border: 1px solid var(--ff-border); border-radius: 4px; padding: 4px 8px; font-size: 12px; font-weight: 700; font-family: inherit; }
-        .table-input.center { text-align: center; width: 60px; color: var(--ff-green); }
-        .impact-text { color: var(--ff-muted); font-weight: 600; font-size: 11px; }
-        .sale-total { font-weight: 900; color: var(--ff-green); font-size: 14px; }
+        .analysis-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+        .analysis-table th { font-size: 11px; font-weight: 900; color: var(--ff-muted); padding: 12px; border-bottom: 2px solid var(--ff-bg); }
+        .analysis-table td { padding: 14px 12px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+        .table-input { width: 100px; border: 1px solid var(--ff-border); border-radius: 6px; padding: 6px 10px; font-size: 13px; font-weight: 800; font-family: inherit; }
+        .table-input.center { text-align: center; width: 70px; color: var(--ff-green); }
+        .impact-tag { color: var(--ff-muted); font-weight: 700; font-size: 11px; }
+        .sale-total { font-weight: 900; color: var(--ff-green); font-size: 16px; }
         
-        .analysis-table tfoot td { font-weight: 800; padding: 16px 10px; background: #f8fafc; }
+        .analysis-table tfoot td { font-weight: 900; padding: 20px 12px; background: #f8fafc; }
 
-        .final-unit-badge { background: var(--ff-green); color: #fff; padding: 20px; border-radius: 12px; text-align: center; }
-        .final-unit-badge .sub { font-size: 10px; font-weight: 700; opacity: 0.8; margin-bottom: 4px; }
-        .final-unit-badge .val { font-size: 32px; font-weight: 900; letter-spacing: -1px; }
+        .footer-flex { display: flex; justify-content: space-between; align-items: center; }
+        .info-box { display: flex; align-items: center; gap: 8px; color: var(--ff-muted); font-size: 12px; }
+        .final-price-badge { background: var(--ff-green); color: #fff; padding: 12px 24px; border-radius: 12px; display: flex; flex-direction: column; align-items: flex-end; }
+        .fp-label { font-size: 10px; font-weight: 800; opacity: 0.9; }
+        .fp-value { font-size: 24px; font-weight: 900; letter-spacing: -1px; }
 
+        .text-green { color: var(--ff-green); }
         .capitalize { text-transform: capitalize; }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
         .font-bold { font-weight: 700; }
-        
-        .ff-toast { position: fixed; bottom: 20px; right: 20px; background: var(--ff-green); color: white; padding: 12px 24px; border-radius: 6px; font-weight: 700; box-shadow: var(--ff-shadow); z-index: 100; font-size: 12px; }
+        .ff-toast { position: fixed; bottom: 24px; right: 24px; background: var(--ff-green); color: white; padding: 14px 28px; border-radius: 10px; font-weight: 800; box-shadow: var(--ff-shadow); z-index: 1000; }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
