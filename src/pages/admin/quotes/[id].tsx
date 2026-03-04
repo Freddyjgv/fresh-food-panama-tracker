@@ -55,9 +55,18 @@ export default function AdminQuoteDetailPage() {
     })();
   }, []);
 
-  async function loadData(quoteId: string) {
+ async function loadData(quoteId: string) {
     setLoading(true);
-    const { data: quote } = await supabase.from("quotes").select(`*, clients (*)`).eq("id", quoteId).single();
+    
+    // 1. Cargamos la cotización y la lista de productos en paralelo (más rápido)
+    const [quoteRes, productsRes] = await Promise.all([
+      supabase.from("quotes").select(`*, clients (*)`).eq("id", quoteId).single(),
+      supabase.from("products").select("*")
+    ]);
+
+    const quote = quoteRes.data;
+    if (productsRes.data) setProducts(productsRes.data);
+
     if (quote) {
       setData(quote);
       setStatus(quote.status || "draft");
@@ -71,6 +80,22 @@ export default function AdminQuoteDetailPage() {
       setVariety(p.variety || "");
       setColor(p.color || "");
       setBrix(p.brix || "");
+
+      // --- IMPORTANTE: CARGA DE VARIEDADES INMEDIATA ---
+      if (quote.product_id) {
+        // En lugar de llamar a fetchVarieties y esperar a que React decida cuándo ejecutarlo,
+        // buscamos las variedades aquí mismo para asegurar que el selector se llene YA.
+        const { data: prodData } = await supabase
+          .from("products")
+          .select("varieties")
+          .eq("id", quote.product_id)
+          .single();
+        
+        if (prodData?.varieties) {
+          setVarieties(prodData.varieties);
+        }
+      }
+      // ------------------------------------------------
 
       const c = quote.costs || {};
       setCosts({
@@ -87,10 +112,8 @@ export default function AdminQuoteDetailPage() {
       const m = quote.totals?.meta || {};
       setIncoterm(m.incoterm || "CIP");
       setPallets(m.pallets || 0);
-      if (quote.product_id) fetchVarieties(quote.product_id);
     }
-    const { data: pList } = await supabase.from("products").select("*");
-    if (pList) setProducts(pList);
+    
     setLoading(false);
   }
 
@@ -176,28 +199,45 @@ export default function AdminQuoteDetailPage() {
           </div>
         </div>
 
-        {/* FILA 1: CALIDAD */}
-        <div className="ff-card row-strip">
-          <div className="strip-label"><Package size={14}/> CALIDAD</div>
-          <div className="strip-content">
-            <div className="s-field">
-              <label>Producto</label>
-              <select value={productId} onChange={e => { setProductId(e.target.value); fetchVarieties(e.target.value); }}>
-                <option value="">Seleccionar...</option>
-                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div className="s-field">
-              <label>Variedad</label>
-              <select value={variety} onChange={e => setVariety(e.target.value)}>
-                <option value="">Seleccionar...</option>
-                {varieties.map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </div>
-            <div className="s-field"><label>Color</label><input value={color} onChange={e => setColor(e.target.value)} /></div>
-            <div className="s-field"><label>Brix</label><input value={brix} onChange={e => setBrix(e.target.value)} /></div>
-          </div>
-        </div>
+        {/* FILA 1: CALIDAD - CORREGIDA */}
+<div className="ff-card row-strip">
+  <div className="strip-label"><Package size={14}/> CALIDAD</div>
+  <div className="strip-content">
+    <div className="s-field">
+      <label>Producto</label>
+      <select 
+        value={productId} 
+        onChange={(e) => {
+          const val = e.target.value;
+          setProductId(val); // 1. Actualiza el ID
+          setVariety("");    // 2. Limpia la variedad vieja
+          if (val) fetchVarieties(val); // 3. LLAMA A LA FUNCIÓN (ESTO FALTABA)
+        }}
+      >
+        <option value="">Seleccionar...</option>
+        {products.map(p => (
+          <option key={p.id} value={p.id}>{p.name}</option>
+        ))}
+      </select>
+    </div>
+
+    <div className="s-field">
+      <label>Variedad</label>
+      <select 
+        value={variety} 
+        onChange={(e) => setVariety(e.target.value)}
+      >
+        <option value="">Seleccionar...</option>
+        {varieties.map((v, index) => (
+          <option key={`${v}-${index}`} value={v}>{v}</option>
+        ))}
+      </select>
+    </div>
+
+    <div className="s-field"><label>Color</label><input value={color} onChange={e => setColor(e.target.value)} /></div>
+    <div className="s-field"><label>Brix</label><input value={brix} onChange={e => setBrix(e.target.value)} /></div>
+  </div>
+</div>
 
         {/* FILA 2: LOGÍSTICA */}
         <div className="ff-card row-strip">
@@ -291,56 +331,66 @@ export default function AdminQuoteDetailPage() {
         .strip-label { width: 100px; font-size: 11px; font-weight: 900; color: #10b981; border-right: 1px solid #f1f5f9; }
         .strip-content { display: flex; flex: 1; gap: 20px; align-items: flex-end; }
        /* 1. Contenedor de la fila con alineación central */
-.strip-content { 
-  display: flex; 
-  flex: 1; 
-  gap: 16px; 
-  align-items: flex-end; /* Alinea todos los inputs por la base */
+/* 1. Forzamos que todos los campos tengan la misma base */
+.strip-content {
+  display: flex;
+  align-items: flex-end; /* Alineación perfecta por la base del input */
+  gap: 16px;
+  flex: 1;
 }
 
-/* 2. El campo individual */
-.s-field { 
-  display: flex; 
-  flex-direction: column; 
-  gap: 6px; 
-  flex: 1; 
-  min-width: 0; /* Evita que el contenido rompa el layout */
-}
-
-/* 3. Campos pequeños con ancho fijo */
-.s-field.small { 
-  flex: 0 0 90px; 
-}
-
-/* 4. Estandarización total de Inputs y Selects */
+/* 2. Estandarizamos el tamaño de TODOS los contenedores de entrada */
 .s-field input, 
-.s-field select { 
+.s-field select, 
+.mini-toggle,
+.s-field :global(.location-input-container), /* Para el LocationSelector */
+.s-field :global(button) { 
+  height: 38px !important; /* Altura fija sagrada */
+  box-sizing: border-box;
+}
+
+/* 3. Ajuste específico para el mini-toggle */
+.mini-toggle {
+  display: flex;
+  background: #f1f5f9;
+  padding: 2px;
+  border-radius: 6px;
   width: 100%;
-  height: 36px; /* Altura idéntica para ambos */
-  padding: 0 10px;
-  border: 1px solid #e2e8f0; 
-  border-radius: 6px; 
-  font-size: 13px; 
-  font-weight: 600; 
-  outline: none;
-  background-color: #ffffff;
-  box-sizing: border-box; /* Fundamental para que el padding no ensanche el campo */
-  transition: border-color 0.2s;
+  border: 1px solid #e2e8f0; /* Para que coincida con los inputs */
 }
 
-.s-field input:focus, 
-.s-field select:focus {
-  border-color: #10b981;
+.mini-toggle button {
+  flex: 1;
+  border: none !important; /* Quitamos bordes internos */
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #94a3b8;
 }
 
-/* 5. Etiquetas consistentes */
-.s-field label { 
-  font-size: 10px; 
-  font-weight: 800; 
-  color: #94a3b8; 
+.mini-toggle button.active {
+  background: white;
+  color: #10b981;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* 4. Campos pequeños (Cajas y Pallets) */
+.s-field.small {
+  flex: 0 0 100px !important; /* Ancho fijo para que no se estiren */
+}
+
+/* 5. Etiquetas (Labels) con altura para evitar saltos */
+.s-field label {
+  font-size: 10px;
+  font-weight: 800;
+  color: #94a3b8;
   text-transform: uppercase;
-  white-space: nowrap;
-  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  display: block;
+  height: 12px; /* Altura fija para la etiqueta */
 }
 
         /* Asegura que el toggle tenga la misma altura que los inputs */
