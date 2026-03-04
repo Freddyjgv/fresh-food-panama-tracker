@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { 
-  Save, FileText, Package, Loader2, Building2, Plane, Ship, 
-  Globe, DollarSign, Info, Calculator, ChevronDown, MapPin, FileUp
+  Save, Package, Loader2, Building2, Plane, Ship, 
+  DollarSign, Info, MapPin, Calculator, TrendingUp
 } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { requireAdminOrRedirect } from "../../../lib/requireAdmin";
@@ -25,29 +25,22 @@ export default function AdminQuoteDetailPage() {
   const [status, setStatus] = useState("draft");
   const [boxes, setBoxes] = useState(0);
   const [weightKg, setWeightKg] = useState(0);
-  const [pallets, setPallets] = useState(0);
   const [mode, setMode] = useState<"AIR" | "SEA">("AIR");
-  const [incoterm, setIncoterm] = useState("CIP");
   const [place, setPlace] = useState("");
   const [productId, setProductId] = useState("");
   const [variety, setVariety] = useState("");
   const [color, setColor] = useState("2.75 - 3");
   const [brix, setBrix] = useState("> 13");
 
+  // CONCEPTOS REESTABLECIDOS
   const [costs, setCosts] = useState<any>({
-    fruit: { base: 13.30, margin: 15 },
-    freight: { base: 0, margin: 0 },
-    origin: { base: 0, margin: 0 },
-    aduana: { base: 0, margin: 0 },
-    other: { base: 0, margin: 0 }
+    fruit: { label: "Fruta ($/Cx)", base: 13.30, margin: 15 },
+    freight: { label: "Flete Internacional", base: 0, margin: 0 },
+    origin: { label: "Gastos en origen", base: 0, margin: 0 },
+    docs: { label: "Gestion documental", base: 0, margin: 0 },
+    inspeccion: { label: "Inspección", base: 0, margin: 0 },
+    other: { label: "Otros gastos", base: 0, margin: 0 }
   });
-
-  // Formateador de número de cotización
-  const getQuoteNumber = (quote: any) => {
-    if (quote?.quote_number) return quote.quote_number;
-    const shortId = String(id).replace(/\D/g, "").slice(-4) || "0001";
-    return `Q-2026-${shortId.padStart(4, '0')}`;
-  };
 
   useEffect(() => {
     (async () => {
@@ -58,17 +51,17 @@ export default function AdminQuoteDetailPage() {
 
   async function loadData(quoteId: string) {
     setLoading(true);
-    // Carga de Cotización + Datos de Cliente por ID
-    const { data: quote } = await supabase.from("quotes").select("*").eq("id", quoteId).single();
+    const { data: quote } = await supabase
+      .from("quotes")
+      .select(`
+        *,
+        clients!client_id ( name, tax_id, contact_email, country, logo_url )
+      `)
+      .eq("id", quoteId)
+      .single();
 
     if (quote) {
-      const { data: clientData } = await supabase
-        .from("clients")
-        .select("name, tax_id, contact_email, country, logo_url")
-        .eq("id", quote.client_id)
-        .single();
-
-      setData({ ...quote, clients: clientData });
+      setData(quote);
       setStatus(quote.status || "draft");
       setBoxes(quote.boxes || 0);
       setWeightKg(quote.weight_kg || 0);
@@ -78,19 +71,21 @@ export default function AdminQuoteDetailPage() {
       
       const p = quote.product_details || {};
       setVariety(p.variety || "");
+      setColor(p.color || "2.75 - 3");
+      setBrix(p.brix || "> 13");
       
       const c = quote.costs || {};
       setCosts({
-        fruit: { base: c.c_fruit || 13.30, margin: quote.margin_markup || 15 },
-        freight: { base: c.c_freight || 0, margin: c.m_freight || 0 },
-        origin: { base: c.c_origin || 0, margin: c.m_origin || 0 },
-        aduana: { base: c.c_aduana || 0, margin: c.m_aduana || 0 },
-        other: { base: c.c_other || 0, margin: c.m_other || 0 }
+        fruit: { label: "Fruta ($/Cx)", base: c.c_fruit || 13.30, margin: quote.margin_markup || 15 },
+        freight: { label: "Flete Internacional", base: c.c_freight || 0, margin: c.m_freight || 0 },
+        origin: { label: "Gastos en origen", base: c.c_origin || 0, margin: c.m_origin || 0 },
+        docs: { label: "Gestion documental", base: c.c_docs || 0, margin: c.m_docs || 0 },
+        inspeccion: { label: "Inspección", base: c.c_inspeccion || 0, margin: c.m_inspeccion || 0 },
+        other: { label: "Otros gastos", base: c.c_other || 0, margin: c.m_other || 0 }
       });
 
       if (quote.product_id) fetchVarieties(quote.product_id);
     }
-    
     const { data: pList } = await supabase.from("products").select("*");
     if (pList) setProducts(pList);
     setLoading(false);
@@ -103,102 +98,99 @@ export default function AdminQuoteDetailPage() {
 
   useEffect(() => { if (authOk && id) loadData(id as string); }, [authOk, id]);
 
+  // ANÁLISIS FINANCIERO CON LÓGICA CIRCULAR
   const analysis = useMemo(() => {
     const lines = Object.entries(costs).map(([key, val]: [string, any]) => {
-      const baseTotal = key === 'fruit' ? val.base * (boxes || 1) : val.base;
-      const marginFact = val.margin / 100;
-      const sale = marginFact < 1 ? baseTotal / (1 - marginFact) : baseTotal;
-      return { key, baseTotal, sale, margin: val.margin };
+      const base = Number(val.base) || 0;
+      const margin = Number(val.margin) || 0;
+      const sale = margin < 100 ? base / (1 - (margin / 100)) : base;
+      return { key, label: val.label, base, margin, sale };
     });
-    const totalSale = lines.reduce((acc, curr) => acc + curr.sale, 0);
-    return { lines, totalSale, perBox: boxes > 0 ? totalSale / boxes : 0 };
-  }, [costs, boxes]);
 
-  const updateCostLine = (key: string, field: 'base' | 'margin', value: number) => {
-    setCosts((prev: any) => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
+    const totalBase = lines.reduce((acc, curr) => acc + curr.base, 0);
+    const totalSale = lines.reduce((acc, curr) => acc + curr.sale, 0);
+    const totalProfit = totalSale - totalBase;
+    const avgMargin = totalSale > 0 ? (totalProfit / totalSale) * 100 : 0;
+
+    return { lines, totalBase, totalSale, totalProfit, avgMargin, perBox: totalSale };
+  }, [costs]);
+
+  // ACTUALIZACIÓN DE LÓGICA: editar Venta afecta Margen
+  const updateCostLine = (key: string, field: 'base' | 'margin' | 'sale', value: number) => {
+    setCosts((prev: any) => {
+      const current = { ...prev[key] };
+      if (field === 'base') {
+        current.base = value;
+      } else if (field === 'margin') {
+        current.margin = value;
+      } else if (field === 'sale') {
+        // Si edito venta: margen = (venta - costo) / venta
+        const newMargin = value > 0 ? ((value - current.base) / value) * 100 : 0;
+        current.margin = newMargin;
+      }
+      return { ...prev, [key]: current };
+    });
   };
 
   async function handleSave() {
     setBusy(true);
     const payload = {
       status, boxes, weight_kg: weightKg, mode, destination: place, product_id: productId,
-      margin_markup: costs.fruit.margin,
-      product_details: { ...data?.product_details, variety },
+      product_details: { variety, color, brix },
       costs: { 
         c_fruit: costs.fruit.base, c_freight: costs.freight.base, c_origin: costs.origin.base, 
-        c_aduana: costs.aduana.base, c_other: costs.other.base,
-        m_freight: costs.freight.margin, m_origin: costs.origin.margin
+        c_docs: costs.docs.base, c_inspeccion: costs.inspeccion.base, c_other: costs.other.base,
+        m_freight: costs.freight.margin, m_origin: costs.origin.margin, m_docs: costs.docs.margin
       },
-      totals: { total: analysis.totalSale, per_box: analysis.perBox }
+      totals: { total_sale: analysis.totalSale * boxes, per_box: analysis.perBox }
     };
     await supabase.from("quotes").update(payload).eq("id", id as string);
     setBusy(false);
-    setToast("Cotización actualizada");
+    setToast("Cambios guardados");
     setTimeout(() => setToast(null), 2000);
   }
 
-  if (loading) return <AdminLayout title="Cargando..."><div className="p-10 text-center text-slate-400 font-bold">Cargando...</div></AdminLayout>;
+  if (loading) return <AdminLayout title="Cargando..."><div className="p-10 text-center">Cargando datos...</div></AdminLayout>;
 
   return (
-    <AdminLayout title={`Cotización ${getQuoteNumber(data)}`}>
+    <AdminLayout title={`Cotización ${data?.quote_number || '...'}`}>
       <div className="view-container">
         
-        {/* HEADER ESTILO CLIENTE [id] */}
         <header className="header-pro">
           <div className="header-left">
             <div className="logo-holder">
-              {data?.clients?.logo_url ? (
-                <img src={data.clients.logo_url} alt="Logo" />
-              ) : (
-                <Building2 size={24} className="opacity-20" />
-              )}
+              {data?.clients?.logo_url ? <img src={data.clients.logo_url} alt="Logo" /> : <Building2 size={24} className="opacity-20" />}
             </div>
-            
             <div className="client-main-info">
               <div className="title-row">
                 <h1>{data?.clients?.name || "Cliente no definido"}</h1>
-                <span className="quote-number-badge">{getQuoteNumber(data)}</span>
+                <span className="quote-number-badge">{data?.quote_number || "S/N"}</span>
               </div>
               <div className="sub-row">
-                <span className="tax-label">
-                   Tax ID: <strong>{data?.clients?.tax_id || 'Pendiente'}</strong>
-                </span>
+                <span>Tax ID: <strong>{data?.clients?.tax_id || 'N/A'}</strong></span>
                 <span className="geo-label"><MapPin size={12}/> {data?.clients?.country || 'N/A'}</span>
               </div>
             </div>
-
             <div className="header-stats">
               <div className="h-stat">
                 <span className="h-stat-label">Estado</span>
-                <div className="status-mini-wrapper">
-                   <select className={`status-pill-select ${status}`} value={status} onChange={e => setStatus(e.target.value)}>
-                     <option value="draft">BORRADOR</option>
-                     <option value="sent">ENVIADA</option>
-                     <option value="won">GANADA</option>
-                   </select>
-                </div>
+                <select className={`status-pill-select ${status}`} value={status} onChange={e => setStatus(e.target.value)}>
+                  <option value="draft">BORRADOR</option>
+                  <option value="sent">ENVIADA</option>
+                  <option value="won">GANADA</option>
+                </select>
               </div>
               <div className="v-divider"></div>
-              <div className="h-stat">
-                <span className="h-stat-label">Cajas</span>
-                <span className="h-stat-val">{boxes}</span>
-              </div>
-              <div className="v-divider"></div>
-              <div className="h-stat">
-                <span className="h-stat-label">Total Venta</span>
-                <span className="h-stat-val">USD {analysis.totalSale.toLocaleString(undefined, {maximumFractionDigits:0})}</span>
-              </div>
+              <div className="h-stat"><span className="h-stat-label">Cajas</span><span className="h-stat-val">{boxes}</span></div>
             </div>
           </div>
-
           <div className="header-actions">
-            <button className="btn-refine-white" onClick={handleSave} disabled={busy}>
+            <button className="btn-save-mini" onClick={handleSave} disabled={busy}>
               {busy ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>} Guardar
             </button>
           </div>
         </header>
 
-        {/* GRID DE CONFIGURACIÓN */}
         <div className="ff-grid">
           <div className="ff-card">
             <div className="ff-card-label"><Package size={14}/> PRODUCTO Y CALIDAD</div>
@@ -232,7 +224,7 @@ export default function AdminQuoteDetailPage() {
               </div>
               <label>Destino</label>
               <LocationSelector mode={mode} value={place} onChange={setPlace} />
-              <div className="ff-row-3">
+              <div className="ff-row-2">
                 <div className="ff-metric"><span>Cajas</span><input type="number" value={boxes} onChange={e=>setBoxes(Number(e.target.value))}/></div>
                 <div className="ff-metric"><span>Peso KG</span><input type="number" value={weightKg} onChange={e=>setWeightKg(Number(e.target.value))}/></div>
               </div>
@@ -240,17 +232,20 @@ export default function AdminQuoteDetailPage() {
           </div>
 
           <div className="ff-card">
-            <div className="ff-card-label"><DollarSign size={14}/> COSTOS BASE</div>
+            <div className="ff-card-label"><DollarSign size={14}/> COSTO BASE RÁPIDO</div>
             <div className="ff-card-body ff-costs">
-               <div className="ff-cost-item"><span>Fruta $/u</span><input type="number" value={costs.fruit.base} onChange={e=>updateCostLine('fruit','base', Number(e.target.value))}/></div>
-               <div className="ff-cost-item"><span>Flete Int.</span><input type="number" value={costs.freight.base} onChange={e=>updateCostLine('freight','base', Number(e.target.value))}/></div>
-               <div className="ff-cost-item"><span>Gastos Origen</span><input type="number" value={costs.origin.base} onChange={e=>updateCostLine('origin','base', Number(e.target.value))}/></div>
+               {analysis.lines.slice(0,3).map(line => (
+                 <div className="ff-cost-item" key={line.key}>
+                   <span>{line.label}</span>
+                   <input type="number" value={line.base} onChange={e=>updateCostLine(line.key,'base', Number(e.target.value))}/>
+                 </div>
+               ))}
             </div>
           </div>
         </div>
 
-        {/* TABLA DE RESUMEN FINANCIERO */}
         <div className="ff-analysis-card">
+          <div className="ff-card-label" style={{border:0, padding: "0 0 15px 0"}}><Calculator size={14}/> ANÁLISIS DE VENTA</div>
           <table className="ff-table">
             <thead>
               <tr>
@@ -264,27 +259,32 @@ export default function AdminQuoteDetailPage() {
             <tbody>
               {analysis.lines.map((line) => (
                 <tr key={line.key}>
-                  <td className="ff-concept">{line.key}</td>
-                  <td align="center"><input className="ff-td-input" type="number" value={costs[line.key].base} onChange={e => updateCostLine(line.key, 'base', Number(e.target.value))}/></td>
-                  <td align="center"><input className="ff-td-input green" type="number" value={line.margin} onChange={e => updateCostLine(line.key, 'margin', Number(e.target.value))}/></td>
-                  <td align="center" className="ff-td-bold">USD {line.sale.toFixed(2)}</td>
+                  <td className="ff-concept">{line.label}</td>
+                  <td align="center"><input className="ff-td-input" type="number" value={line.base} onChange={e => updateCostLine(line.key, 'base', Number(e.target.value))}/></td>
+                  <td align="center"><input className="ff-td-input green" type="number" value={line.margin.toFixed(1)} onChange={e => updateCostLine(line.key, 'margin', Number(e.target.value))}/></td>
+                  <td align="center"><input className="ff-td-input bold" type="number" value={line.sale.toFixed(2)} onChange={e => updateCostLine(line.key, 'sale', Number(e.target.value))}/></td>
                   <td align="right" className="ff-impact">{analysis.totalSale > 0 ? ((line.sale / analysis.totalSale) * 100).toFixed(0) : 0}%</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          {/* FOOTER MINIATURIZADO */}
-          <div className="mini-footer">
-            <div className="footer-info-text"><Info size={12}/> Precios basados en margen de contribución.</div>
-            <div className="footer-actions-group">
-              <button className="btn-save-mini" onClick={handleSave} disabled={busy}>
-                <Save size={14}/> {busy ? "..." : "Actualizar"}
-              </button>
-              <div className="price-pill-mini">
-                <span className="pill-label">PRECIO CAJA</span>
-                <span className="pill-value">USD {analysis.perBox.toFixed(2)}</span>
-              </div>
+          <div className="footer-pills-container">
+            <div className="f-pill gray">
+              <span className="f-pill-lbl">COSTO TOTAL</span>
+              <span className="f-pill-val">USD {analysis.totalBase.toFixed(2)}</span>
+            </div>
+            <div className="f-pill gray">
+              <span className="f-pill-lbl">PRECIO DE VENTA</span>
+              <span className="f-pill-val">USD {analysis.totalSale.toFixed(2)}</span>
+            </div>
+            <div className="f-pill green">
+              <span className="f-pill-lbl">MARGEN TOTAL</span>
+              <span className="f-pill-val">{analysis.avgMargin.toFixed(1)}%</span>
+            </div>
+            <div className="f-pill dark">
+              <span className="f-pill-lbl">VENTA POR CAJA</span>
+              <span className="f-pill-val">USD {analysis.perBox.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -293,9 +293,8 @@ export default function AdminQuoteDetailPage() {
       </div>
 
       <style jsx>{`
-        .view-container { padding: 30px; max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; font-family: 'Inter', sans-serif; }
+        .view-container { padding: 30px; max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; font-family: 'Inter', sans-serif; background: #fbfcfd; min-height: 100vh; }
         
-        /* HEADER PRO (ESPEJO DE CLIENTES) */
         .header-pro { display: flex; justify-content: space-between; align-items: center; background: white; padding: 16px 24px; border-radius: 14px; border: 1px solid #eef0f2; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
         .header-left { display: flex; align-items: center; gap: 20px; }
         .logo-holder { width: 48px; height: 48px; background: #f8fafc; border-radius: 10px; border: 1.5px solid #eef2f6; display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -305,22 +304,17 @@ export default function AdminQuoteDetailPage() {
         .quote-number-badge { background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 800; border: 1px solid #e2e8f0; }
         .sub-row { display: flex; gap: 15px; margin-top: 2px; font-size: 12px; color: #64748b; }
         .header-stats { display: flex; gap: 20px; padding-left: 20px; border-left: 1.5px solid #f1f5f9; margin-left: 5px; }
-        .h-stat { display: flex; flex-direction: column; justify-content: center; }
-        .h-stat-label { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+        .h-stat-label { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; display: block; }
         .h-stat-val { font-size: 15px; font-weight: 800; color: #1e293b; }
         .v-divider { width: 1px; height: 25px; background: #f1f5f9; align-self: center; }
-        .status-pill-select { border: none; background: #dcfce7; color: #166534; font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 5px; cursor: pointer; outline: none; }
-        .btn-refine-white { background: white; border: 1.5px solid #e2e8f0; padding: 8px 16px; border-radius: 8px; font-weight: 700; color: #64748b; cursor: pointer; display: flex; gap: 8px; font-size: 13px; }
+        .status-pill-select { border: none; background: #dcfce7; color: #166534; font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
 
-        /* GRID & CARDS */
         .ff-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
         .ff-card { background: white; border: 1px solid #eef0f2; border-radius: 12px; }
-        .ff-card-label { padding: 12px 16px; font-size: 10px; font-weight: 800; color: #166534; border-bottom: 1px solid #f8fafc; display: flex; align-items: center; gap: 8px; }
+        .ff-card-label { padding: 12px 16px; font-size: 10px; font-weight: 800; color: #166534; border-bottom: 1px solid #f8fafc; display: flex; align-items: center; gap: 8px; text-transform: uppercase; }
         .ff-card-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
         .ff-card-body label { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: -6px; }
         .ff-input { width: 100%; padding: 8px 12px; border: 1.5px solid #eef2f6; border-radius: 8px; font-size: 13px; font-weight: 600; outline: none; }
-        .ff-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .ff-row-3 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 5px; }
         .ff-metric { background: #f8fafc; padding: 8px; border-radius: 8px; border: 1px solid #eef2f6; text-align: center; }
         .ff-metric span { display: block; font-size: 8px; font-weight: 700; color: #94a3b8; }
         .ff-metric input { width: 100%; background: transparent; border: none; text-align: center; font-weight: 800; font-size: 14px; outline: none; }
@@ -328,32 +322,32 @@ export default function AdminQuoteDetailPage() {
         .ff-toggle button { border: none; background: transparent; padding: 4px 10px; border-radius: 6px; cursor: pointer; color: #94a3b8; }
         .ff-toggle button.active { background: white; color: #166534; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 
-        /* COST ITEMS */
         .ff-cost-item { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #f8fafc; }
-        .ff-cost-item span { font-size: 13px; font-weight: 600; color: #475569; }
-        .ff-cost-item input { width: 80px; text-align: right; border: 1.5px solid #eef2f6; border-radius: 6px; padding: 4px 8px; font-weight: 700; }
+        .ff-cost-item span { font-size: 12px; font-weight: 600; color: #475569; }
+        .ff-cost-item input { width: 70px; text-align: right; border: 1.5px solid #eef2f6; border-radius: 6px; padding: 3px 6px; font-weight: 700; font-size: 12px; }
 
-        /* TABLE */
-        .ff-analysis-card { background: white; border: 1px solid #eef0f2; border-radius: 12px; padding: 20px; }
-        .ff-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .ff-table th { padding: 10px; font-size: 10px; font-weight: 800; color: #94a3b8; border-bottom: 2px solid #f8fafc; }
-        .ff-table td { padding: 12px 10px; border-bottom: 1px solid #f9fafb; font-size: 13px; }
-        .ff-td-input { width: 80px; padding: 5px; border: 1.5px solid #eef2f6; border-radius: 6px; text-align: center; font-weight: 700; outline: none; }
+        .ff-analysis-card { background: white; border: 1px solid #eef0f2; border-radius: 12px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.01); }
+        .ff-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+        .ff-table th { padding: 10px; font-size: 10px; font-weight: 800; color: #94a3b8; border-bottom: 2px solid #f8fafc; text-transform: uppercase; }
+        .ff-table td { padding: 10px; border-bottom: 1px solid #f9fafb; font-size: 13px; }
+        .ff-concept { font-weight: 600; color: #475569; }
+        .ff-td-input { width: 90px; padding: 6px; border: 1.5px solid #eef2f6; border-radius: 8px; text-align: center; font-weight: 700; outline: none; transition: 0.2s; }
+        .ff-td-input:focus { border-color: #166534; background: #f0fdf4; }
         .ff-td-input.green { color: #166534; background: #f0fdf4; border-color: #dcfce7; }
-        .ff-td-bold { font-weight: 800; color: #1e293b; }
-        .ff-impact { color: #94a3b8; font-weight: 700; font-size: 11px; }
+        .ff-td-input.bold { font-weight: 900; color: #1e293b; background: #f8fafc; }
+        .ff-impact { color: #cbd5e1; font-weight: 800; font-size: 11px; }
 
-        /* FOOTER MINI */
-        .mini-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 15px; }
-        .footer-info-text { font-size: 11px; color: #94a3b8; font-style: italic; display: flex; align-items: center; gap: 5px; }
-        .footer-actions-group { display: flex; align-items: center; gap: 10px; }
-        .btn-save-mini { background: #166534; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: 0.2s; }
-        .btn-save-mini:hover { background: #0f4a25; }
-        .price-pill-mini { background: #1e293b; color: white; padding: 6px 14px; border-radius: 8px; text-align: right; min-width: 130px; }
-        .pill-label { display: block; font-size: 8px; font-weight: 700; opacity: 0.6; }
-        .pill-value { font-size: 18px; font-weight: 900; }
+        .footer-pills-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; border-top: 2px solid #f8fafc; padding-top: 20px; }
+        .f-pill { padding: 12px 20px; border-radius: 12px; display: flex; flex-direction: column; }
+        .f-pill.gray { background: #f8fafc; border: 1px solid #eef2f6; }
+        .f-pill.green { background: #f0fdf4; border: 1px solid #dcfce7; color: #166534; }
+        .f-pill.dark { background: #1e293b; color: white; }
+        .f-pill-lbl { font-size: 9px; font-weight: 800; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.05em; }
+        .f-pill-val { font-size: 18px; font-weight: 900; }
 
-        .ff-toast { position: fixed; bottom: 20px; right: 20px; background: #1e293b; color: white; padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 13px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .btn-save-mini { background: #166534; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+        .btn-save-mini:hover { background: #0f4a25; transform: translateY(-1px); }
+        .ff-toast { position: fixed; bottom: 25px; right: 25px; background: #1e293b; color: white; padding: 12px 24px; border-radius: 10px; font-weight: 700; box-shadow: 0 10px 30px rgba(0,0,0,0.2); z-index: 1000; }
       `}</style>
     </AdminLayout>
   );
