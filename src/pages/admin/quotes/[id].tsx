@@ -54,7 +54,20 @@ export default function AdminQuoteDetailPage() {
 
   async function loadData(quoteId: string) {
     setLoading(true);
-    const { data: quote } = await supabase.from("quotes").select("*").eq("id", quoteId).single();
+    // CORRECCIÓN: Join con la tabla clients para obtener datos frescos
+    const { data: quote } = await supabase
+      .from("quotes")
+      .select(`
+        *,
+        clients (
+          name,
+          tax_id,
+          contact_email,
+          logo_url
+        )
+      `)
+      .eq("id", quoteId)
+      .single();
 
     if (quote) {
       setData(quote);
@@ -135,29 +148,56 @@ export default function AdminQuoteDetailPage() {
       },
       totals: { total: analysis.totalSale, profit: analysis.profit, per_box: analysis.perBox, meta: { incoterm, pallets, place } }
     };
-    const { error } = await supabase.from("quotes").update(payload).eq("id", id);
+    const { error } = await supabase.from("quotes").update(payload).eq(id as string);
     setBusy(false);
     if (!error) { setToast("Cambios guardados"); setTimeout(() => setToast(null), 2000); }
   }
 
-  if (loading) return <AdminLayout title="Cargando..."><div className="ff-card-pad">Cargando datos...</div></AdminLayout>;
+  if (loading) return <AdminLayout title="Cargando..."><div className="ff-card-pad">Cargando datos de cotización...</div></AdminLayout>;
 
   return (
     <AdminLayout title={`Cotización ${data?.quote_number || id?.slice(0,8)}`}>
       <div className="ff-content ff-content--wide">
         
-        {/* HEADER RESTAURADO */}
-        <div className="ff-card ff-card-pad header-flex">
-          <div className="client-brand">
-            <div className="avatar-box"><Building2 size={22} /></div>
-            <div className="client-info-stack">
-              <h2 className="client-name">{data?.client_snapshot?.name || "Cliente no definido"}</h2>
-              <div className="client-meta">
-                <span className="meta-item"><FileText size={12}/> {data?.client_snapshot?.tax_id || "Sin TAX ID"}</span>
-                <span className="meta-item"><Globe size={12}/> {data?.client_snapshot?.contact_email || "Sin email"}</span>
+        {/* HEADER PRO - ESTILO CLIENTES */}
+        <div className="ff-card header-pro">
+          <div className="header-left">
+            <div className="logo-holder">
+              {data?.clients?.logo_url ? (
+                <img src={data.clients.logo_url} alt="Logo" />
+              ) : (
+                <Building2 size={24} className="opacity-20" />
+              )}
+            </div>
+            
+            <div className="client-main-info">
+              <div className="title-row">
+                <h1>{data?.clients?.name || data?.client_snapshot?.name || "Cliente no definido"}</h1>
+                <span className={`status-badge-pro ${status}`}>{status.toUpperCase()}</span>
+              </div>
+              <div className="sub-row">
+                <span className="tax-label">
+                   <FileText size={12}/> Tax ID: <strong>{data?.clients?.tax_id || data?.client_snapshot?.tax_id || 'Pendiente'}</strong>
+                </span>
+                <span className="geo-label">
+                  <Globe size={12}/> {data?.clients?.contact_email || data?.client_snapshot?.contact_email || 'Sin email'}
+                </span>
+              </div>
+            </div>
+
+            <div className="header-stats-group">
+              <div className="h-stat">
+                <span className="h-stat-label">Cajas</span>
+                <span className="h-stat-val">{boxes}</span>
+              </div>
+              <div className="v-divider"></div>
+              <div className="h-stat">
+                <span className="h-stat-label">Venta Total</span>
+                <span className="h-stat-val">${analysis.totalSale.toLocaleString()}</span>
               </div>
             </div>
           </div>
+
           <div className="actions-cluster">
             <div className="status-pill-container">
                <select className={`status-pill-select ${status}`} value={status} onChange={e => setStatus(e.target.value)}>
@@ -176,7 +216,7 @@ export default function AdminQuoteDetailPage() {
           </div>
         </div>
 
-        {/* FILA DE CONFIGURACION 3 COLUMNAS */}
+        {/* CONFIGURACIÓN 3 COLUMNAS */}
         <div className="config-row">
           <div className="ff-card config-card">
             <div className="card-label"><Package size={14}/> Producto y Calidad</div>
@@ -201,10 +241,10 @@ export default function AdminQuoteDetailPage() {
           </div>
 
           <div className="ff-card config-card">
-            <div className="card-label"><Ship size={14}/> Configuración Logística</div>
+            <div className="card-label"><Ship size={14}/> Logística</div>
             <div className="config-grid">
               <div className="field full flex-between">
-                <label>Modo de Transporte</label>
+                <label>Modo</label>
                 <div className="mini-toggle">
                   <button className={mode==='AIR'?'active':''} onClick={()=>setMode('AIR')}><Plane size={12}/></button>
                   <button className={mode==='SEA'?'active':''} onClick={()=>setMode('SEA')}><Ship size={12}/></button>
@@ -216,19 +256,19 @@ export default function AdminQuoteDetailPage() {
                   <option value="CIP">CIP</option><option value="CIF">CIF</option><option value="FOB">FOB</option><option value="DDP">DDP</option>
                 </select>
               </div>
-              <div className="field full"><label>Destino (Place)</label><LocationSelector mode={mode} value={place} onChange={setPlace} /></div>
+              <div className="field full"><label>Destino</label><LocationSelector mode={mode} value={place} onChange={setPlace} /></div>
               <div className="mini-stats">
                  <div className="ms-item"><span>Cajas</span><input type="number" value={boxes} onChange={e=>setBoxes(Number(e.target.value))}/></div>
                  <div className="ms-item"><span>Pallets</span><input type="number" value={pallets} onChange={e=>setPallets(Number(e.target.value))}/></div>
-                 <div className="ms-item"><span>Peso (KG)</span><input type="number" value={weightKg} onChange={e=>setWeightKg(Number(e.target.value))}/></div>
+                 <div className="ms-item"><span>KG</span><input type="number" value={weightKg} onChange={e=>setWeightKg(Number(e.target.value))}/></div>
               </div>
             </div>
           </div>
 
           <div className="ff-card config-card">
-            <div className="card-label"><DollarSign size={14}/> Estructura de Costos Base</div>
+            <div className="card-label"><DollarSign size={14}/> Costos Base</div>
             <div className="costs-entry-list">
-               <div className="ce-item"><span>Fruta ($/caja)</span><input type="number" step="0.01" value={costs.fruit.base} onChange={e=>updateCostLine('fruit','base', Number(e.target.value))}/></div>
+               <div className="ce-item"><span>Fruta ($/cx)</span><input type="number" step="0.01" value={costs.fruit.base} onChange={e=>updateCostLine('fruit','base', Number(e.target.value))}/></div>
                <div className="ce-item"><span>Flete Int.</span><input type="number" value={costs.freight.base} onChange={e=>updateCostLine('freight','base', Number(e.target.value))}/></div>
                <div className="ce-item"><span>Gastos Origen</span><input type="number" value={costs.origin.base} onChange={e=>updateCostLine('origin','base', Number(e.target.value))}/></div>
                <div className="ce-item"><span>Aduana</span><input type="number" value={costs.aduana.base} onChange={e=>updateCostLine('aduana','base', Number(e.target.value))}/></div>
@@ -237,17 +277,16 @@ export default function AdminQuoteDetailPage() {
           </div>
         </div>
 
-        {/* ANALISIS FINANCIERO 100% ANCHO */}
+        {/* ANÁLISIS FINANCIERO */}
         <div className="ff-card analysis-card">
           <div className="analysis-header">
             <div className="ah-left">
               <Calculator size={20} className="text-green"/>
-              <h3>Resumen Financiero y Análisis de Venta</h3>
+              <h3>Resumen de Venta</h3>
             </div>
             <div className="mini-badges">
               <div className="m-badge">Costo: <b>${analysis.totalCost.toLocaleString()}</b></div>
               <div className="m-badge green">Venta: <b>${analysis.totalSale.toLocaleString()}</b></div>
-              <div className="m-badge utility">Utilidad: <b>${analysis.profit.toLocaleString()}</b></div>
             </div>
           </div>
 
@@ -255,10 +294,10 @@ export default function AdminQuoteDetailPage() {
             <thead>
               <tr>
                 <th style={{textAlign:'left'}}>CONCEPTO</th>
-                <th style={{textAlign:'right'}}>COSTO BASE (USD)</th>
+                <th style={{textAlign:'right'}}>COSTO BASE</th>
                 <th style={{textAlign:'center'}}>MARGEN (%)</th>
                 <th style={{textAlign:'right'}}>PRECIO VENTA</th>
-                <th style={{textAlign:'right'}}>IMPACTO (%)</th>
+                <th style={{textAlign:'right'}}>IMPACTO</th>
               </tr>
             </thead>
             <tbody>
@@ -281,10 +320,15 @@ export default function AdminQuoteDetailPage() {
           </table>
 
           <div className="footer-flex">
-            <div className="info-box"><Info size={14}/> <span>Precios editables. Los cambios en margen afectan la utilidad final.</span></div>
-            <div className="final-price-pill">
-               <span className="fp-label">PRECIO FINAL POR CAJA</span>
-               <span className="fp-value">USD {analysis.perBox.toFixed(2)}</span>
+            <div className="info-box"><Info size={14}/> <span>Precios editables. El cambio de margen afecta el precio de venta.</span></div>
+            <div className="final-actions-group">
+                <button className="ff-btn ff-btn-primary save-btn-extra" onClick={handleSave} disabled={busy}>
+                    {busy ? <Loader2 size={16} className="spin"/> : <Save size={16}/>} Guardar Cambios
+                </button>
+                <div className="final-price-pill">
+                <span className="fp-label">PRECIO FINAL POR CAJA</span>
+                <span className="fp-value">USD {analysis.perBox.toFixed(2)}</span>
+                </div>
             </div>
           </div>
         </div>
@@ -293,33 +337,44 @@ export default function AdminQuoteDetailPage() {
       </div>
 
       <style jsx>{`
-        .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding: 16px 24px; }
-        .client-brand { display: flex; gap: 16px; align-items: center; }
-        .avatar-box { background: #f0fdf4; color: var(--ff-green); width: 44px; height: 44px; display: grid; place-items: center; border-radius: 10px; border: 1px solid rgba(31,122,58,0.1); }
-        .client-name { margin: 0; font-size: 19px; font-weight: 800; color: #1e293b; letter-spacing: -0.5px; }
-        .client-meta { display: flex; gap: 15px; margin-top: 2px; }
-        .meta-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; font-weight: 500; }
-
-        .actions-cluster { display: flex; gap: 12px; align-items: center; }
-        .status-pill-container { position: relative; display: flex; align-items: center; }
-        .pill-icon { position: absolute; right: 12px; pointer-events: none; color: inherit; opacity: 0.7; }
+        /* HEADER PRO STYLE */
+        .header-pro { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding: 18px 24px; background: white; border: 1px solid #eef0f2; border-radius: 12px; }
+        .header-left { display: flex; align-items: center; gap: 20px; flex: 1; }
+        .logo-holder { width: 54px; height: 54px; background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; }
+        .logo-holder img { width: 100%; height: 100%; object-fit: contain; padding: 5px; }
         
+        .client-main-info h1 { font-size: 20px; font-weight: 800; color: #1a202c; margin: 0; }
+        .title-row { display: flex; align-items: center; gap: 12px; }
+        .status-badge-pro { font-size: 9px; font-weight: 800; padding: 3px 10px; border-radius: 20px; text-transform: uppercase; background: #f1f5f9; color: #475569; }
+        .status-badge-pro.won { background: #dcfce7; color: #166534; }
+        .status-badge-pro.sent { background: #eff6ff; color: #1e40af; }
+        
+        .sub-row { display: flex; gap: 15px; font-size: 12px; color: #718096; align-items: center; margin-top: 4px; }
+        .tax-label strong { color: #2d3748; }
+
+        .header-stats-group { display: flex; gap: 20px; padding-left: 20px; border-left: 1px solid #edf2f7; margin-left: 10px; }
+        .h-stat { display: flex; flex-direction: column; }
+        .h-stat-label { font-size: 10px; font-weight: 700; color: #a0aec0; text-transform: uppercase; }
+        .h-stat-val { font-size: 15px; font-weight: 800; color: #2d3748; }
+        .v-divider { width: 1px; height: 30px; background: #edf2f7; }
+
+        /* ACTIONS CLUSTER */
+        .actions-cluster { display: flex; gap: 10px; align-items: center; }
+        .status-pill-container { position: relative; display: flex; align-items: center; }
+        .pill-icon { position: absolute; right: 12px; pointer-events: none; opacity: 0.5; }
         .status-pill-select { 
-          appearance: none; border: 1px solid transparent; border-radius: 100px; 
-          padding: 0 35px 0 18px; font-weight: 800; font-size: 11px; height: 38px; cursor: pointer; 
-          transition: all 0.2s; letter-spacing: 0.5px;
+          appearance: none; border: 1px solid #e2e8f0; border-radius: 100px; 
+          padding: 0 32px 0 16px; font-weight: 800; font-size: 11px; height: 38px; cursor: pointer; background: white;
         }
-        .status-pill-select.draft { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
-        .status-pill-select.sent { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
-        .status-pill-select.won { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+        .status-pill-select.won { color: #166534; border-color: #bcf0da; }
 
-        .pdf-btn { height: 38px; font-weight: 700; background: #fff; border: 1px solid #e2e8f0; color: #64748b; }
-        .save-btn { height: 38px; padding: 0 20px; font-weight: 700; display: flex; gap: 8px; border-radius: 10px; }
+        .pdf-btn { height: 38px; background: white; border: 1px solid #e2e8f0; color: #64748b; font-weight: 700; }
+        .save-btn { height: 38px; padding: 0 20px; font-weight: 700; border-radius: 10px; }
 
+        /* GRID & CARDS */
         .config-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
         .config-card { padding: 20px; }
         .card-label { font-size: 11px; font-weight: 900; text-transform: uppercase; color: var(--ff-green); display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
-        
         .config-grid { display: flex; flex-wrap: wrap; gap: 12px; }
         .field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 45%; min-width: 0; }
         .field.full { flex: 1 1 100%; }
@@ -332,42 +387,38 @@ export default function AdminQuoteDetailPage() {
 
         .mini-stats { display: flex; gap: 8px; width: 100%; margin-top: 8px; }
         .ms-item { flex: 1; background: #f8fafc; padding: 8px; border-radius: 8px; text-align: center; border: 1px solid #e2e8f0; }
-        .ms-item span { display: block; font-size: 9px; font-weight: 800; color: #94a3b8; margin-bottom: 2px; }
+        .ms-item span { display: block; font-size: 9px; font-weight: 800; color: #94a3b8; }
         .ms-item input { width: 100%; border: none; background: transparent; text-align: center; font-weight: 900; font-size: 13px; outline: none; }
 
         .costs-entry-list { display: flex; flex-direction: column; gap: 10px; }
-        .ce-item { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9; }
+        .ce-item { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; }
         .ce-item span { font-size: 13px; font-weight: 600; color: #475569; }
         .ce-item input { width: 90px; text-align: right; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 8px; font-weight: 700; }
 
+        /* ANALYSIS */
         .analysis-card { padding: 30px; }
         .analysis-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
         .ah-left { display: flex; align-items: center; gap: 12px; }
-        .ah-left h3 { margin: 0; font-size: 20px; font-weight: 800; color: #1e293b; }
-        
-        .mini-badges { display: flex; gap: 12px; }
+        .ah-left h3 { margin: 0; font-size: 18px; font-weight: 800; }
         .m-badge { background: #f8fafc; padding: 8px 16px; border-radius: 12px; font-size: 12px; border: 1px solid #e2e8f0; }
         .m-badge.green { background: #f0fdf4; color: var(--ff-green); border-color: #dcfce7; }
-        .m-badge.utility { background: #eff6ff; color: #2563eb; border-color: #dbeafe; }
 
         .analysis-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-        .analysis-table th { padding: 12px; border-bottom: 2px solid #f8fafc; font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
-        .analysis-table td { padding: 14px 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
-        .table-input { width: 100px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; font-weight: 700; text-align: right; }
+        .analysis-table th { padding: 12px; border-bottom: 2px solid #f8fafc; font-size: 11px; color: #94a3b8; text-transform: uppercase; }
+        .analysis-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        .table-input { width: 100px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; font-weight: 700; text-align: right; }
         .table-input.center { text-align: center; color: var(--ff-green); width: 70px; }
 
-        .footer-flex { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 20px; }
-        .info-box { display: flex; align-items: center; gap: 8px; color: #94a3b8; font-size: 12px; font-style: italic; }
-        .final-price-pill { background: #f8fafc; border: 2px solid var(--ff-green); padding: 10px 24px; border-radius: 12px; text-align: right; }
-        .fp-label { display: block; font-size: 10px; font-weight: 800; color: var(--ff-green); }
-        .fp-value { font-size: 26px; font-weight: 900; color: #1e293b; letter-spacing: -1px; }
+        /* FOOTER ACTIONS */
+        .footer-flex { display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid #f1f5f9; padding-top: 25px; }
+        .final-actions-group { display: flex; align-items: center; gap: 15px; }
+        .save-btn-extra { height: 60px; padding: 0 25px; font-weight: 800; border-radius: 12px; font-size: 14px; display: flex; gap: 10px; }
+        
+        .final-price-pill { background: #1e293b; color: white; padding: 10px 24px; border-radius: 12px; text-align: right; min-width: 200px; }
+        .fp-label { display: block; font-size: 10px; font-weight: 800; opacity: 0.6; margin-bottom: 2px; }
+        .fp-value { font-size: 26px; font-weight: 900; letter-spacing: -1px; }
 
-        .text-green { color: var(--ff-green); }
-        .capitalize { text-transform: capitalize; }
-        .text-right { text-align: right; }
-        .text-center { text-align: center; }
-        .font-bold { font-weight: 700; }
-        .ff-toast { position: fixed; bottom: 24px; right: 24px; background: var(--ff-green); color: white; padding: 14px 28px; border-radius: 10px; font-weight: 800; z-index: 1000; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        .ff-toast { position: fixed; bottom: 24px; right: 24px; background: #1e293b; color: white; padding: 14px 28px; border-radius: 12px; font-weight: 700; z-index: 1000; }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
