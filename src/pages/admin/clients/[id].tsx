@@ -1,6 +1,5 @@
 import { useRouter } from 'next/router';
 import { useState, useEffect, useCallback } from 'react';
-// CORRECCIÓN DE RUTAS: Al estar en admin/clients/[id], necesitamos ../../../
 import { supabase } from '../../../lib/supabaseClient';
 import { AdminLayout, notify } from '../../../components/AdminLayout';
 import { 
@@ -11,8 +10,6 @@ import {
 import Link from 'next/link';
 import ShipmentDrawer from '../../../components/ShipmentDrawer';
 
-const INCOTERMS = ['FOB', 'CIF', 'CIP', 'FCA', 'CFR', 'EXW', 'DDP', 'DAP'];
-
 export default function ClientDetailPage() {
   const router = useRouter();
   const { id } = router.query;
@@ -22,7 +19,6 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [openAcc, setOpenAcc] = useState<string | null>('fact');
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<any>({});
 
@@ -57,11 +53,6 @@ export default function ClientDetailPage() {
     if (router.isReady && id) fetchData(id as string);
   }, [id, router.isReady, fetchData]);
 
-  const handleShipmentSuccess = () => {
-    notify("Nuevo embarque creado", "success");
-    if (id) fetchData(id as string);
-  };
-
   const handleLogoUpload = async (e: any) => {
     try {
       setUploading(true);
@@ -75,13 +66,16 @@ export default function ClientDetailPage() {
       const { error: uploadError } = await supabase.storage.from('client-logos').upload(filePath, file);
       if (uploadError) throw uploadError;
 
+      // Solución al problema de visualización: Forzamos la URL pública
       const { data: { publicUrl } } = supabase.storage.from('client-logos').getPublicUrl(filePath);
-      await supabase.from('clients').update({ logo_url: publicUrl }).eq('id', id);
+      
+      const { error: updateError } = await supabase.from('clients').update({ logo_url: publicUrl }).eq('id', id);
+      if (updateError) throw updateError;
       
       setClient({ ...client, logo_url: publicUrl });
       notify("Logo actualizado", "success");
     } catch (err: any) {
-      notify("Error subiendo imagen", "error");
+      notify("Error al procesar imagen", "error");
     } finally {
       setUploading(false);
     }
@@ -92,7 +86,7 @@ export default function ClientDetailPage() {
       const { error } = await supabase.from('clients').update({
         contact_email: editData.contact_email,
         phone: editData.phone,
-        tax_id: editData.tax_id,
+        tax_id: editData.tax_id, // Ahora editable
         billing_address: editData.billing_address,
         consignee_info: editData.consignee_info,
         notify_party: editData.notify_party,
@@ -108,323 +102,279 @@ export default function ClientDetailPage() {
     }
   };
 
-  const copyId = () => {
-    if (id) {
-      navigator.clipboard.writeText(id as string);
-      notify("ID de cliente copiado", "success");
-    }
-  };
-
-  if (loading) return (
-    <AdminLayout title="Cargando...">
-      <div className="loader-container">
-        <Loader2 className="spin-pro" size={48} />
-        <p>Sincronizando expediente...</p>
-      </div>
-    </AdminLayout>
-  );
+  if (loading) return <div className="p-20 text-center"><Loader2 className="animate-spin mx-auto text-green-600" size={40}/></div>;
 
   return (
-    <AdminLayout title={client?.name || "Detalle de Cliente"}>
+    <AdminLayout title={client?.name}>
       <div className="view-container">
         
-        <div className="breadcrumb-nav">
-          <Link href="/admin/users" className="btn-back">
-            <ArrowLeft size={14} /> Volver al directorio
-          </Link>
-          <div className="quick-actions">
-            <button className="btn-ghost" onClick={copyId}><Copy size={12}/> ID: {String(id).slice(0,8)}</button>
-          </div>
-        </div>
-
-        <header className="profile-header">
-          <div className="profile-main">
-            <div className="profile-logo-area">
-              <div className={`logo-box ${uploading ? 'is-uploading' : ''}`}>
-                {client.logo_url ? <img src={client.logo_url} alt="Logo" /> : <Building2 size={28} className="text-muted" />}
-                <label className="logo-overlay">
-                  {uploading ? <Loader2 className="spin-pro" /> : <FileUp size={18} />}
-                  <input type="file" hidden onChange={handleLogoUpload} accept="image/*" />
-                </label>
-              </div>
+        {/* HEADER REFINADO */}
+        <header className="header-pro">
+          <div className="header-left">
+            <div className={`logo-holder ${uploading ? 'is-loading' : ''}`}>
+              {client.logo_url ? (
+                <img src={client.logo_url} alt="Logo" onError={(e: any) => e.target.src = '/placeholder-logo.png'} />
+              ) : (
+                <Building2 size={24} className="opacity-20" />
+              )}
+              <label className="upload-btn">
+                <FileUp size={14} />
+                <input type="file" hidden onChange={handleLogoUpload} />
+              </label>
             </div>
-            <div className="profile-info">
-              <div className="name-row">
+            
+            <div className="client-main-info">
+              <div className="title-row">
                 <h1>{client.name}</h1>
-                <span className={`status-pill-lg ${shipments.length > 0 ? 'active' : 'new'}`}>
-                  {shipments.length > 0 ? 'Cliente Activo' : 'Nuevo Prospecto'}
+                <span className={`status-badge ${shipments.length > 0 ? 'active' : 'new'}`}>
+                  {shipments.length > 0 ? 'Cliente Activo' : 'Prospecto'}
                 </span>
               </div>
-              <div className="meta-row">
-                <div className="meta-item"><Hash size={12}/> <span>RUC: {client.tax_id || 'Pendiente'}</span></div>
-                <div className="meta-item"><Globe size={12}/> <span>{client.country || 'Panamá'}</span></div>
+              <div className="sub-row">
+                <span className="tax-label">Tax ID: <strong>{client.tax_id || 'Pendiente'}</strong></span>
+                <span className="geo-label"><MapPin size={12}/> {client.country || 'Panamá'}</span>
+              </div>
+            </div>
+
+            {/* KPIs INTEGRADOS EN HEADER */}
+            <div className="header-stats">
+              <div className="h-stat">
+                <span className="h-stat-label">Embarques</span>
+                <span className="h-stat-val">{shipments.length}</span>
+              </div>
+              <div className="h-stat">
+                <span className="h-stat-label">Incoterm</span>
+                <span className="h-stat-val">{client.default_incoterm}</span>
+              </div>
+              <div className="h-stat">
+                <span className="h-stat-label">Último Despacho</span>
+                <span className="h-stat-val">{shipments[0] ? new Date(shipments[0].created_at).toLocaleDateString() : '--'}</span>
               </div>
             </div>
           </div>
-          
+
           <div className="header-actions">
             {!isEditing ? (
               <>
-                <button className="ff-btn-white" onClick={() => setIsEditing(true)}><Edit3 size={14}/> Editar Perfil</button>
-                <button className="ff-btn ff-btn-primary" onClick={() => setIsDrawerOpen(true)}><Plus size={14}/> Nuevo Embarque</button>
+                <button className="btn-refine-white" onClick={() => setIsEditing(true)}>
+                  <Edit3 size={14}/> Editar Perfil
+                </button>
+                <button className="btn-refine-green" onClick={() => setIsDrawerOpen(true)}>
+                  <Plus size={14}/> Nuevo Embarque
+                </button>
               </>
             ) : (
               <div className="editing-actions">
-                <button className="btn-text-danger" onClick={() => setIsEditing(false)}>Descartar</button>
-                <button className="ff-btn ff-btn-primary" onClick={saveClientData}><Save size={14}/> Guardar Expediente</button>
+                <button className="btn-cancel" onClick={() => setIsEditing(false)}>Descartar</button>
+                <button className="btn-save" onClick={saveClientData}><Save size={14}/> Guardar</button>
               </div>
             )}
           </div>
         </header>
 
-        <div className="stats-strip">
-          <div className="stat-card">
-            <div className="stat-icon purple"><Package size={18}/></div>
-            <div className="stat-label">Total Embarques</div>
-            <div className="stat-value">{shipments.length}</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon green"><Shield size={18}/></div>
-            <div className="stat-label">Incoterm Base</div>
-            <div className="stat-value">{client.default_incoterm}</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon orange"><Clock size={18}/></div>
-            <div className="stat-label">Último Despacho</div>
-            <div className="stat-value">{shipments[0] ? new Date(shipments[0].created_at).toLocaleDateString() : '--/--/--'}</div>
-          </div>
-        </div>
-
-        <div className="content-layout">
-          <section className="side-column">
-            <div className="glass-panel">
-              <h3 className="panel-title">Contacto</h3>
-              <div className="field-group">
-                <label>Correo Electrónico</label>
-                <div className="input-box">
-                  <Mail size={12}/>
-                  <input disabled={!isEditing} value={isEditing ? editData.contact_email : client.contact_email} 
-                    onChange={e => setEditData({...editData, contact_email: e.target.value})} />
-                </div>
-              </div>
-              <div className="field-group">
-                <label>Teléfono</label>
-                <div className="input-box">
-                  <Phone size={12}/>
-                  <input disabled={!isEditing} value={isEditing ? editData.phone : client.phone} 
-                    onChange={e => setEditData({...editData, phone: e.target.value})} />
-                </div>
-              </div>
-              <div className="field-group">
-                <label>Incoterm</label>
-                <select disabled={!isEditing} value={isEditing ? editData.default_incoterm : client.default_incoterm}
-                  onChange={e => setEditData({...editData, default_incoterm: e.target.value})}>
-                  {INCOTERMS.map(inc => <option key={inc} value={inc}>{inc}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="glass-panel mt-4">
-              <h3 className="panel-title">Documentación KYC</h3>
-              <div className="file-stack">
-                <div className="file-row"><FileText size={14} className="text-blue"/> <span>Registro Fiscal.pdf</span></div>
-                <div className="file-row"><FileText size={14} className="text-blue"/> <span>Pacto Social.pdf</span></div>
-                <button className="btn-add-file"><Plus size={12}/> Adjuntar</button>
-              </div>
-            </div>
-          </section>
-
-          <main className="center-column">
-            <div className="data-panel">
-              <div className="panel-header">
+        <div className="main-grid">
+          {/* COLUMNA 1 Y 2: ACTIVIDAD RECIENTE (AMPLIADA) */}
+          <main className="activity-section">
+            <div className="card-pro">
+              <div className="card-header">
                 <h3>Actividad Reciente</h3>
-                <Link href={`/admin/shipments?client=${id}`} className="link-pro">Ver todo <ExternalLink size={12}/></Link>
+                <Link href={`/admin/shipments?client=${id}`} className="view-all">Ver historial <ExternalLink size={12}/></Link>
               </div>
-              
-              <div className="table-responsive">
-                <table className="pro-table-v2">
+              <div className="table-wrapper">
+                <table className="table-refine">
                   <thead>
                     <tr>
                       <th>ID</th>
                       <th>Producto</th>
                       <th>Destino</th>
-                      <th className="txt-right">Cajas / Peso</th>
+                      <th className="txt-right">Volumen</th>
                       <th>Estado</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {shipments.slice(0, 5).map(s => (
-                      <tr key={s.id} onClick={() => router.push(`/admin/shipments/${s.id}`)} className="row-link">
-                        <td><span className="code-tag">{s.code}</span></td>
+                    {shipments.map(s => (
+                      <tr key={s.id} className="row-hover" onClick={() => router.push(`/admin/shipments/${s.id}`)}>
+                        <td><span className="id-tag">{s.code}</span></td>
                         <td>
-                          <div className="prod-info">
+                          <div className="cell-product">
                             <strong>{s.product_name}</strong>
-                            <small>{s.product_variety}</small>
+                            <span>{s.product_variety}</span>
                           </div>
                         </td>
-                        <td><div className="dest-info"><MapPin size={12}/> {s.destination_port}</div></td>
+                        <td>
+                          <div className="cell-dest">
+                             <img src={`https://flagcdn.com/w20/${s.destination_country_code?.toLowerCase() || 'pa'}.png`} alt="flag" className="flag-icon" />
+                             <span>{s.destination_port}</span>
+                          </div>
+                        </td>
                         <td className="txt-right">
-                          <div className="vol-info">
+                          <div className="cell-vol">
                             <strong>{s.boxes || 0} CX</strong>
-                            <small>{s.weight || 0} KG</small>
+                            <span className="text-muted-xs">{s.weight || 0} KG</span>
                           </div>
                         </td>
-                        <td><span className={`status-pill-sm ${s.status?.toLowerCase()}`}>{s.status}</span></td>
+                        <td>
+                          <span className={`pill-status-v2 ${s.status?.toLowerCase()}`}>
+                            {s.status}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                {shipments.length === 0 && (
-                  <div className="empty-state-v2">
-                    <Ship size={32} />
-                    <p>Sin actividad registrada</p>
-                    <button className="ff-btn ff-btn-primary btn-sm" onClick={() => setIsDrawerOpen(true)}>Crear Embarque</button>
-                  </div>
-                )}
               </div>
             </div>
           </main>
 
-          <section className="side-column">
-            <div className="glass-panel logistics-panel">
-              <h3 className="panel-title">Logística</h3>
-              
-              <div className={`acc-item ${openAcc === 'fact' ? 'is-open' : ''}`}>
-                <button className="acc-trigger" onClick={() => setOpenAcc(openAcc === 'fact' ? null : 'fact')}>
-                  <Building2 size={14}/> Facturación
-                </button>
-                <div className="acc-content">
+          {/* COLUMNA 3: INFORMACIÓN ESTÁTICA */}
+          <aside className="info-sidebar">
+            {/* CONTACTO */}
+            <div className="card-pro mini">
+              <h4 className="section-title">Contacto</h4>
+              <div className="contact-links">
+                <a href={`mailto:${client.contact_email}`} className="contact-item">
+                  <Mail size={14} className="text-green-600"/>
+                  <div className="contact-data">
+                    <label>Email</label>
+                    {isEditing ? (
+                      <input value={editData.contact_email} onChange={e => setEditData({...editData, contact_email: e.target.value})} />
+                    ) : (
+                      <span>{client.contact_email}</span>
+                    )}
+                  </div>
+                </a>
+                <div className="contact-item">
+                  <Phone size={14} className="text-green-600"/>
+                  <div className="contact-data">
+                    <label>Teléfono</label>
+                    {isEditing ? (
+                      <input value={editData.phone} onChange={e => setEditData({...editData, phone: e.target.value})} />
+                    ) : (
+                      <span>{client.phone || 'N/A'}</span>
+                    )}
+                  </div>
+                </div>
+                {isEditing && (
+                  <div className="contact-item">
+                    <Hash size={14} className="text-green-600"/>
+                    <div className="contact-data">
+                      <label>Tax ID</label>
+                      <input value={editData.tax_id} onChange={e => setEditData({...editData, tax_id: e.target.value})} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* LOGÍSTICA */}
+            <div className="card-pro mini">
+              <h4 className="section-title">Instrucciones Logísticas</h4>
+              <div className="logistics-stack">
+                <div className="log-block">
+                  <div className="log-label"><Building2 size={12}/> Facturación</div>
                   {isEditing ? (
                     <textarea value={editData.billing_address} onChange={e => setEditData({...editData, billing_address: e.target.value})} />
-                  ) : ( <p>{client.billing_address || 'Sin dirección'}</p> )}
-                </div>
-              </div>
-
-              <div className={`acc-item ${openAcc === 'cons' ? 'is-open' : ''}`}>
-                <button className="acc-trigger" onClick={() => setOpenAcc(openAcc === 'cons' ? null : 'cons')}>
-                  <User size={14}/> Consignatario
-                </button>
-                <div className="acc-content">
-                  {isEditing ? (
-                    <div className="edit-box-sm">
-                      <input placeholder="Nombre" value={editData.consignee_info?.name} onChange={e => setEditData({...editData, consignee_info: {...editData.consignee_info, name: e.target.value}})} />
-                      <textarea placeholder="Dirección" value={editData.consignee_info?.address} onChange={e => setEditData({...editData, consignee_info: {...editData.consignee_info, address: e.target.value}})} />
-                    </div>
                   ) : (
-                    <div className="view-box-sm">
-                      <strong>{client.consignee_info?.name || 'Pendiente'}</strong>
-                      <p>{client.consignee_info?.address || 'Pendiente'}</p>
-                    </div>
+                    <p>{client.billing_address || 'Sin dirección'}</p>
                   )}
                 </div>
-              </div>
-
-              <div className={`acc-item ${openAcc === 'notify' ? 'is-open' : ''}`}>
-                <button className="acc-trigger" onClick={() => setOpenAcc(openAcc === 'notify' ? null : 'notify')}>
-                  <Info size={14}/> Notify Party
-                </button>
-                <div className="acc-content">
+                <div className="log-block">
+                  <div className="log-label"><User size={12}/> Consignatario</div>
                   {isEditing ? (
-                    <div className="edit-box-sm">
-                      <input placeholder="Nombre" value={editData.notify_party?.name} onChange={e => setEditData({...editData, notify_party: {...editData.notify_party, name: e.target.value}})} />
-                      <textarea placeholder="Dirección" value={editData.notify_party?.address} onChange={e => setEditData({...editData, notify_party: {...editData.notify_party, address: e.target.value}})} />
-                    </div>
+                    <textarea value={editData.consignee_info?.address} onChange={e => setEditData({...editData, consignee_info: {...editData.consignee_info, address: e.target.value}})} />
                   ) : (
-                    <div className="view-box-sm">
-                      <strong>{client.notify_party?.name || 'Mismo que consignatario'}</strong>
-                      <p>{client.notify_party?.address || '---'}</p>
-                    </div>
+                    <p>{client.consignee_info?.name}</p>
                   )}
                 </div>
               </div>
             </div>
-          </section>
+
+            {/* DOCUMENTOS */}
+            <div className="card-pro mini">
+              <h4 className="section-title">Documentos KYC</h4>
+              <div className="file-list-pro">
+                <div className="file-item-pro"><FileText size={14}/> Registro Fiscal.pdf</div>
+                <div className="file-item-pro"><FileText size={14}/> Pacto Social.pdf</div>
+                <button className="btn-add-pro"><Plus size={12}/> Adjuntar</button>
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
 
-      <ShipmentDrawer 
-        isOpen={isDrawerOpen} 
-        onClose={() => setIsDrawerOpen(false)}
-        clientId={id as string} 
-        clientName={client.name}
-        onSuccess={handleShipmentSuccess}
-        defaultIncoterm={client.default_incoterm}
-      />
-
       <style jsx>{`
-        .view-container { padding: 20px 30px; max-width: 1440px; margin: 0 auto; color: #1e293b; font-family: 'Inter', sans-serif; }
+        .view-container { padding: 25px 40px; max-width: 1550px; margin: 0 auto; background: #fcfcfd; min-height: 100vh; font-family: 'Inter', sans-serif; }
         
-        /* NAVEGACIÓN */
-        .breadcrumb-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .btn-back { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #64748b; text-decoration: none; }
-        .btn-ghost { background: #f1f5f9; border: none; padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 700; color: #64748b; cursor: pointer; }
-
-        /* HEADER */
-        .profile-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; background: white; padding: 20px; border-radius: 16px; border: 1px solid #f1f5f9; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
-        .profile-main { display: flex; align-items: center; gap: 20px; }
-        .logo-box { width: 70px; height: 70px; background: #f8fafc; border-radius: 14px; border: 1px solid #e2e8f0; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-        .logo-box img { width: 100%; height: 100%; object-fit: contain; padding: 8px; }
-        .logo-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.4); color: white; display: flex; align-items: center; justify-content: center; opacity: 0; cursor: pointer; }
-        .logo-box:hover .logo-overlay { opacity: 1; }
-
-        .name-row { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
-        .name-row h1 { font-size: 22px; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
-        .status-pill-lg { font-size: 9px; font-weight: 800; padding: 2px 8px; border-radius: 12px; text-transform: uppercase; }
-        .status-pill-lg.active { background: #dcfce7; color: #15803d; }
-        .status-pill-lg.new { background: #eff6ff; color: #1d4ed8; }
-        .meta-row { display: flex; gap: 15px; }
-        .meta-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #94a3b8; font-weight: 500; }
-
-        /* KPI */
-        .stats-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
-        .stat-card { background: white; padding: 15px; border-radius: 16px; border: 1px solid #f1f5f9; position: relative; }
-        .stat-icon { position: absolute; right: 15px; top: 15px; width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-        .stat-icon.purple { background: #faf5ff; color: #7e22ce; }
-        .stat-icon.green { background: #f0fdf4; color: #15803d; }
-        .stat-icon.orange { background: #fff7ed; color: #c2410c; }
-        .stat-label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; }
-        .stat-value { font-size: 20px; font-weight: 800; color: #1e293b; }
-
-        /* GRID */
-        .content-layout { display: grid; grid-template-columns: 280px 1fr 280px; gap: 20px; align-items: start; }
-        .glass-panel { background: white; border: 1px solid #f1f5f9; border-radius: 16px; padding: 18px; }
-        .panel-title { font-size: 11px; font-weight: 800; color: #1f7a3a; text-transform: uppercase; margin-bottom: 15px; letter-spacing: 0.05em; }
+        /* HEADER REFINADO */
+        .header-pro { display: flex; justify-content: space-between; align-items: center; background: white; padding: 18px 24px; border-radius: 12px; border: 1px solid #eef0f2; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+        .header-left { display: flex; align-items: center; gap: 24px; flex: 1; }
         
-        .field-group { margin-bottom: 14px; }
-        .field-group label { display: block; font-size: 10px; font-weight: 700; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase; }
-        .input-box { display: flex; align-items: center; gap: 8px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 0 10px; border-radius: 8px; }
-        .input-box input { border: none; background: transparent; padding: 8px 0; font-size: 12px; font-weight: 600; width: 100%; outline: none; }
-        select { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 12px; font-weight: 600; }
+        .logo-holder { width: 60px; height: 60px; background: #f8fafc; border-radius: 10px; position: relative; border: 1.5px dashed #e2e8f0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .logo-holder img { width: 100%; height: 100%; object-fit: contain; padding: 6px; }
+        .upload-btn { position: absolute; inset: 0; background: rgba(0,0,0,0.4); color: white; display: flex; align-items: center; justify-content: center; opacity: 0; cursor: pointer; transition: 0.2s; }
+        .logo-holder:hover .upload-btn { opacity: 1; }
 
-        /* TABLA */
-        .data-panel { background: white; border-radius: 16px; border: 1px solid #f1f5f9; overflow: hidden; }
-        .panel-header { padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; }
-        .panel-header h3 { font-size: 14px; font-weight: 800; margin: 0; }
-        .link-pro { font-size: 11px; font-weight: 700; color: #1f7a3a; text-decoration: none; }
-        .pro-table-v2 { width: 100%; border-collapse: collapse; }
-        .pro-table-v2 th { text-align: left; padding: 12px 20px; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; background: #fafafa; }
-        .pro-table-v2 td { padding: 14px 20px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
-        .row-link { cursor: pointer; }
-        .row-link:hover { background: #f8fafc; }
-        .code-tag { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: 700; color: #1f7a3a; }
-        .status-pill-sm { padding: 2px 8px; border-radius: 6px; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+        .client-main-info h1 { font-size: 20px; font-weight: 800; color: #1a202c; margin: 0; }
+        .title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
+        .sub-row { display: flex; gap: 15px; font-size: 12px; color: #718096; align-items: center; }
+        .status-badge { font-size: 9px; font-weight: 800; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; }
+        .status-badge.active { background: #e6fffa; color: #2c7a7b; }
 
-        /* ACCORDION */
-        .acc-item { border-bottom: 1px solid #f1f5f9; }
-        .acc-trigger { width: 100%; padding: 12px 0; border: none; background: none; display: flex; align-items: center; gap: 10px; font-weight: 700; color: #475569; cursor: pointer; font-size: 12px; }
-        .acc-content { max-height: 0; overflow: hidden; transition: 0.3s; color: #64748b; font-size: 12px; }
-        .is-open .acc-content { max-height: 200px; padding-bottom: 15px; }
-        textarea { width: 100%; min-height: 60px; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 12px; resize: none; }
+        .header-stats { display: flex; gap: 30px; border-left: 1px solid #edf2f7; padding-left: 30px; margin-left: 10px; }
+        .h-stat { display: flex; flex-direction: column; }
+        .h-stat-label { font-size: 10px; font-weight: 700; color: #a0aec0; text-transform: uppercase; }
+        .h-stat-val { font-size: 14px; font-weight: 800; color: #2d3748; }
 
-        .loader-container { height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; font-size: 14px; color: #64748b; }
-        .spin-pro { animation: spin 1s linear infinite; color: #1f7a3a; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .header-actions { display: flex; gap: 8px; }
+        .btn-refine-white { padding: 6px 14px; border-radius: 6px; border: 1px solid #e2e8f0; background: white; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; color: #4a5568; }
+        .btn-refine-green { padding: 6px 14px; border-radius: 6px; border: none; background: #1f7a3a; color: white; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+
+        /* GRID LAYOUT */
+        .main-grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
+        .card-pro { background: white; border-radius: 12px; border: 1px solid #eef0f2; overflow: hidden; }
+        .card-header { padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f7fafc; }
+        .card-header h3 { font-size: 14px; font-weight: 700; margin: 0; }
+        .view-all { font-size: 11px; color: #1f7a3a; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 4px; }
+
+        /* TABLA REFINADA */
+        .table-refine { width: 100%; border-collapse: collapse; }
+        .table-refine th { text-align: left; padding: 12px 20px; font-size: 10px; font-weight: 800; color: #a0aec0; text-transform: uppercase; background: #fcfcfd; }
+        .table-refine td { padding: 12px 20px; border-bottom: 1px solid #f7fafc; font-size: 12px; vertical-align: middle; }
+        .id-tag { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: #1f7a3a; background: #f0fdf4; padding: 3px 6px; border-radius: 4px; white-space: nowrap; }
+        .cell-product { display: flex; flex-direction: column; line-height: 1.2; }
+        .cell-product strong { font-size: 13px; color: #2d3748; }
+        .cell-product span { font-size: 11px; color: #718096; }
+        .cell-dest { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+        .flag-icon { width: 18px; border-radius: 2px; }
+        .cell-vol { display: flex; flex-direction: column; text-align: right; }
+        .text-muted-xs { font-size: 10px; color: #a0aec0; }
         
-        /* BOTONES */
-        .ff-btn { padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; border: none; display: flex; align-items: center; gap: 8px; }
-        .ff-btn-primary { background: #1f7a3a; color: white; }
-        .ff-btn-white { background: white; border: 1px solid #e2e8f0; color: #475569; padding: 7px 15px; font-size: 12px; font-weight: 700; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-        .btn-text-danger { background: none; border: none; color: #e11d48; font-weight: 700; font-size: 12px; cursor: pointer; padding: 0 15px; }
+        /* ESTADOS PILL (Hitos) */
+        .pill-status-v2 { font-size: 10px; font-weight: 800; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; display: inline-block; }
+        .pill-status-v2.packed { background: #f0fdf4; color: #166534; border: 1px solid #bcf0da; }
+        .pill-status-v2.at_destination { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+        .pill-status-v2.created { background: #fefce8; color: #854d0e; border: 1px solid #fef08a; }
+
+        /* SIDEBAR */
+        .info-sidebar { display: flex; flex-direction: column; gap: 20px; }
+        .section-title { font-size: 11px; font-weight: 800; color: #1f7a3a; text-transform: uppercase; letter-spacing: 0.05em; padding: 16px 20px 0; margin-bottom: 12px; }
+        .contact-links { padding: 0 20px 20px; display: flex; flex-direction: column; gap: 12px; }
+        .contact-item { display: flex; align-items: flex-start; gap: 12px; text-decoration: none; color: inherit; }
+        .contact-data label { display: block; font-size: 9px; font-weight: 700; color: #a0aec0; text-transform: uppercase; }
+        .contact-data span, .contact-data input { font-size: 12px; font-weight: 600; color: #2d3748; }
+        .contact-data input { border: 1px solid #e2e8f0; border-radius: 4px; padding: 2px 5px; width: 100%; }
+
+        .logistics-stack { padding: 0 20px 20px; display: flex; flex-direction: column; gap: 15px; }
+        .log-label { font-size: 10px; font-weight: 800; color: #718096; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+        .log-block p { font-size: 12px; margin: 0; color: #4a5568; line-height: 1.4; }
+        .log-block textarea { width: 100%; font-size: 12px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; min-height: 60px; }
+
+        .file-list-pro { padding: 0 20px 20px; display: flex; flex-direction: column; gap: 8px; }
+        .file-item-pro { font-size: 12px; color: #4a5568; display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8fafc; border-radius: 6px; }
+        .btn-add-pro { margin-top: 5px; background: none; border: 1.5px dashed #e2e8f0; padding: 8px; border-radius: 6px; color: #a0aec0; cursor: pointer; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        
+        .txt-right { text-align: right; }
+        .mini { padding-bottom: 5px; }
       `}</style>
     </AdminLayout>
   );
