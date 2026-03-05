@@ -32,7 +32,8 @@ export const handler: Handler = async (event) => {
         status, 
         mode, 
         currency, 
-        destination, 
+        destination,
+        total,
         boxes, 
         weight_kg, 
         margin_markup, 
@@ -75,7 +76,7 @@ export const handler: Handler = async (event) => {
       client_id: r.client_id,
       client_name: r.clients?.name || r.client_snapshot?.name || "Sin Nombre",
       client_email: r.clients?.contact_email || r.client_snapshot?.contact_email || null,
-      total: r.totals?.totalSale || r.totals?.total || 0,
+      total: r.total || 0,
     }));
 
     const total = count ?? 0;
