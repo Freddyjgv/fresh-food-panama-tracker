@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { 
-  Save, FileText, Package, Loader2, Plane, Ship, 
+  Save, FileText, Loader2, Plane, Ship, 
   Thermometer, Droplets, Calculator
 } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
@@ -9,7 +9,7 @@ import { requireAdminOrRedirect } from "../../../lib/requireAdmin";
 import { AdminLayout } from "../../../components/AdminLayout";
 import { LocationSelector } from "../../../components/LocationSelector";
 
-// 1. DEFINICIÓN DE TIPOS PARA EVITAR ERRORES DE VS CODE
+// 1. DEFINICIÓN DE TIPOS PARA VS CODE
 interface CostLine {
   base: number;
   unitSale: number;
@@ -46,15 +46,15 @@ export default function AdminQuoteDetailPage() {
   const [color, setColor] = useState("");
   const [brix, setBrix] = useState("");
 
-  // 2. ESTADO INICIAL CON TODAS LAS PROPIEDADES DEFINIDAS
+  // 2. ESTADO INICIAL (Ajustado a llaves de Supabase)
   const [costs, setCosts] = useState<CostState>({
-    fruta: { base: 13.30, unitSale: 15.50, label: "Fruta (Base Cajas)", tip: "Precio de compra por caja." },
+    fruta: { base: 13.30, unitSale: 0, label: "Fruta (Base Cajas)", tip: "Precio de compra por caja." },
     flete: { base: 0, unitSale: 0, label: "Flete Internacional", tip: "Costo por Kg estimado." },
     origen: { base: 0, unitSale: 0, label: "Gastos de Origen", tip: "Transporte interno y manejo PA." },
     aduana: { base: 0, unitSale: 0, label: "Gestión Aduanera", tip: "Corredor y trámites." },
-    inspeccion: { base: 60, unitSale: 75, label: "Inspecciones / Fiton", tip: "Costo fijo MIDA." },
-    documentos: { base: 100, unitSale: 125, label: "Documentación / BL", tip: "Gestión documental." },
-    impuestos: { base: 0, unitSale: 0, label: "Impuestos / Tasas", tip: "Tasas aeroportuarias/portuarias." },
+    inspeccion: { base: 0, unitSale: 0, label: "Inspecciones / Fiton", tip: "Costo fijo MIDA." },
+    itbms: { base: 0, unitSale: 0, label: "ITBMS / Tasas", tip: "Impuestos aplicables." },
+    handling: { base: 0, unitSale: 0, label: "Handling", tip: "Manejo de carga." },
     otros: { base: 0, unitSale: 0, label: "Otros Gastos", tip: "Gastos no previstos." }
   });
 
@@ -69,7 +69,7 @@ export default function AdminQuoteDetailPage() {
     };
   }, [data, id]);
 
-  // 3. LÓGICA DE CÁLCULO (SANEADA)
+  // 3. MOTOR DE CÁLCULO
   const analysis = useMemo(() => {
     const lines = Object.entries(costs).map(([key, val]) => {
       let qty = 1;
@@ -100,6 +100,7 @@ export default function AdminQuoteDetailPage() {
     })();
   }, []);
 
+  // 4. CARGA DE DATOS (LECTURA EXACTA DE JSONB)
   useEffect(() => {
     if (authOk && id) {
       (async () => {
@@ -131,13 +132,16 @@ export default function AdminQuoteDetailPage() {
           }
 
           const c = q.costs || {};
-          setCosts((prev) => ({
-            ...prev,
-            fruta: { ...prev.fruta, base: c.c_fruit || 13.3, unitSale: q.totals?.per_box || 15.5 },
-            flete: { ...prev.flete, base: c.c_freight || 0, unitSale: c.s_freight || 0 },
-            origen: { ...prev.origen, base: c.c_origin || 0, unitSale: c.s_origin || 0 },
-            aduana: { ...prev.aduana, base: c.c_aduana || 0, unitSale: c.s_aduana || 0 }
-          }));
+          setCosts({
+            fruta: { base: c.c_fruit || 0, unitSale: c.s_fruit || 0, label: "Fruta (Base Cajas)", tip: "Precio de compra." },
+            flete: { base: c.c_freight || 0, unitSale: c.s_freight || 0, label: "Flete Internacional", tip: "Costo por Kg." },
+            origen: { base: c.c_origin || 0, unitSale: c.s_origin || 0, label: "Gastos de Origen", tip: "Manejo local." },
+            aduana: { base: c.c_aduana || 0, unitSale: c.s_aduana || 0, label: "Gestión Aduanera", tip: "Corredor." },
+            inspeccion: { base: c.c_insp || 0, unitSale: c.s_insp || 0, label: "Inspecciones / Fiton", tip: "MIDA." },
+            itbms: { base: c.c_itbms || 0, unitSale: c.s_itbms || 0, label: "ITBMS / Tasas", tip: "Impuestos." },
+            handling: { base: c.c_handling || 0, unitSale: c.s_handling || 0, label: "Handling", tip: "Manejo carga." },
+            otros: { base: c.c_other || 0, unitSale: c.s_other || 0, label: "Otros Gastos", tip: "Extras." }
+          });
 
           const m = q.totals?.meta || {};
           setIncoterm(m.incoterm || "CIP");
@@ -148,18 +152,15 @@ export default function AdminQuoteDetailPage() {
     }
   }, [authOk, id]);
 
-  // 4. FUNCIÓN DE ACTUALIZACIÓN CON TIPADO ESTRICTO
   const updateCostLine = (key: string, field: 'base' | 'unitSale', value: string) => {
     const numValue = value === "" ? 0 : parseFloat(value);
     setCosts((prev) => ({
       ...prev,
-      [key]: {
-        ...prev[key],
-        [field]: numValue
-      }
+      [key]: { ...prev[key], [field]: numValue }
     }));
   };
 
+  // 5. GUARDADO (ESCRITURA EXACTA EN JSONB)
   async function handleSave() {
     setBusy(true);
     const payload = {
@@ -167,14 +168,17 @@ export default function AdminQuoteDetailPage() {
       product_details: { variety, color, brix },
       costs: { 
         c_fruit: costs.fruta.base, c_freight: costs.flete.base, c_origin: costs.origen.base, 
-        c_aduana: costs.aduana.base, c_insp: costs.inspeccion.base, c_doc: costs.documentos.base,
-        s_freight: costs.flete.unitSale, s_origin: costs.origen.unitSale, s_aduana: costs.aduana.unitSale
+        c_aduana: costs.aduana.base, c_insp: costs.inspeccion.base, c_itbms: costs.itbms.base,
+        c_handling: costs.handling.base, c_other: costs.otros.base,
+        s_fruit: costs.fruta.unitSale, s_freight: costs.flete.unitSale, s_origin: costs.origen.unitSale,
+        s_aduana: costs.aduana.unitSale, s_insp: costs.inspeccion.unitSale, s_itbms: costs.itbms.unitSale,
+        s_handling: costs.handling.unitSale, s_other: costs.otros.unitSale
       },
       totals: { total: analysis.totalSale, per_box: analysis.perBox, meta: { incoterm, pallets } }
     };
     await supabase.from("quotes").update(payload).eq("id", id);
     setBusy(false);
-    setToast("Guardado");
+    setToast("¡Cambios guardados!");
     setTimeout(() => setToast(null), 2000);
   }
 
@@ -273,23 +277,11 @@ export default function AdminQuoteDetailPage() {
                 <tr key={l.key}>
                   <td><div className="c-box"><b>{l.label}</b><span>{l.tip}</span></div></td>
                   <td align="right">
-                    <input 
-                      className="in no-spin" 
-                      type="number" 
-                      step="any"
-                      value={costs[l.key].base || ""} 
-                      onChange={e => updateCostLine(l.key, 'base', e.target.value)}
-                    />
+                    <input className="in no-spin" type="number" step="any" value={costs[l.key].base || ""} onChange={e => updateCostLine(l.key, 'base', e.target.value)} />
                   </td>
                   <td align="center" style={{fontWeight: 800, color: '#64748b'}}>{l.qty}</td>
                   <td align="right">
-                    <input 
-                      className="in s no-spin" 
-                      type="number" 
-                      step="any"
-                      value={costs[l.key].unitSale || ""} 
-                      onChange={e => updateCostLine(l.key, 'unitSale', e.target.value)}
-                    />
+                    <input className="in s no-spin" type="number" step="any" value={costs[l.key].unitSale || ""} onChange={e => updateCostLine(l.key, 'unitSale', e.target.value)} />
                   </td>
                   <td align="right" style={{fontWeight: 700, paddingRight: '10px'}}>
                     ${l.totalSaleRow.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
