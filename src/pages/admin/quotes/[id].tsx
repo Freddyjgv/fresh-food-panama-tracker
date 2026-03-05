@@ -96,18 +96,10 @@ export default function AdminQuoteDetailPage() {
   const selectedProd = products.find(p => p.id === id);
   
   if (selectedProd && selectedProd.variety) {
-    let rawVariety = selectedProd.variety;
-
-    // 1. Si viene como string con llaves {"..."}, limpiamos los caracteres de Postgres
-    if (typeof rawVariety === 'string' && rawVariety.startsWith('{')) {
-      rawVariety = rawVariety.replace(/[{}" ]/g, ''); // Quitamos {, }, " y espacios extra
-    }
-
-    // 2. Convertimos a Array para el .map() del select
-    const vList = Array.isArray(rawVariety) 
-      ? rawVariety 
-      : [rawVariety];
-
+    // Si es un array lo usamos, si es un string lo metemos en un array
+    const vList = Array.isArray(selectedProd.variety) 
+      ? selectedProd.variety 
+      : [selectedProd.variety];
     setVarieties(vList);
   } else {
     setVarieties([]);
@@ -201,15 +193,7 @@ export default function AdminQuoteDetailPage() {
         boxes: Number(boxes),
         weight_kg: Number(weightKg),
         status: status, 
-        terms: incoterm, // Se cambió 'incoterm' por 'terms' que sí existe en tu BD
-        mode: mode,
-        destination: place,
-        product_id: productId,
-        product_details: { variety, color, brix },
-        currency: "USD", // Campo obligatorio NOT NULL
-        margin_markup: 0, // Campo obligatorio NOT NULL (ajusta si tienes el valor)
-        
-        // Estructura de Costos
+        incoterm: incoterm, 
         costs: {
           c_fruit: Number(costs.fruta.base),
           s_fruit: Number(costs.fruta.unitSale),
@@ -228,22 +212,11 @@ export default function AdminQuoteDetailPage() {
           c_other: Number(costs.otros.base),
           s_other: Number(costs.otros.unitSale)
         },
-
-        // --- CAMPOS OBLIGATORIOS FALTANTES ---
-        // Totals es NOT NULL, debe ir como objeto
-        totals: { 
-          total: Number(boxes) * Number(costs.fruta.unitSale), // Cálculo simple de ejemplo
-          totalSale: 0 // El que usa el index
-        },
-        // Client Snapshot es NOT NULL
-        client_snapshot: {
-          name: "Cliente Temporal" // Ajusta con el nombre real si lo tienes
-        }
+        mode,
+        destination: place,
+        product_id: productId,
+        product_details: { variety, color, brix }
       };
-
-      // Debug para ver qué se va antes de fallar
-      console.log("Enviando payload limpio:", payload);
-
       const { error } = await supabase.from("quotes").update(payload).eq("id", id);
       if (error) throw error;
       setToast("Guardado con éxito");
