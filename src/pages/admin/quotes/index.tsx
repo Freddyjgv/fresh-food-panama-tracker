@@ -225,42 +225,37 @@ export default function AdminQuotesIndex() {
     href={`/admin/quotes/${r.id}`}
     title={
       <div className="rowMainLayout">
-        {/* COLUMNA 1: IDENTIFICACIÓN (240px según tu CSS) */}
-        <div className="idAndClient">
-          <div className="quoteIdBadge">{r.quote_number || "S/N"}</div>
-          <span className="clientName">{r.client_name || "Sin Cliente"}</span>
-        </div>
+  {/* COLUMNA 1: QUIÉN */}
+  <div className="leftBlock">
+    <div className="quoteIdBadge">{r.quote_number || "S/N"}</div>
+    <span className="clientName">{r.client_name || "Sin Nombre"}</span>
+  </div>
 
-        {/* COLUMNA 2: LOGÍSTICA (1fr - ocupa el centro) */}
-        <div className="logisticsInfo">
-          <div className="routeTag">
-             <span>PTY</span>
-             <span style={{ margin: '0 8px', opacity: 0.5 }}>→</span>
-             <span>{r.destination || 'TBD'}</span>
-          </div>
-          <div className="rowSub">
-            <span>{r.boxes} Cajas</span>
-            <span style={{ margin: '0 4px' }}>•</span>
-            <span>{fmtDate(r.created_at)}</span>
-          </div>
-        </div>
+  {/* COLUMNA 2: DÓNDE Y CUÁNDO */}
+  <div className="centerBlock">
+    <div className="routeInfo">
+      <span>PTY</span>
+      <span style={{opacity: 0.3}}>→</span>
+      <span>{r.destination || 'PANAMA'}</span>
+    </div>
+    <div className="metaInfo">
+      <span>{r.boxes} Cajas</span>
+      <span>•</span>
+      <span>{fmtDate(r.created_at)}</span>
+    </div>
+  </div>
 
-        {/* COLUMNA 3: FINANZAS (auto - se pega a la derecha) */}
-        <div className="rightSide">
-          <div className="totalAmount">
-            {r.total && Number(r.total) > 0 
-              ? `${r.currency} ${Number(r.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}` 
-              : "Pendiente"}
-          </div>
-          
-          <StatusPill v={r.status} />
-
-          <div className="editAction">
-             {/* Flecha simple para edición limpia */}
-             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-          </div>
-        </div>
-      </div>
+  {/* COLUMNA 3: CUÁNTO Y ESTADO */}
+  <div className="rightBlock">
+    <span className="amountText">
+      {Number(r.total) > 0 ? `${r.currency} ${Number(r.total).toLocaleString()}` : "Pendiente"}
+    </span>
+    <span className="statusText">{r.status}</span>
+    <div className="actionIcon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+    </div>
+  </div>
+</div>
     }
     /* Dejamos estos vacíos para que no interfieran con nuestro layout grid */
     subtitle={null}
@@ -272,48 +267,85 @@ export default function AdminQuotesIndex() {
       </div>
 
       <style jsx>{`
-    .idAndClient {
+    .rowMainLayout {
+  display: grid;
+  /* Columna 1: 250px fija | Columna 2: Flexible | Columna 3: 180px fija */
+  grid-template-columns: 250px 1fr 180px;
+  align-items: center;
+  width: 100%;
+  padding: 12px 0;
+}
+
+/* Bloque Izquierdo: Vertical y fuerte */
+.leftBlock {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .quoteIdBadge {
-  background: #f1f5f9;
-  color: #64748b;
-  font-family: monospace;
+  background: #1e293b;
+  color: white;
   font-size: 11px;
-  font-weight: bold;
   padding: 2px 8px;
   border-radius: 4px;
   width: fit-content;
+  font-family: monospace;
 }
 
 .clientName {
-  font-weight: 700;
-  color: #1e293b;
+  font-weight: 800;
+  color: #0f172a;
   font-size: 15px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.logisticsInfo {
+/* Bloque Central: Horizontal y con aire */
+.centerBlock {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
 }
 
-.routeTag {
+.routeInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   font-weight: 600;
   color: #475569;
-  font-size: 14px;
 }
 
-.rowSub {
+.metaInfo {
+  display: flex;
+  gap: 12px;
   font-size: 12px;
   color: #94a3b8;
+}
+
+/* Bloque Derecho: Alineado a la derecha */
+.rightBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.amountText {
+  font-size: 16px;
+  font-weight: 800;
+  color: #10b981; /* Verde esmeralda para el dinero */
+}
+
+.statusText {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: capitalize;
+}
+
+.actionIcon {
+  margin-top: 4px;
+  color: #cbd5e1;
 }
         .statsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
         .statCard { background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
