@@ -302,7 +302,7 @@ export default function AdminQuoteDetailPage() {
           </div>
         </div>
 
-        {/* ANÁLISIS COMERCIAL - SIN TOCAR LOGICA */}
+       {/* TABLA DE VENTAS DINÁMICA - RESTAURADA */}
         <div className="ff-card">
           <div className="table-h"><Calculator size={18} color="#16a34a"/> <span>Análisis Comercial de la Oferta</span></div>
           <table className="a-table">
