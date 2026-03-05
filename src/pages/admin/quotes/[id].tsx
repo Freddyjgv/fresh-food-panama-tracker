@@ -336,61 +336,94 @@ export default function AdminQuoteDetailPage() {
   </div>
 </div>
         {/* FILA 3: ANÁLISIS (USANDO TU LÓGICA DE 4 COLUMNAS) */}
-        <div className="ff-card analysis-card">
-          <div className="analysis-header"><Calculator size={18} /> <h3>Análisis de Costos y Ventas</h3></div>
-          <table className="analysis-table">
-            <thead>
-              <tr>
-                <th align="left">CONCEPTO</th>
-                <th align="right">COSTO BASE (USD)</th>
-                <th align="center">MARGEN %</th>
-                <th align="right">PRECIO DE VENTA</th>
-              </tr>
-            </thead>
-            <tbody>
-              {analysis.lines.map((line) => (
-                <tr key={line.key}>
-                  <td className="concept-td">
-                    <span className="concept-label">{line.label}</span>
-                    <span className="info-icon" title={line.tip}>?</span>
-                  </td>
-                  <td align="right">
-                    <input 
-                      className="table-input no-spin" 
-                      type="number" 
-                      step="0.01"
-                      value={costs[line.key].base} 
-                      onChange={e => updateCostLine(line.key, 'base', Number(e.target.value))}
-                    />
-                  </td>
-                  <td align="center">
-                    <input 
-                      className="table-input center no-spin" 
-                      type="number" 
-                      value={costs[line.key].margin} 
-                      onChange={e => updateCostLine(line.key, 'margin', Number(e.target.value))}
-                    />
-                  </td>
-                  <td align="right">
-                    <input 
-                      className="table-input sale-input no-spin" 
-                      type="number" 
-                      value={line.sale.toFixed(2)} 
-                      onChange={e => updateCostLine(line.key, 'sale', Number(e.target.value))}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+       {/* FILA 3: TABLA DE ANÁLISIS (ESTILO SHIPMENTS) */}
+<div className="ff-card analysis-card">
+  <div className="analysis-header" style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
+     <Calculator size={18} color="#16a34a" /> 
+     <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "800", color: "#1e293b" }}>Análisis de Costos y Margen de Venta</h3>
+  </div>
 
-          <div className="footer-stats-grid">
-            <div className="stat-pill"><span className="stat-label">COSTO TOTAL</span><span className="stat-value text-gray">${analysis.totalCost.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-            <div className="stat-pill"><span className="stat-label">VENTA TOTAL</span><span className="stat-value text-green">${analysis.totalSale.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-            <div className="stat-pill"><span className="stat-label">GANANCIA TOTAL</span><span className="stat-value text-blue">${analysis.profit.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-            <div className="stat-pill featured"><span className="stat-label">PRECIO POR CAJA</span><span className="stat-value">USD {analysis.perBox.toFixed(2)}</span></div>
-          </div>
-        </div>
+  <table className="analysis-table">
+    <thead>
+      <tr>
+        <th align="left">CONCEPTO</th>
+        <th align="right">COSTO BASE (USD)</th>
+        <th align="center">MARGEN %</th>
+        <th align="right">PRECIO DE VENTA</th>
+      </tr>
+    </thead>
+    <tbody>
+      {analysis.lines.map((line) => (
+        <tr key={line.key}>
+          <td className="concept-td">
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <span className="concept-label">{line.label}</span>
+              <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: "500" }}>{line.tip}</span>
+            </div>
+          </td>
+          <td align="right">
+            <input 
+              className="table-input no-spin" 
+              type="number" 
+              step="0.01"
+              value={costs[line.key].base} 
+              onChange={e => updateCostLine(line.key, 'base', Number(e.target.value))}
+            />
+          </td>
+          <td align="center">
+            <input 
+              className="table-input center no-spin" 
+              type="number" 
+              value={costs[line.key].margin} 
+              onChange={e => updateCostLine(line.key, 'margin', Number(e.target.value))}
+              style={{ color: costs[line.key].margin > 0 ? "#10b981" : "#94a3b8" }}
+            />
+          </td>
+          <td align="right">
+            <input 
+              className="table-input sale-input no-spin" 
+              type="number" 
+              step="0.01"
+              value={line.sale.toFixed(2)} 
+              onChange={e => updateCostLine(line.key, 'sale', Number(e.target.value))}
+            />
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+
+  {/* GRID DE TOTALES INFERIORES */}
+  <div className="footer-stats-grid">
+    <div className="stat-pill">
+      <span className="stat-label">COSTO OPERATIVO TOTAL</span>
+      <span className="stat-value" style={{ color: "#64748b" }}>
+        ${analysis.totalCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+      </span>
+    </div>
+    
+    <div className="stat-pill">
+      <span className="stat-label">VALOR TOTAL VENTA</span>
+      <span className="stat-value" style={{ color: "#10b981" }}>
+        ${analysis.totalSale.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+      </span>
+    </div>
+
+    <div className="stat-pill">
+      <span className="stat-label">UTILIDAD BRUTA</span>
+      <span className="stat-value" style={{ color: "#3b82f6" }}>
+        ${analysis.profit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+      </span>
+    </div>
+
+    <div className="stat-pill featured">
+      <span className="stat-label">PRECIO FINAL POR CAJA</span>
+      <span className="stat-value">
+        USD {analysis.perBox.toFixed(2)}
+      </span>
+    </div>
+  </div>
+</div>
 
         {toast && <div className="ff-toast">{toast}</div>}
       </div>
