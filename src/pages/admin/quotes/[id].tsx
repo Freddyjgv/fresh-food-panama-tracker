@@ -162,25 +162,81 @@ export default function AdminQuoteDetailPage() {
 
   // 5. GUARDADO (ESCRITURA EXACTA EN JSONB)
   async function handleSave() {
-    setBusy(true);
-    const payload = {
-      status, boxes, weight_kg: weightKg, mode, destination: place, product_id: productId,
-      product_details: { variety, color, brix },
-      costs: { 
-        c_fruit: costs.fruta.base, c_freight: costs.flete.base, c_origin: costs.origen.base, 
-        c_aduana: costs.aduana.base, c_insp: costs.inspeccion.base, c_itbms: costs.itbms.base,
-        c_handling: costs.handling.base, c_other: costs.otros.base,
-        s_fruit: costs.fruta.unitSale, s_freight: costs.flete.unitSale, s_origin: costs.origen.unitSale,
-        s_aduana: costs.aduana.unitSale, s_insp: costs.inspeccion.unitSale, s_itbms: costs.itbms.unitSale,
-        s_handling: costs.handling.unitSale, s_other: costs.otros.unitSale
-      },
-      totals: { total: analysis.totalSale, per_box: analysis.perBox, meta: { incoterm, pallets } }
-    };
-    await supabase.from("quotes").update(payload).eq("id", id);
-    setBusy(false);
-    setToast("¡Cambios guardados!");
-    setTimeout(() => setToast(null), 2000);
+  if (!id) {
+    console.error("❌ ERROR: No hay ID de cotización en la URL");
+    setToast("Error: ID no encontrado");
+    return;
   }
+
+  setBusy(true);
+  
+  // Construimos el objeto asegurando que no haya valores null/undefined que rompan el JSON
+  const payload = {
+    status: status || "draft",
+    boxes: Number(boxes) || 0,
+    weight_kg: Number(weightKg) || 0,
+    mode: mode,
+    destination: place || "",
+    product_id: productId || null,
+    product_details: { 
+      variety: variety || "", 
+      color: color || "", 
+      brix: brix || "" 
+    },
+    costs: { 
+      c_fruit: Number(costs.fruta.base) || 0,
+      c_freight: Number(costs.flete.base) || 0,
+      c_origin: Number(costs.origen.base) || 0, 
+      c_aduana: Number(costs.aduana.base) || 0,
+      c_insp: Number(costs.inspeccion.base) || 0,
+      c_itbms: Number(costs.itbms.base) || 0,
+      c_handling: Number(costs.handling.base) || 0,
+      c_other: Number(costs.otros.base) || 0,
+      s_fruit: Number(costs.fruta.unitSale) || 0,
+      s_freight: Number(costs.flete.unitSale) || 0,
+      s_origin: Number(costs.origen.unitSale) || 0,
+      s_aduana: Number(costs.aduana.unitSale) || 0,
+      s_insp: Number(costs.inspeccion.unitSale) || 0,
+      s_itbms: Number(costs.itbms.unitSale) || 0,
+      s_handling: Number(costs.handling.unitSale) || 0,
+      s_other: Number(costs.otros.unitSale) || 0
+    },
+    totals: { 
+      total: Number(analysis.totalSale) || 0, 
+      per_box: Number(analysis.perBox) || 0, 
+      meta: { incoterm, pallets: Number(pallets) || 0 } 
+    }
+  };
+
+  console.log("🚀 Intentando guardar en ID:", id);
+  console.log("📦 Datos a enviar:", payload);
+
+  try {
+    const { data: updateData, error } = await supabase
+      .from("quotes")
+      .update(payload)
+      .eq("id", id)
+      .select(); // El select ayuda a confirmar que hubo un cambio
+
+    if (error) {
+      console.error("🛑 ERROR DE SUPABASE:", error.message);
+      console.error("Detalles:", error.details);
+      setToast(`Error: ${error.message}`);
+    } else if (updateData && updateData.length === 0) {
+      console.warn("⚠️ ADVERTENCIA: No se encontró ninguna fila con ese ID para actualizar.");
+      setToast("Error: No se encontró el registro");
+    } else {
+      console.log("✅ GUARDADO EXITOSO:", updateData);
+      setToast("¡Cambios guardados!");
+    }
+  } catch (err) {
+    console.error("💥 Error inesperado:", err);
+    setToast("Error de conexión");
+  } finally {
+    setBusy(false);
+    setTimeout(() => setToast(null), 3000);
+  }
+}
 
   if (loading) return <AdminLayout title="Cargando..."><div className="p-10">Cargando...</div></AdminLayout>;
 
