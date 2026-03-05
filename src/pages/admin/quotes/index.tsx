@@ -219,60 +219,102 @@ export default function AdminQuotesIndex() {
         <div className="listContainer">
   {loading && <div className="loadingState">Sincronizando con base de datos...</div>}
   
-  {!loading && items.length > 0 && items.map((r) => (
-    <CompactRow
-      key={r.id}
-      href={`/admin/quotes/${r.id}`}
-      title={
-        <div className="rowMainLayout">
-          {/* El badge ahora mostrará el Q/2026/XXXX de la BD */}
-          <div className="quoteIdBadge">
-            {r.quote_number || "S/N"}
-          </div>
-          <div className="clientInfo">
-            <span className="clientName">{r.client_name || "Cliente sin asignar"}</span>
-            <div className="routeTag">
-              {r.mode === 'AIR' ? <Plane size={12} /> : <Ship size={12} />}
-              <span>PTY <ArrowRight size={10}/> {r.destination || 'TBD'}</span>
-            </div>
-          </div>
+  {items.map((r: any) => (
+  <CompactRow
+    key={r.id}
+    href={`/admin/quotes/${r.id}`}
+    title={
+      <div className="rowMainLayout">
+        {/* COLUMNA 1: IDENTIFICACIÓN (240px según tu CSS) */}
+        <div className="idAndClient">
+          <div className="quoteIdBadge">{r.quote_number || "S/N"}</div>
+          <span className="clientName">{r.client_name || "Sin Cliente"}</span>
         </div>
-      }
-      subtitle={
-        <div className="rowSub">
-          <span className="dataItem"><Package size={12}/> {r.boxes} Cajas</span>
-          <span className="dot">•</span>
-          <span className="dataItem"><CalendarDays size={12}/> {fmtDate(r.created_at)}</span>
-          {r.total && r.total > 0 ? (
-            <>
-              <span className="dot">•</span>
-              <span className="totalAmount">
-                {r.currency} {Number(r.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="dot">•</span>
-              <span className="noPrice">Pendiente de costeo</span>
-            </>
-          )}
-        </div>
-      }
-      status={<StatusPill v={r.status} />}
-      actionLabel="Gestionar"
-    />
-  ))}
 
-  {!loading && items.length === 0 && (
-    <div className="emptyState">
-      <AlertCircle size={24} />
-      <p>No se encontraron cotizaciones.</p>
-    </div>
-  )}
+        {/* COLUMNA 2: LOGÍSTICA (1fr - ocupa el centro) */}
+        <div className="logisticsInfo">
+          <div className="routeTag">
+             <span>PTY</span>
+             <span style={{ margin: '0 8px', opacity: 0.5 }}>→</span>
+             <span>{r.destination || 'TBD'}</span>
+          </div>
+          <div className="rowSub">
+            <span>{r.boxes} Cajas</span>
+            <span style={{ margin: '0 4px' }}>•</span>
+            <span>{fmtDate(r.created_at)}</span>
+          </div>
+        </div>
+
+        {/* COLUMNA 3: FINANZAS (auto - se pega a la derecha) */}
+        <div className="rightSide">
+          <div className="totalAmount">
+            {r.total && Number(r.total) > 0 
+              ? `${r.currency} ${Number(r.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}` 
+              : "Pendiente"}
+          </div>
+          
+          <StatusPill v={r.status} />
+
+          <div className="editAction">
+             {/* Flecha simple para edición limpia */}
+             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+        </div>
+      </div>
+    }
+    /* Dejamos estos vacíos para que no interfieran con nuestro layout grid */
+    subtitle={null}
+    status={null}
+    actionLabel={null}
+  />
+))}
 </div>
       </div>
 
       <style jsx>{`
+    .idAndClient {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quoteIdBadge {
+  background: #f1f5f9;
+  color: #64748b;
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.clientName {
+  font-weight: 700;
+  color: #1e293b;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.logisticsInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.routeTag {
+  font-weight: 600;
+  color: #475569;
+  font-size: 14px;
+}
+
+.rowSub {
+  font-size: 12px;
+  color: #94a3b8;
+}
         .statsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
         .statCard { background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .iconBox { padding: 10px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
