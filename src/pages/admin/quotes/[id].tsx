@@ -91,6 +91,22 @@ export default function AdminQuoteDetailPage() {
     };
   }, [data]);
 
+  const handleProductChange = (id: string) => {
+  setProductId(id);
+  const selectedProd = products.find(p => p.id === id);
+  
+  if (selectedProd && selectedProd.variety) {
+    // Si es un array lo usamos, si es un string lo metemos en un array
+    const vList = Array.isArray(selectedProd.variety) 
+      ? selectedProd.variety 
+      : [selectedProd.variety];
+    setVarieties(vList);
+  } else {
+    setVarieties([]);
+  }
+  setVariety(""); 
+};
+
   const analysis = useMemo(() => {
     const lines = Object.entries(costs).map(([key, val]) => {
       let qty = 1;
@@ -279,18 +295,28 @@ export default function AdminQuoteDetailPage() {
         <div className="ff-card strip">
           <div className="strip-label">CALIDAD</div>
           <div className="strip-grid">
-            <div className="f"><label>Producto</label>
-              <select value={productId} onChange={e => setProductId(e.target.value)}>
-                <option value="">Seleccionar...</option>
-                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div className="f"><label>Variedad</label>
-              <select value={variety} onChange={e => setVariety(e.target.value)}>
-                <option value="">Seleccionar...</option>
-                {varieties.map((v, i) => <option key={i} value={v}>{v}</option>)}
-              </select>
-            </div>
+            <div className="f">
+  <label>Producto</label>
+  <select 
+    value={productId} 
+    onChange={e => handleProductChange(e.target.value)}
+  >
+    <option value="">Seleccionar...</option>
+    {products.map(p => (
+      <option key={p.id} value={p.id}>{p.name}</option>
+    ))}
+  </select>
+</div>
+
+<div className="f">
+  <label>Variedad</label>
+  <select value={variety} onChange={e => setVariety(e.target.value)}>
+    <option value="">Seleccionar...</option>
+    {varieties.map((v, i) => (
+      <option key={i} value={v}>{v}</option>
+    ))}
+  </select>
+</div>
             <div className="f"><label><Thermometer size={10}/> Color</label><input placeholder="2.75-3.25" value={color} onChange={e => setColor(e.target.value)} /></div>
             <div className="f"><label><Droplets size={10}/> Brix</label><input placeholder="≥13" value={brix} onChange={e => setBrix(e.target.value)} /></div>
           </div>
