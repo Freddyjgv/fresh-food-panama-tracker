@@ -205,29 +205,23 @@ export default function AdminQuotesIndex() {
 
         {/* LISTADO DE RESULTADOS */}
         <div className="listContainer">
-          {loading && <div className="loadingState">Sincronizando con base de datos...</div>}
-          
-         // Dentro del .map de items en tu index.tsx:
-
-{!loading && items.map((r) => {
-  // Lógica de respaldo por si el número aún es null en la BD
-  const displayID = r.quote_number && r.quote_number !== "S/N" 
-    ? r.quote_number 
-    : `Q-26${r.id.slice(0, 4).toUpperCase()}`;
-
-  return (
+  {loading && <div className="loadingState">Sincronizando con base de datos...</div>}
+  
+  {!loading && items.length > 0 && items.map((r) => (
     <CompactRow
       key={r.id}
       href={`/admin/quotes/${r.id}`}
       title={
         <div className="rowMainLayout">
-          {/* Mostramos el ID ya sea el de la BD o el generado */}
-          <div className="quoteIdBadge">{displayID}</div>
+          {/* El badge ahora mostrará el Q/2026/XXXX de la BD */}
+          <div className="quoteIdBadge">
+            {r.quote_number || "S/N"}
+          </div>
           <div className="clientInfo">
-            <span className="clientName">{r.client_name}</span>
+            <span className="clientName">{r.client_name || "Cliente sin asignar"}</span>
             <div className="routeTag">
               {r.mode === 'AIR' ? <Plane size={12} /> : <Ship size={12} />}
-              <span>PTY <ArrowRight size={10}/> {r.destination}</span>
+              <span>PTY <ArrowRight size={10}/> {r.destination || 'TBD'}</span>
             </div>
           </div>
         </div>
@@ -237,27 +231,33 @@ export default function AdminQuotesIndex() {
           <span className="dataItem"><Package size={12}/> {r.boxes} Cajas</span>
           <span className="dot">•</span>
           <span className="dataItem"><CalendarDays size={12}/> {fmtDate(r.created_at)}</span>
-          {r.total > 0 && (
+          {r.total && r.total > 0 ? (
             <>
               <span className="dot">•</span>
-              <span className="totalAmount">{r.currency} {Number(r.total).toLocaleString()}</span>
+              <span className="totalAmount">
+                {r.currency} {Number(r.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="dot">•</span>
+              <span className="noPrice">Pendiente de costeo</span>
             </>
           )}
         </div>
       }
       status={<StatusPill v={r.status} />}
-      actionLabel="Ver Ficha"
+      actionLabel="Gestionar"
     />
-  );
-})}
+  ))}
 
-          {!loading && items.length === 0 && (
-            <div className="emptyState">
-              <AlertCircle size={24} />
-              <p>No hay cotizaciones con los filtros aplicados.</p>
-            </div>
-          )}
-        </div>
+  {!loading && items.length === 0 && (
+    <div className="emptyState">
+      <AlertCircle size={24} />
+      <p>No se encontraron cotizaciones.</p>
+    </div>
+  )}
+</div>
       </div>
 
       <style jsx>{`
@@ -292,7 +292,25 @@ export default function AdminQuotesIndex() {
 
         .listContainer { padding: 20px 24px; display: grid; gap: 12px; }
         .rowMainLayout { display: flex; align-items: center; gap: 20px; }
-        .quoteIdBadge { background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; padding: 4px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 800; min-width: 110px; text-align: center; }
+        .quoteIdBadge {
+  background: #1e293b;
+  color: #ffffff;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 120px; /* Un poco más ancho para el nuevo formato */
+  text-align: center;
+  letter-spacing: 0.5px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+}
+
+.noPrice {
+  color: #94a3b8;
+  font-style: italic;
+  font-size: 11px;
+}
         .clientName { font-weight: 800; color: #1e293b; font-size: 15px; }
         .routeTag { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #64748b; margin-top: 2px; }
         
