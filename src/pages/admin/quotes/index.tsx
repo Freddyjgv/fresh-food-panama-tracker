@@ -219,133 +219,150 @@ export default function AdminQuotesIndex() {
         <div className="listContainer">
   {loading && <div className="loadingState">Sincronizando con base de datos...</div>}
   
-  {items.map((r: any) => (
+ {items.map((r: any) => (
   <CompactRow
     key={r.id}
     href={`/admin/quotes/${r.id}`}
     title={
       <div className="rowMainLayout">
-  {/* COLUMNA 1: QUIÉN */}
-  <div className="leftBlock">
-    <div className="quoteIdBadge">{r.quote_number || "S/N"}</div>
-    <span className="clientName">{r.client_name || "Sin Nombre"}</span>
-  </div>
+        {/* COLUMNA 1: QUIÉN ES */}
+        <div className="leftBlock">
+          <span className="quoteIdBadge">{r.quote_number || "SIN NÚMERO"}</span>
+          <span className="clientName">{r.client_name || "Cliente No Registrado"}</span>
+        </div>
 
-  {/* COLUMNA 2: DÓNDE Y CUÁNDO */}
-  <div className="centerBlock">
-    <div className="routeInfo">
-      <span>PTY</span>
-      <span style={{opacity: 0.3}}>→</span>
-      <span>{r.destination || 'PANAMA'}</span>
-    </div>
-    <div className="metaInfo">
-      <span>{r.boxes} Cajas</span>
-      <span>•</span>
-      <span>{fmtDate(r.created_at)}</span>
-    </div>
-  </div>
+        {/* COLUMNA 2: QUÉ Y DÓNDE */}
+        <div className="centerBlock">
+          <div className="routeInfo">
+            <span>PTY</span>
+            <span style={{ color: '#cbd5e1' }}>→</span>
+            <span>{r.destination || 'POR DEFINIR'}</span>
+          </div>
+          <div className="metaInfo">
+            <span>{r.boxes} Cajas</span>
+            <span style={{ opacity: 0.3 }}>|</span>
+            <span>{fmtDate(r.created_at)}</span>
+          </div>
+        </div>
 
-  {/* COLUMNA 3: CUÁNTO Y ESTADO */}
-  <div className="rightBlock">
-    <span className="amountText">
-      {Number(r.total) > 0 ? `${r.currency} ${Number(r.total).toLocaleString()}` : "Pendiente"}
-    </span>
-    <span className="statusText">{r.status}</span>
-    <div className="actionIcon">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-    </div>
-  </div>
-</div>
+        {/* COLUMNA 3: CUÁNTO Y ESTADO */}
+        <div className="rightBlock">
+          <div className="priceInfo">
+            {Number(r.total) > 0 ? (
+              <span className="amountText">
+                {r.currency} {Number(r.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </span>
+            ) : (
+              <span className="noPriceText">Sin Costeo</span>
+            )}
+            <StatusPill v={r.status} />
+          </div>
+          
+          <div className="actionWrapper">
+             {/* Icono de flecha minimalista para cerrar la fila */}
+             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+        </div>
+      </div>
     }
-    /* Dejamos estos vacíos para que no interfieran con nuestro layout grid */
-    subtitle={null}
-    status={null}
-    actionLabel={null}
   />
 ))}
 </div>
       </div>
 
       <style jsx>{`
-    .rowMainLayout {
+  /* El contenedor que obliga a las 3 columnas */
+.rowMainLayout {
   display: grid;
-  /* Columna 1: 250px fija | Columna 2: Flexible | Columna 3: 180px fija */
-  grid-template-columns: 250px 1fr 180px;
+  grid-template-columns: 280px 1fr 200px; /* Rieles fijos en los extremos */
   align-items: center;
   width: 100%;
-  padding: 12px 0;
+  padding: 8px 0;
 }
 
-/* Bloque Izquierdo: Vertical y fuerte */
+/* RIEL IZQUIERDO: Identidad */
 .leftBlock {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
+  text-align: left;
 }
 
 .quoteIdBadge {
-  background: #1e293b;
-  color: white;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  width: fit-content;
-  font-family: monospace;
+  font-family: 'Monaco', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .clientName {
-  font-weight: 800;
-  color: #0f172a;
   font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Bloque Central: Horizontal y con aire */
+/* RIEL CENTRAL: Logística (El puente) */
 .centerBlock {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
+  align-items: center; /* Todo centradito aquí */
+  gap: 4px;
 }
 
 .routeInfo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   font-weight: 600;
-  color: #475569;
+  color: #334155;
+  font-size: 14px;
 }
 
 .metaInfo {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   font-size: 12px;
   color: #94a3b8;
+  align-items: center;
 }
 
-/* Bloque Derecho: Alineado a la derecha */
+/* RIEL DERECHO: El Cierre Financiero */
 .rightBlock {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* Todo pegado a la derecha */
+  gap: 20px;
+}
+
+.priceInfo {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
 }
 
 .amountText {
   font-size: 16px;
   font-weight: 800;
-  color: #10b981; /* Verde esmeralda para el dinero */
+  color: #10b981; /* Verde esmeralda */
 }
 
-.statusText {
-  font-size: 12px;
+.noPriceText {
+  font-size: 13px;
   font-weight: 600;
-  color: #64748b;
-  text-transform: capitalize;
+  color: #94a3b8;
+  font-style: italic;
 }
 
-.actionIcon {
-  margin-top: 4px;
+.actionWrapper {
+  display: flex;
+  align-items: center;
   color: #cbd5e1;
+  padding-left: 10px;
 }
         .statsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
         .statCard { background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
