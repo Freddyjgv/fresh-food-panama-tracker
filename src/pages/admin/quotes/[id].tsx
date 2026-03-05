@@ -188,27 +188,34 @@ export default function AdminQuoteDetailPage() {
  async function handleSave() {
   if (!id) return;
   setBusy(true);
-  try {
-    // PREPARACIÓN DEL PAYLOAD
-    const payload = {
-      // 1. SOLUCIÓN AL ERROR DE COLUMNA INEXISTENTE:
-      // Mapeamos el estado 'incoterm' a la columna real 'terms'.
-      terms: incoterm, 
-      
-      // 2. SOLUCIÓN AL ERROR DE CAMPO OBLIGATORIO (NOT NULL):
-      // Enviamos 'currency', que la DB exige y no tiene valor por defecto.
-      currency: data?.currency || 'USD', 
 
-      // 3. DATOS DE IDENTIDAD Y LOGÍSTICA
-      // Mantenemos quote_number para que el trigger no intente generar uno nuevo.
-      quote_number: data?.quote_number,
+  try {
+    // 1. CÁLCULO DEL TOTAL (Sumando lo que el cliente va a pagar)
+    // Usamos los nombres que vienen de tu estado de React: costs.categoria.unitSale
+    const totalVentaCientifico = 
+      Number(costs.fruta?.unitSale || 0) +
+      Number(costs.flete?.unitSale || 0) +
+      Number(costs.origen?.unitSale || 0) +
+      Number(costs.aduana?.unitSale || 0) +
+      Number(costs.inspeccion?.unitSale || 0) +
+      Number(costs.itbms?.unitSale || 0) +
+      Number(costs.handling?.unitSale || 0) +
+      Number(costs.otros?.unitSale || 0);
+
+    const payload = {
+      // CAMPOS DE TEXTO Y LOGÍSTICA
+      terms: incoterm, 
+      currency: data?.currency || 'USD', 
       status: status,
       mode: mode,
       destination: place,
       boxes: Number(boxes),
       weight_kg: Number(weightKg),
       
-      // 4. OBJETOS JSONB
+      // EL TOTAL PARA EL INDEX
+      total: totalVentaCientifico, 
+
+      // OBJETO JSONB (Mapeado a los nombres s_ y c_ que verificamos en la DB)
       costs: {
         c_fruit: Number(costs.fruta.base),
         s_fruit: Number(costs.fruta.unitSale),
@@ -227,27 +234,19 @@ export default function AdminQuoteDetailPage() {
         c_other: Number(costs.otros.base),
         s_other: Number(costs.otros.unitSale)
       },
-
-      // 5. SOLUCIÓN AL ERROR DE SINTAXIS UUID:
-      // Si productId está vacío (""), mandamos null para que la DB lo acepte.
       product_id: productId && productId !== "" ? productId : null,
-      
       product_details: { variety, color, brix }
     };
 
-    // EJECUCIÓN EN SUPABASE
     const { error } = await supabase.from("quotes").update(payload).eq("id", id);
     if (error) throw error;
     
     setToast("Guardado con éxito");
-    
-    // REDIRIGIR AL INDEX TRAS 1.5 SEGUNDOS
-    setTimeout(() => {
-      router.push('/admin/quotes'); 
-    }, 1500);
-  } catch (err: any) {
-    // Capturamos el error detallado para auditoría
-    console.error("Error guardando en Fresh Food:", err.message, err.details);
+    // Forzamos regreso al index para ver el nuevo total
+    setTimeout(() => router.push('/admin/quotes'), 1500);
+
+  } catch (err) {
+    console.error("Error:", err.message);
     setToast("Error: " + err.message);
   } finally {
     setBusy(false);
