@@ -162,77 +162,60 @@ export default function AdminQuoteDetailPage() {
 
   // 5. GUARDADO (ESCRITURA EXACTA EN JSONB)
   async function handleSave() {
+  console.log("📍 PASO 1: Inicio de la función handleSave");
   if (!id) {
-    console.error("❌ ERROR: No hay ID de cotización en la URL");
-    setToast("Error: ID no encontrado");
+    console.error("❌ ERROR: El ID de la cotización es undefined");
     return;
   }
+  
+  setBusy(true);
 
-  setBusy(true);
-  
-  // Construimos el objeto asegurando que no haya valores null/undefined que rompan el JSON
- async function handleSave() {
-  if (!id) return;
-  setBusy(true);
-  
   try {
-    // 1. Creamos un objeto de costos simple (Planificado para evitar el error 54001)
-    const cleanCosts = {
-      c_fruit: Number(costs.fruta.base) || 0,
-      c_freight: Number(costs.flete.base) || 0,
-      c_origin: Number(costs.origen.base) || 0,
-      c_aduana: Number(costs.aduana.base) || 0,
-      c_insp: Number(costs.inspeccion.base) || 0,
-      c_itbms: Number(costs.itbms.base) || 0,
-      c_handling: Number(costs.handling.base) || 0,
-      c_other: Number(costs.otros.base) || 0,
-      s_fruit: Number(costs.fruta.unitSale) || 0,
-      s_freight: Number(costs.flete.unitSale) || 0,
-      s_origin: Number(costs.origen.unitSale) || 0,
-      s_aduana: Number(costs.aduana.unitSale) || 0,
-      s_insp: Number(costs.inspeccion.unitSale) || 0,
-      s_itbms: Number(costs.itbms.unitSale) || 0,
-      s_handling: Number(costs.handling.unitSale) || 0,
-      s_other: Number(costs.otros.unitSale) || 0
-    };
+    console.log("📍 PASO 2: Construyendo objeto Payload...");
+    
+    // Verificamos si 'costs' existe antes de acceder a sus propiedades
+    if (!costs || !costs.fruta) {
+      console.error("❌ ERROR: El objeto 'costs' no tiene la estructura esperada", costs);
+      throw new Error("Estructura de costos inválida");
+    }
 
-    // 2. Payload minimalista
     const payload = {
-      status: status,
-      boxes: Number(boxes) || 0,
-      weight_kg: Number(weightKg) || 0,
-      mode: mode,
-      destination: place,
-      product_id: productId || null,
-      product_details: { 
-        variety: String(variety || ""), 
-        color: String(color || ""), 
-        brix: String(brix || "") 
-      },
-      costs: cleanCosts, // Enviamos el objeto ya procesado
-      totals: { 
-        total: Number(analysis.totalSale) || 0, 
-        per_box: Number(analysis.perBox) || 0,
-        meta: { incoterm, pallets: Number(pallets) || 0 }
+      boxes: Number(boxes),
+      weight_kg: Number(weightKg),
+      costs: {
+        c_fruit: Number(costs.fruta.base),
+        s_fruit: Number(costs.fruta.unitSale),
+        c_freight: Number(costs.flete.base),
+        s_freight: Number(costs.flete.unitSale)
+        // Agregamos solo los básicos para la prueba inicial
       }
     };
 
-    const { error } = await supabase
+    console.log("📍 PASO 3: Payload listo para enviar:", payload);
+
+    console.log("📍 PASO 4: Llamando a supabase.update()...");
+    const response = await supabase
       .from("quotes")
       .update(payload)
-      .eq("id", id);
-    
-    if (error) throw error;
+      .eq("id", id)
+      .select();
 
-    setToast("¡Guardado correctamente!");
+    console.log("📍 PASO 5: Respuesta de Supabase recibida:", response);
+
+    if (response.error) {
+      console.error("❌ ERROR DE BD:", response.error.message, response.error.details);
+    } else {
+      console.log("✅ GUARDADO EXITOSO. Datos devueltos:", response.data);
+      setToast("Guardado con éxito");
+    }
+
   } catch (err: any) {
-    console.error("Error detallado:", err);
-    setToast(`Error: ${err.message || 'Error de servidor'}`);
+    console.error("💥 ERROR CRÍTICO DE JS:", err.message);
+    console.error("Stack trace:", err.stack);
   } finally {
+    console.log("📍 PASO 6: Finalizando proceso (setBusy(false))");
     setBusy(false);
-    setTimeout(() => setToast(null), 3000);
   }
-}
 }
 
   if (loading) return <AdminLayout title="Cargando..."><div className="p-10">Cargando...</div></AdminLayout>;
