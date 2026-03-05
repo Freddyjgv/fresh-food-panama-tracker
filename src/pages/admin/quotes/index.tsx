@@ -5,12 +5,13 @@ import { useRouter } from "next/router";
 import { 
   PlusCircle, Search, Plane, Ship, FileText, 
   CheckCircle, Clock, SortAsc, CalendarDays, 
-  Package, ArrowRight, AlertCircle, TrendingUp
+  Package, ArrowRight, AlertCircle, TrendingUp, ChevronRight
 } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { requireAdminOrRedirect } from "../../../lib/requireAdmin";
 import { AdminLayout } from "../../../components/AdminLayout";
 import { CompactRow } from "../../../components/CompactRow";
+
 
 // --- TYPES ---
 type QuoteRow = {
@@ -247,22 +248,16 @@ export default function AdminQuotesIndex() {
 
         {/* COLUMNA 3: CUÁNTO Y ESTADO */}
         <div className="rightBlock">
-          <div className="priceInfo">
-            {Number(r.total) > 0 ? (
-              <span className="amountText">
-                {r.currency} {Number(r.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </span>
-            ) : (
-              <span className="noPriceText">Sin Costeo</span>
-            )}
-            <StatusPill v={r.status} />
-          </div>
-          
-          <div className="actionWrapper">
-             {/* Icono de flecha minimalista para cerrar la fila */}
-             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-          </div>
-        </div>
+  <div className="priceContainer">
+    <span className="totalAmount">
+      {r.total > 0 ? `USD ${Number(r.total).toLocaleString()}` : 'Pendiente'}
+    </span>
+    <StatusPill v={r.status} />
+  </div>
+  <div className="actionIcon">
+    <ChevronRight size={20} />
+  </div>
+</div>
       </div>
     }
   />
@@ -274,95 +269,43 @@ export default function AdminQuotesIndex() {
   /* El contenedor que obliga a las 3 columnas */
 .rowMainLayout {
   display: grid;
-  grid-template-columns: 280px 1fr 200px; /* Rieles fijos en los extremos */
+  /* Columna 1: 220px fija | Columna 2: Todo el resto | Columna 3: 150px fija */
+  grid-template-columns: 220px 1fr 180px; 
   align-items: center;
   width: 100%;
-  padding: 8px 0;
-}
-
-/* RIEL IZQUIERDO: Identidad */
-.leftBlock {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  text-align: left;
-}
-
-.quoteIdBadge {
-  font-family: 'Monaco', monospace;
-  font-size: 10px;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.clientName {
-  font-size: 15px;
-  font-weight: 700;
-  color: #0f172a;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* RIEL CENTRAL: Logística (El puente) */
-.centerBlock {
-  display: flex;
-  flex-direction: column;
-  align-items: center; /* Todo centradito aquí */
-  gap: 4px;
-}
-
-.routeInfo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  color: #334155;
-  font-size: 14px;
-}
-
-.metaInfo {
-  display: flex;
-  gap: 10px;
-  font-size: 12px;
-  color: #94a3b8;
-  align-items: center;
-}
-
-/* RIEL DERECHO: El Cierre Financiero */
-.rightBlock {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end; /* Todo pegado a la derecha */
+  padding: 12px 0;
   gap: 20px;
 }
 
-.priceInfo {
+/* Forzamos el comportamiento de cada riel */
+.leftBlock {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.centerBlock {
+  text-align: center; /* ESTO ALINEA LAS COLUMNAS CENTRALES */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.rightBlock {
+  text-align: right; /* ESTO PEGA TODO A LA DERECHA */
+  display: flex;
+  flex-direction: row; /* Precio y Status uno al lado del otro o arriba/abajo */
+  align-items: center;
+  justify-content: flex-end;
+  gap: 15px;
+}
+
+.priceAndStatus {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-}
-
-.amountText {
-  font-size: 16px;
-  font-weight: 800;
-  color: #10b981; /* Verde esmeralda */
-}
-
-.noPriceText {
-  font-size: 13px;
-  font-weight: 600;
-  color: #94a3b8;
-  font-style: italic;
-}
-
-.actionWrapper {
-  display: flex;
-  align-items: center;
-  color: #cbd5e1;
-  padding-left: 10px;
 }
         .statsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
         .statCard { background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
@@ -394,7 +337,6 @@ export default function AdminQuotesIndex() {
         .toggleGroup button.active { background: white; color: #1e293b; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 
         .listContainer { padding: 20px 24px; display: grid; gap: 12px; }
-        .rowMainLayout { display: flex; align-items: center; gap: 20px; }
         .quoteIdBadge {
   background: #1e293b;
   color: #ffffff;
