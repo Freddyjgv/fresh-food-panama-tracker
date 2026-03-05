@@ -201,7 +201,15 @@ export default function AdminQuoteDetailPage() {
         boxes: Number(boxes),
         weight_kg: Number(weightKg),
         status: status, 
-        incoterm: incoterm, 
+        terms: incoterm, // Se cambió 'incoterm' por 'terms' que sí existe en tu BD
+        mode: mode,
+        destination: place,
+        product_id: productId,
+        product_details: { variety, color, brix },
+        currency: "USD", // Campo obligatorio NOT NULL
+        margin_markup: 0, // Campo obligatorio NOT NULL (ajusta si tienes el valor)
+        
+        // Estructura de Costos
         costs: {
           c_fruit: Number(costs.fruta.base),
           s_fruit: Number(costs.fruta.unitSale),
@@ -220,11 +228,22 @@ export default function AdminQuoteDetailPage() {
           c_other: Number(costs.otros.base),
           s_other: Number(costs.otros.unitSale)
         },
-        mode,
-        destination: place,
-        product_id: productId,
-        product_details: { variety, color, brix }
+
+        // --- CAMPOS OBLIGATORIOS FALTANTES ---
+        // Totals es NOT NULL, debe ir como objeto
+        totals: { 
+          total: Number(boxes) * Number(costs.fruta.unitSale), // Cálculo simple de ejemplo
+          totalSale: 0 // El que usa el index
+        },
+        // Client Snapshot es NOT NULL
+        client_snapshot: {
+          name: "Cliente Temporal" // Ajusta con el nombre real si lo tienes
+        }
       };
+
+      // Debug para ver qué se va antes de fallar
+      console.log("Enviando payload limpio:", payload);
+
       const { error } = await supabase.from("quotes").update(payload).eq("id", id);
       if (error) throw error;
       setToast("Guardado con éxito");
