@@ -96,10 +96,18 @@ export default function AdminQuoteDetailPage() {
   const selectedProd = products.find(p => p.id === id);
   
   if (selectedProd && selectedProd.variety) {
-    // Si es un array lo usamos, si es un string lo metemos en un array
-    const vList = Array.isArray(selectedProd.variety) 
-      ? selectedProd.variety 
-      : [selectedProd.variety];
+    let rawVariety = selectedProd.variety;
+
+    // 1. Si viene como string con llaves {"..."}, limpiamos los caracteres de Postgres
+    if (typeof rawVariety === 'string' && rawVariety.startsWith('{')) {
+      rawVariety = rawVariety.replace(/[{}" ]/g, ''); // Quitamos {, }, " y espacios extra
+    }
+
+    // 2. Convertimos a Array para el .map() del select
+    const vList = Array.isArray(rawVariety) 
+      ? rawVariety 
+      : [rawVariety];
+
     setVarieties(vList);
   } else {
     setVarieties([]);
