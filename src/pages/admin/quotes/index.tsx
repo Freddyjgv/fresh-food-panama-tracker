@@ -207,39 +207,49 @@ export default function AdminQuotesIndex() {
         <div className="listContainer">
           {loading && <div className="loadingState">Sincronizando con base de datos...</div>}
           
-          {!loading && items.map((r) => (
-            <CompactRow
-              key={r.id}
-              href={`/admin/quotes/${r.id}`}
-              title={
-                <div className="rowMainLayout">
-                  <div className="quoteIdBadge">{r.quote_number || 'S/N'}</div>
-                  <div className="clientInfo">
-                    <span className="clientName">{r.client_name || "Sin asignar"}</span>
-                    <div className="routeTag">
-                      {r.mode === 'AIR' ? <Plane size={12} /> : <Ship size={12} />}
-                      <span>PTY <ArrowRight size={10}/> {r.destination}</span>
-                    </div>
-                  </div>
-                </div>
-              }
-              subtitle={
-                <div className="rowSub">
-                  <span className="dataItem"><Package size={12}/> {r.boxes} Cajas</span>
-                  <span className="dot">•</span>
-                  <span className="dataItem"><CalendarDays size={12}/> {fmtDate(r.created_at)}</span>
-                  {r.total && (
-                    <>
-                      <span className="dot">•</span>
-                      <span className="totalAmount">{r.currency} {Number(r.total).toLocaleString()}</span>
-                    </>
-                  )}
-                </div>
-              }
-              status={<StatusPill v={r.status} />}
-              actionLabel="Ver Ficha"
-            />
-          ))}
+         // Dentro del .map de items en tu index.tsx:
+
+{!loading && items.map((r) => {
+  // Lógica de respaldo por si el número aún es null en la BD
+  const displayID = r.quote_number && r.quote_number !== "S/N" 
+    ? r.quote_number 
+    : `Q-26${r.id.slice(0, 4).toUpperCase()}`;
+
+  return (
+    <CompactRow
+      key={r.id}
+      href={`/admin/quotes/${r.id}`}
+      title={
+        <div className="rowMainLayout">
+          {/* Mostramos el ID ya sea el de la BD o el generado */}
+          <div className="quoteIdBadge">{displayID}</div>
+          <div className="clientInfo">
+            <span className="clientName">{r.client_name}</span>
+            <div className="routeTag">
+              {r.mode === 'AIR' ? <Plane size={12} /> : <Ship size={12} />}
+              <span>PTY <ArrowRight size={10}/> {r.destination}</span>
+            </div>
+          </div>
+        </div>
+      }
+      subtitle={
+        <div className="rowSub">
+          <span className="dataItem"><Package size={12}/> {r.boxes} Cajas</span>
+          <span className="dot">•</span>
+          <span className="dataItem"><CalendarDays size={12}/> {fmtDate(r.created_at)}</span>
+          {r.total > 0 && (
+            <>
+              <span className="dot">•</span>
+              <span className="totalAmount">{r.currency} {Number(r.total).toLocaleString()}</span>
+            </>
+          )}
+        </div>
+      }
+      status={<StatusPill v={r.status} />}
+      actionLabel="Ver Ficha"
+    />
+  );
+})}
 
           {!loading && items.length === 0 && (
             <div className="emptyState">

@@ -62,7 +62,7 @@ export const handler: Handler = async (event) => {
     // 5. Mapeo de Datos (Data Transformation)
     const items = (data || []).map((r: any) => ({
       id: r.id,
-      code: r.code || "S/N", // r.code ya viene mapeado desde quote_number por el alias
+      quote_number: r.code || "S/N", // Mapeamos el alias 'code' al nombre estándar
       created_at: r.created_at,
       updated_at: r.updated_at,
       status: r.status,
@@ -73,9 +73,9 @@ export const handler: Handler = async (event) => {
       weight_kg: r.weight_kg,
       margin_markup: r.margin_markup,
       client_id: r.client_id,
-      client_name: r.clients?.name || r.client_snapshot?.name || "Cliente Desconocido",
+      client_name: r.clients?.name || r.client_snapshot?.name || "Sin Nombre",
       client_email: r.clients?.contact_email || r.client_snapshot?.contact_email || null,
-      total_amount: r.totals?.total || 0,
+      total: r.totals?.totalSale || r.totals?.total || 0,
     }));
 
     const total = count ?? 0;
