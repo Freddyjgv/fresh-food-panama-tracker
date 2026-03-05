@@ -171,22 +171,16 @@ export default function AdminQuoteDetailPage() {
   setBusy(true);
   
   // Construimos el objeto asegurando que no haya valores null/undefined que rompan el JSON
-  const payload = {
-    status: status || "draft",
-    boxes: Number(boxes) || 0,
-    weight_kg: Number(weightKg) || 0,
-    mode: mode,
-    destination: place || "",
-    product_id: productId || null,
-    product_details: { 
-      variety: variety || "", 
-      color: color || "", 
-      brix: brix || "" 
-    },
-    costs: { 
+ async function handleSave() {
+  if (!id) return;
+  setBusy(true);
+  
+  try {
+    // 1. Creamos un objeto de costos simple (Planificado para evitar el error 54001)
+    const cleanCosts = {
       c_fruit: Number(costs.fruta.base) || 0,
       c_freight: Number(costs.flete.base) || 0,
-      c_origin: Number(costs.origen.base) || 0, 
+      c_origin: Number(costs.origen.base) || 0,
       c_aduana: Number(costs.aduana.base) || 0,
       c_insp: Number(costs.inspeccion.base) || 0,
       c_itbms: Number(costs.itbms.base) || 0,
@@ -200,42 +194,45 @@ export default function AdminQuoteDetailPage() {
       s_itbms: Number(costs.itbms.unitSale) || 0,
       s_handling: Number(costs.handling.unitSale) || 0,
       s_other: Number(costs.otros.unitSale) || 0
-    },
-    totals: { 
-      total: Number(analysis.totalSale) || 0, 
-      per_box: Number(analysis.perBox) || 0, 
-      meta: { incoterm, pallets: Number(pallets) || 0 } 
-    }
-  };
+    };
 
-  console.log("🚀 Intentando guardar en ID:", id);
-  console.log("📦 Datos a enviar:", payload);
+    // 2. Payload minimalista
+    const payload = {
+      status: status,
+      boxes: Number(boxes) || 0,
+      weight_kg: Number(weightKg) || 0,
+      mode: mode,
+      destination: place,
+      product_id: productId || null,
+      product_details: { 
+        variety: String(variety || ""), 
+        color: String(color || ""), 
+        brix: String(brix || "") 
+      },
+      costs: cleanCosts, // Enviamos el objeto ya procesado
+      totals: { 
+        total: Number(analysis.totalSale) || 0, 
+        per_box: Number(analysis.perBox) || 0,
+        meta: { incoterm, pallets: Number(pallets) || 0 }
+      }
+    };
 
-  try {
-    const { data: updateData, error } = await supabase
+    const { error } = await supabase
       .from("quotes")
       .update(payload)
-      .eq("id", id)
-      .select(); // El select ayuda a confirmar que hubo un cambio
+      .eq("id", id);
+    
+    if (error) throw error;
 
-    if (error) {
-      console.error("🛑 ERROR DE SUPABASE:", error.message);
-      console.error("Detalles:", error.details);
-      setToast(`Error: ${error.message}`);
-    } else if (updateData && updateData.length === 0) {
-      console.warn("⚠️ ADVERTENCIA: No se encontró ninguna fila con ese ID para actualizar.");
-      setToast("Error: No se encontró el registro");
-    } else {
-      console.log("✅ GUARDADO EXITOSO:", updateData);
-      setToast("¡Cambios guardados!");
-    }
-  } catch (err) {
-    console.error("💥 Error inesperado:", err);
-    setToast("Error de conexión");
+    setToast("¡Guardado correctamente!");
+  } catch (err: any) {
+    console.error("Error detallado:", err);
+    setToast(`Error: ${err.message || 'Error de servidor'}`);
   } finally {
     setBusy(false);
     setTimeout(() => setToast(null), 3000);
   }
+}
 }
 
   if (loading) return <AdminLayout title="Cargando..."><div className="p-10">Cargando...</div></AdminLayout>;
