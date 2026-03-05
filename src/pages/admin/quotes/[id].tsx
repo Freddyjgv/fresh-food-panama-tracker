@@ -28,8 +28,11 @@ const labelStatus = (status: string | undefined) => {
     draft: 'Borrador',
     sent: 'Enviada',
     approved: 'Aprobada',
+    won: 'Aprobada',     // Mapeo doble por seguridad
     rejected: 'Rechazada',
-    expired: 'Vencida'
+    lost: 'Rechazada',   // Mapeo doble por seguridad
+    expired: 'Vencida',
+    archived: 'Archivada'
   };
   return labels[status?.toLowerCase() || 'draft'] || 'Borrador';
 };
