@@ -9,11 +9,22 @@ import { requireAdminOrRedirect } from "../../../lib/requireAdmin";
 import { AdminLayout } from "../../../components/AdminLayout";
 import { LocationSelector } from "../../../components/LocationSelector";
 
+// 1. DEFINICIÓN DE TIPOS PARA EVITAR ERRORES DE VS CODE
+interface CostLine {
+  base: number;
+  unitSale: number;
+  label: string;
+  tip: string;
+}
+
+interface CostState {
+  [key: string]: CostLine;
+}
+
 export default function AdminQuoteDetailPage() {
   const router = useRouter();
   const { id } = router.query;
 
-  // ESTADOS DE CONTROL
   const [authOk, setAuthOk] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -35,19 +46,18 @@ export default function AdminQuoteDetailPage() {
   const [color, setColor] = useState("");
   const [brix, setBrix] = useState("");
 
-  // COSTOS OPERATIVOS (ESTADO)
-  const [costs, setCosts] = useState<any>({
-    fruta: { base: 13.30, label: "Fruta (Base Cajas)", tip: "Precio de compra por caja.", manualSale: undefined },
-    flete: { base: 0, label: "Flete Internacional", tip: "Costo por Kg estimado.", manualSale: undefined },
-    origen: { base: 0, label: "Gastos de Origen", tip: "Transporte interno y manejo PA.", manualSale: undefined },
-    aduana: { base: 0, label: "Gestión Aduanera", tip: "Corredor y trámites.", manualSale: undefined },
-    inspeccion: { base: 60, label: "Inspecciones / Fiton", tip: "Costo fijo MIDA.", manualSale: undefined },
-    documentos: { base: 100, label: "Documentación / BL", tip: "Gestión documental.", manualSale: undefined },
-    impuestos: { base: 0, label: "Impuestos / Tasas", tip: "Tasas aeroportuarias/portuarias.", manualSale: undefined },
-    otros: { base: 0, label: "Otros Gastos", tip: "Gastos no previstos.", manualSale: undefined }
+  // 2. ESTADO INICIAL CON TODAS LAS PROPIEDADES DEFINIDAS
+  const [costs, setCosts] = useState<CostState>({
+    fruta: { base: 13.30, unitSale: 15.50, label: "Fruta (Base Cajas)", tip: "Precio de compra por caja." },
+    flete: { base: 0, unitSale: 0, label: "Flete Internacional", tip: "Costo por Kg estimado." },
+    origen: { base: 0, unitSale: 0, label: "Gastos de Origen", tip: "Transporte interno y manejo PA." },
+    aduana: { base: 0, unitSale: 0, label: "Gestión Aduanera", tip: "Corredor y trámites." },
+    inspeccion: { base: 60, unitSale: 75, label: "Inspecciones / Fiton", tip: "Costo fijo MIDA." },
+    documentos: { base: 100, unitSale: 125, label: "Documentación / BL", tip: "Gestión documental." },
+    impuestos: { base: 0, unitSale: 0, label: "Impuestos / Tasas", tip: "Tasas aeroportuarias/portuarias." },
+    otros: { base: 0, unitSale: 0, label: "Otros Gastos", tip: "Gastos no previstos." }
   });
 
-  // 1. HEADER LOGIC (REACTIVO AL CÓDIGO REAL)
   const headerInfo = useMemo(() => {
     if (!data) return { name: "Cargando...", tax: "...", code: "Q-2026-0000" };
     const year = data.created_at ? new Date(data.created_at).getFullYear() : 2026;
@@ -59,39 +69,30 @@ export default function AdminQuoteDetailPage() {
     };
   }, [data, id]);
 
-  // 2. MOTOR DE CÁLCULO (LA TABLA DE VENTAS)
+  // 3. LÓGICA DE CÁLCULO (SANEADA)
   const analysis = useMemo(() => {
-    const lines = Object.entries(costs).map(([key, val]: [string, any]) => {
-      // Determinar Cantidad
+    const lines = Object.entries(costs).map(([key, val]) => {
       let qty = 1;
       if (key === 'fruta') qty = boxes;
       if (key === 'flete') qty = weightKg;
 
-      const baseTotal = val.base * qty;
-      
-      // Venta: Si no hay manual, usamos costo + 15% por defecto para no mostrar 0
-      let saleValue = val.manualSale;
-      if (saleValue === undefined) {
-        saleValue = baseTotal * 1.15; 
-      }
-
-      // Margen Resultante (Solo lectura)
-      const currentMargin = saleValue > 0 && saleValue > baseTotal 
-        ? ((1 - (baseTotal / saleValue)) * 100).toFixed(2) 
+      const baseTotalCost = val.base * qty;
+      const totalSaleRow = val.unitSale * qty;
+      const currentMargin = totalSaleRow > 0 
+        ? ((1 - (baseTotalCost / totalSaleRow)) * 100).toFixed(2) 
         : "0.00";
 
-      return { key, label: val.label, tip: val.tip, qty, baseTotal, sale: saleValue, margin: currentMargin };
+      return { key, ...val, qty, baseTotalCost, totalSaleRow, margin: currentMargin };
     });
 
-    const totalCost = lines.reduce((acc, curr) => acc + curr.baseTotal, 0);
-    const totalSale = lines.reduce((acc, curr) => acc + curr.sale, 0);
+    const totalCost = lines.reduce((acc, curr) => acc + curr.baseTotalCost, 0);
+    const totalSale = lines.reduce((acc, curr) => acc + curr.totalSaleRow, 0);
     const profit = totalSale - totalCost;
     const perBox = boxes > 0 ? totalSale / boxes : 0;
 
     return { lines, totalCost, totalSale, profit, perBox };
   }, [costs, boxes, weightKg]);
 
-  // 3. CARGA DE DATOS Y EVENTOS
   useEffect(() => {
     (async () => {
       const r = await requireAdminOrRedirect();
@@ -130,13 +131,12 @@ export default function AdminQuoteDetailPage() {
           }
 
           const c = q.costs || {};
-          // Mapeo de costos desde DB a Estado local
-          setCosts((prev: any) => ({
+          setCosts((prev) => ({
             ...prev,
-            fruta: { ...prev.fruta, base: c.c_fruit ?? 13.3 },
-            flete: { ...prev.flete, base: c.c_freight || 0 },
-            origen: { ...prev.origen, base: c.c_origin || 0 },
-            aduana: { ...prev.aduana, base: c.c_aduana || 0 }
+            fruta: { ...prev.fruta, base: c.c_fruit || 13.3, unitSale: q.totals?.per_box || 15.5 },
+            flete: { ...prev.flete, base: c.c_freight || 0, unitSale: c.s_freight || 0 },
+            origen: { ...prev.origen, base: c.c_origin || 0, unitSale: c.s_origin || 0 },
+            aduana: { ...prev.aduana, base: c.c_aduana || 0, unitSale: c.s_aduana || 0 }
           }));
 
           const m = q.totals?.meta || {};
@@ -148,13 +148,16 @@ export default function AdminQuoteDetailPage() {
     }
   }, [authOk, id]);
 
-  const updateCostLine = (key: string, field: 'base' | 'sale', value: number) => {
-    setCosts((prev: any) => {
-      const line = { ...prev[key] };
-      if (field === 'base') line.base = value;
-      if (field === 'sale') line.manualSale = value;
-      return { ...prev, [key]: line };
-    });
+  // 4. FUNCIÓN DE ACTUALIZACIÓN CON TIPADO ESTRICTO
+  const updateCostLine = (key: string, field: 'base' | 'unitSale', value: string) => {
+    const numValue = value === "" ? 0 : parseFloat(value);
+    setCosts((prev) => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        [field]: numValue
+      }
+    }));
   };
 
   async function handleSave() {
@@ -164,7 +167,8 @@ export default function AdminQuoteDetailPage() {
       product_details: { variety, color, brix },
       costs: { 
         c_fruit: costs.fruta.base, c_freight: costs.flete.base, c_origin: costs.origen.base, 
-        c_aduana: costs.aduana.base, c_insp: costs.inspeccion.base, c_doc: costs.documentos.base
+        c_aduana: costs.aduana.base, c_insp: costs.inspeccion.base, c_doc: costs.documentos.base,
+        s_freight: costs.flete.unitSale, s_origin: costs.origen.unitSale, s_aduana: costs.aduana.unitSale
       },
       totals: { total: analysis.totalSale, per_box: analysis.perBox, meta: { incoterm, pallets } }
     };
@@ -250,16 +254,17 @@ export default function AdminQuoteDetailPage() {
           </div>
         </div>
 
-        {/* TABLA DE VENTAS */}
+        {/* TABLA DE VENTAS DINÁMICA */}
         <div className="ff-card">
-          <div className="table-h"><Calculator size={18} color="#16a34a"/> <span>Análisis de Costos y Margen</span></div>
+          <div className="table-h"><Calculator size={18} color="#16a34a"/> <span>Análisis Comercial de la Oferta</span></div>
           <table className="a-table">
             <thead>
               <tr>
                 <th align="left">CONCEPTO</th>
-                <th align="right">COSTO BASE (USD)</th>
+                <th align="right">COSTO UNIT.</th>
                 <th align="center">CANT.</th>
-                <th align="right">PRECIO VENTA</th>
+                <th align="right">P. UNIT. VENTA</th>
+                <th align="right">VENTA TOTAL</th>
                 <th align="center">MARGEN %</th>
               </tr>
             </thead>
@@ -267,9 +272,28 @@ export default function AdminQuoteDetailPage() {
               {analysis.lines.map(l => (
                 <tr key={l.key}>
                   <td><div className="c-box"><b>{l.label}</b><span>{l.tip}</span></div></td>
-                  <td align="right"><input className="in no-spin" type="number" value={costs[l.key].base} onChange={e => updateCostLine(l.key, 'base', Number(e.target.value))}/></td>
+                  <td align="right">
+                    <input 
+                      className="in no-spin" 
+                      type="number" 
+                      step="any"
+                      value={costs[l.key].base || ""} 
+                      onChange={e => updateCostLine(l.key, 'base', e.target.value)}
+                    />
+                  </td>
                   <td align="center" style={{fontWeight: 800, color: '#64748b'}}>{l.qty}</td>
-                  <td align="right"><input className="in s no-spin" type="number" value={l.sale.toFixed(2)} onChange={e => updateCostLine(l.key, 'sale', Number(e.target.value))}/></td>
+                  <td align="right">
+                    <input 
+                      className="in s no-spin" 
+                      type="number" 
+                      step="any"
+                      value={costs[l.key].unitSale || ""} 
+                      onChange={e => updateCostLine(l.key, 'unitSale', e.target.value)}
+                    />
+                  </td>
+                  <td align="right" style={{fontWeight: 700, paddingRight: '10px'}}>
+                    ${l.totalSaleRow.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
+                  </td>
                   <td align="center"><span className="m-badge">{l.margin}%</span></td>
                 </tr>
               ))}
@@ -316,7 +340,7 @@ export default function AdminQuoteDetailPage() {
         .a-table td { padding: 12px 10px; border-bottom: 1px solid #f8fafc; }
         .c-box b { display: block; font-size: 13px; color: #334155; }
         .c-box span { font-size: 10px; color: #94a3b8; }
-        .in { width: 110px; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; text-align: right; font-weight: 700; }
+        .in { width: 105px; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; text-align: right; font-weight: 700; }
         .in.s { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
         .no-spin::-webkit-outer-spin-button, .no-spin::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .no-spin { -moz-appearance: textfield; }
