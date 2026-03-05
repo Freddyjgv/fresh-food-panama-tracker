@@ -185,55 +185,66 @@ export default function AdminQuoteDetailPage() {
     setCosts((prev) => ({ ...prev, [key]: { ...prev[key], [field]: numValue } }));
   };
 
-  async function handleSave() {
+ async function handleSave() {
   if (!id) return;
   setBusy(true);
   try {
-    // DENTRO DE handleSave
-const payload = {
-  // 1. Cambia 'incoterm' por el nombre real de tu columna: 'terms'
-  terms: incoterm, 
-  
-  // 2. Agrega 'currency' (OBLIGATORIO en tu tabla y ausente en tu código original)
-  currency: data?.currency || 'USD', 
+    // PREPARACIÓN DEL PAYLOAD
+    const payload = {
+      // 1. SOLUCIÓN AL ERROR DE COLUMNA INEXISTENTE:
+      // Mapeamos el estado 'incoterm' a la columna real 'terms'.
+      terms: incoterm, 
+      
+      // 2. SOLUCIÓN AL ERROR DE CAMPO OBLIGATORIO (NOT NULL):
+      // Enviamos 'currency', que la DB exige y no tiene valor por defecto.
+      currency: data?.currency || 'USD', 
 
-  // 3. Mantén los datos que ya tenías
-  status: status,
-  mode: mode,
-  destination: place,
-  boxes: Number(boxes),
-  weight_kg: Number(weightKg),
-  
-  // 4. Los objetos JSONB (Asegúrate de no enviar campos que no existen)
-  costs: {
-    c_fruit: Number(costs.fruta.base),
-    s_fruit: Number(costs.fruta.unitSale),
-    c_freight: Number(costs.flete.base),
-    s_freight: Number(costs.flete.unitSale),
-    c_origin: Number(costs.origen.base),
-    s_origin: Number(costs.origen.unitSale),
-    c_aduana: Number(costs.aduana.base),
-    s_aduana: Number(costs.aduana.unitSale),
-    c_insp: Number(costs.inspeccion.base),
-    s_insp: Number(costs.inspeccion.unitSale),
-    c_itbms: Number(costs.itbms.base),
-    s_itbms: Number(costs.itbms.unitSale),
-    c_handling: Number(costs.handling.base),
-    s_handling: Number(costs.handling.unitSale),
-    c_other: Number(costs.otros.base),
-    s_other: Number(costs.otros.unitSale)
-  },
-  product_id: productId,
-  product_details: { variety, color, brix }
-};
+      // 3. DATOS DE IDENTIDAD Y LOGÍSTICA
+      // Mantenemos quote_number para que el trigger no intente generar uno nuevo.
+      quote_number: data?.quote_number,
+      status: status,
+      mode: mode,
+      destination: place,
+      boxes: Number(boxes),
+      weight_kg: Number(weightKg),
+      
+      // 4. OBJETOS JSONB
+      costs: {
+        c_fruit: Number(costs.fruta.base),
+        s_fruit: Number(costs.fruta.unitSale),
+        c_freight: Number(costs.flete.base),
+        s_freight: Number(costs.flete.unitSale),
+        c_origin: Number(costs.origen.base),
+        s_origin: Number(costs.origen.unitSale),
+        c_aduana: Number(costs.aduana.base),
+        s_aduana: Number(costs.aduana.unitSale),
+        c_insp: Number(costs.inspeccion.base),
+        s_insp: Number(costs.inspeccion.unitSale),
+        c_itbms: Number(costs.itbms.base),
+        s_itbms: Number(costs.itbms.unitSale),
+        c_handling: Number(costs.handling.base),
+        s_handling: Number(costs.handling.unitSale),
+        c_other: Number(costs.otros.base),
+        s_other: Number(costs.otros.unitSale)
+      },
 
+      // 5. SOLUCIÓN AL ERROR DE SINTAXIS UUID:
+      // Si productId está vacío (""), mandamos null para que la DB lo acepte.
+      product_id: productId && productId !== "" ? productId : null,
+      
+      product_details: { variety, color, brix }
+    };
+
+    // EJECUCIÓN EN SUPABASE
     const { error } = await supabase.from("quotes").update(payload).eq("id", id);
+    
     if (error) throw error;
     
     setToast("Guardado con éxito");
     setTimeout(() => setToast(null), 3000);
   } catch (err: any) {
-    console.error("Error guardando en Fresh Food:", err.message);
+    // Capturamos el error detallado para auditoría
+    console.error("Error guardando en Fresh Food:", err.message, err.details);
     setToast("Error: " + err.message);
   } finally {
     setBusy(false);
