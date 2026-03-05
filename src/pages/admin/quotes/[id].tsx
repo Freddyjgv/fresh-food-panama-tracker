@@ -176,6 +176,8 @@ export default function AdminQuoteDetailPage() {
       const payload = {
         boxes: Number(boxes),
         weight_kg: Number(weightKg),
+        status: status, 
+        incoterm: incoterm, 
         costs: {
           c_fruit: Number(costs.fruta.base),
           s_fruit: Number(costs.fruta.unitSale),
@@ -245,16 +247,32 @@ export default function AdminQuoteDetailPage() {
                  {busy ? 'Guardando...' : 'Guardar'}
                </button>
             </div>
-            <span className="pill green">
-              <MapPin size={14}/> {data?.origin_port || 'Origen'} <ArrowRight size={12} style={{margin: '0 4px'}}/> {data?.destination_port || 'Destino'}
-            </span>
-            <span className="pill blue">
-              <Shield size={14}/> {data?.incoterm || 'FOB'}
-            </span>
-            <span className={statusBadgeClass(data?.status)}>
-              {labelStatus(data?.status)}
-            </span>
-          </div>
+            {/* Pill de Ruta - AHORA REACTIVO AL SELECTOR DE ABAJO */}
+<span className="pill green">
+  <MapPin size={14}/> 
+  {/* El origen suele ser fijo (Panamá/PTY), si lo tienes en un estado úsalo aquí */}
+  {"PTY"} 
+  <ArrowRight size={12} style={{margin: '0 4px'}}/> 
+  {place || 'Destino'} 
+</span>
+  {/* Pill de Incoterm - AHORA USA EL ESTADO LOCAL 'incoterm' */}
+  <span className="pill blue">
+    <Shield size={14}/> {incoterm}
+  </span>
+           {/* Badge de Estado - AHORA ES UN SELECT INTERACTIVO */}
+  <select 
+    className={statusBadgeClass(status)} 
+    value={status} 
+    onChange={(e) => setStatus(e.target.value)}
+    style={{ cursor: 'pointer', border: 'none', outline: 'none', appearance: 'none', WebkitAppearance: 'none' }}
+  >
+    <option value="draft">Borrador</option>
+    <option value="sent">Enviada</option>
+    <option value="approved">Aprobada (Ganada)</option>
+    <option value="rejected">Rechazada (Perdida)</option>
+    <option value="expired">Vencida</option>
+  </select>
+</div>
         </div>
 
         {/* CALIDAD - SIN TOCAR LOGICA */}
