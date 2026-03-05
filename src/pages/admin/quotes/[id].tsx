@@ -237,11 +237,14 @@ export default function AdminQuoteDetailPage() {
 
     // EJECUCIÓN EN SUPABASE
     const { error } = await supabase.from("quotes").update(payload).eq("id", id);
-    
     if (error) throw error;
     
     setToast("Guardado con éxito");
-    setTimeout(() => setToast(null), 3000);
+    
+    // REDIRIGIR AL INDEX TRAS 1.5 SEGUNDOS
+    setTimeout(() => {
+      router.push('/admin/quotes'); 
+    }, 1500);
   } catch (err: any) {
     // Capturamos el error detallado para auditoría
     console.error("Error guardando en Fresh Food:", err.message, err.details);

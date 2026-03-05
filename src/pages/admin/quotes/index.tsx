@@ -107,8 +107,20 @@ export default function AdminQuotesIndex() {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`/.netlify/functions/listQuotes?${queryString}`, {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+      
+      // 1. CREAMOS UN TIMESTAMP PARA ROMPER EL CACHE
+      const t = new Date().getTime();
+      
+      // 2. AGREGAMOS EL TIMESTAMP A LA URL
+      const url = `/.netlify/functions/listQuotes?${queryString}&t=${t}`;
+
+      const res = await fetch(url, {
+        headers: { 
+          Authorization: `Bearer ${session?.access_token}`,
+          // 3. HEADERS EXTRA PARA ASEGURAR DATOS FRESCOS
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        },
       });
       const json = await res.json() as ApiResponse;
       setItems(json.items || []);
