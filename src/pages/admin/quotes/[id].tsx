@@ -34,6 +34,13 @@ export default function AdminQuoteDetailPage() {
   const [color, setColor] = useState("");
   const [brix, setBrix] = useState("");
 
+  // Definimos las variables de apoyo igual que en embarques
+const clientName = data?.clients?.name || "Cliente no especificado";
+const clientTaxId = data?.clients?.tax_id || "N/A";
+const quoteCode = data?.created_at 
+  ? `Q-${new Date(data.created_at).getFullYear()}-${String(data.id_serial || id).slice(-4).padStart(4, '0')}`
+  : `Q-2026-0000`;
+
   // COSTOS CON MONTOS FIJOS Y TIPS
   const [costs, setCosts] = useState<any>({
     fruta: { base: 13.30, margin: 15, label: "Fruta (Base Cajas)", tip: "Precio por caja." },
@@ -111,25 +118,63 @@ export default function AdminQuoteDetailPage() {
   const analysis = useMemo(() => {
     const lines = Object.entries(costs).map(([key, val]: [string, any]) => {
       const baseTotal = key === 'fruta' ? val.base * boxes : val.base;
-      const marginFact = val.margin / 100;
-      const sale = marginFact < 1 ? baseTotal / (1 - marginFact) : baseTotal;
-      return { key, label: val.label, tip: val.tip, baseTotal, sale, margin: val.margin };
+      
+      // Si el usuario escribió manualmente la venta, usamos esa. 
+      // Si no, usamos la fórmula del margen.
+      let saleValue = val.manualSale;
+      
+      if (saleValue === undefined) {
+        const marginFact = val.margin / 100;
+        saleValue = marginFact < 1 ? baseTotal / (1 - marginFact) : baseTotal;
+      }
+
+      return { 
+        key, 
+        label: val.label, 
+        tip: val.tip, 
+        baseTotal, 
+        sale: saleValue, 
+        margin: val.margin 
+      };
     });
+
     const totalCost = lines.reduce((acc, curr) => acc + curr.baseTotal, 0);
     const totalSale = lines.reduce((acc, curr) => acc + curr.sale, 0);
-    return { lines, totalCost, totalSale, profit: totalSale - totalCost, perBox: boxes > 0 ? totalSale / boxes : 0 };
+
+    return { 
+      lines, 
+      totalCost, 
+      totalSale, 
+      profit: totalSale - totalCost, 
+      perBox: boxes > 0 ? totalSale / boxes : 0 
+    };
   }, [costs, boxes]);
 
   // ACTUALIZACIÓN BIDIRECCIONAL (MARGEN <-> VENTA)
   const updateCostLine = (key: string, field: string, value: number) => {
     setCosts((prev: any) => {
-      const newLine = { ...prev[key], [field]: value };
-      if (field === 'sale') {
-        const baseTotal = key === 'fruta' ? prev[key].base * boxes : prev[key].base;
-        const newMargin = value > 0 ? (1 - (baseTotal / value)) * 100 : 0;
-        newLine.margin = Number(newMargin.toFixed(2));
+      const currentLine = { ...prev[key] };
+      
+      if (field === 'base') {
+        currentLine.base = value;
+      } else if (field === 'margin') {
+        currentLine.margin = value;
+        // Al cambiar margen, borramos cualquier "sale" manual previo para que use la fórmula
+        delete currentLine.manualSale;
+      } else if (field === 'sale') {
+        // Guardamos el valor manual y calculamos el margen hacia atrás
+        currentLine.manualSale = value;
+        const baseTotal = key === 'fruta' ? currentLine.base * boxes : currentLine.base;
+        
+        if (value > 0 && value > baseTotal) {
+          const newMargin = (1 - (baseTotal / value)) * 100;
+          currentLine.margin = Number(newMargin.toFixed(2));
+        } else if (value <= baseTotal && value > 0) {
+          currentLine.margin = 0; // Evitamos márgenes negativos automáticos si no quieres
+        }
       }
-      return { ...prev, [key]: newLine };
+
+      return { ...prev, [key]: currentLine };
     });
   };
 
@@ -161,32 +206,56 @@ export default function AdminQuoteDetailPage() {
     <AdminLayout title={`Cotización: ${data?.clients?.name}`}>
       <div className="ff-container">
         
-        {/* HEADER PRO */}
-        <div className="ff-card header-pro">
-          <div className="header-left">
-            <button onClick={() => router.push('/admin/quotes')} className="back-btn"><ChevronLeft size={20}/></button>
-            <div className="logo-holder">
-              {data?.clients?.logo_url ? <img src={data.clients.logo_url} alt="Logo" /> : <Building2 size={24} className="opacity-20" />}
-            </div>
-            <div className="client-main-info">
-              <h1>{data?.clients?.name}</h1>
-              <div className="sub-row">
-                <span><FileText size={12}/> {data?.clients?.tax_id}</span>
-                <span><MapPin size={12}/> {data?.clients?.country}</span>
-              </div>
-            </div>
+      {/* Header resumen (Estructura espejo de Embarques) */}
+<div className="ff-card cardHead">
+  <div className="ff-spread2" style={{ alignItems: "flex-start", display: "flex", justifyContent: "space-between" }}>
+    <div style={{ minWidth: 0 }}>
+      <div className="codeRow" style={{ display: "flex", gap: "15px" }}>
+        <span className="codeIcon" style={{ padding: "10px", background: "#f0fdf4", borderRadius: "8px", display: "flex", alignItems: "center" }}>
+          <FileText size={20} color="#16a34a" />
+        </span>
+
+        <div style={{ minWidth: 0 }}>
+          {/* 1) Numero de Cotización con tu formato Q-2026-0001 */}
+          <div className="code" style={{ fontSize: "20px", fontWeight: "800", color: "#1e293b" }}>
+            {quoteCode}
           </div>
-          <div className="actions-cluster">
-            <select className={`status-pill-select ${status}`} value={status} onChange={e => setStatus(e.target.value)}>
-              <option value="draft">BORRADOR</option>
-              <option value="sent">ENVIADA</option>
-              <option value="won">GANADA</option>
-            </select>
-            <button className="ff-btn-primary" onClick={handleSave} disabled={busy}>
-              {busy ? <Loader2 size={16} className="spin"/> : <Save size={16}/>} Guardar
-            </button>
+
+          {/* 2) Cliente y Tax ID justo debajo */}
+          <div className="meta" style={{ marginTop: 4, fontSize: "14px", color: "#64748b" }}>
+            Cliente: <b style={{ color: "#1e293b" }}>{clientName}</b> 
+            <span style={{ margin: "0 8px", opacity: 0.3 }}>|</span>
+            TAX ID: <b>{clientTaxId}</b>
+          </div>
+
+          {/* 3) Producto y Variedad (Similar a productLine) */}
+          <div className="meta" style={{ marginTop: 2, fontSize: "13px" }}>
+             Producto: <b>{data?.product_name || 'Piña MD2'}</b> · Variedad: <b>{variety || 'N/A'}</b>
+          </div>
+
+          {/* 4) Destino y Modo */}
+          <div className="meta" style={{ marginTop: 2, fontSize: "12px", color: "#94a3b8" }}>
+            Destino: <b>{place || 'Por definir'}</b> · Modo: <b>{mode}</b> · Incoterm: <b>{incoterm}</b>
           </div>
         </div>
+      </div>
+    </div>
+
+    {/* Acciones de la derecha */}
+    <div className="ff-row2" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+       <select className={`status-pill ${status}`} value={status} onChange={e => setStatus(e.target.value)}>
+          <option value="draft">BORRADOR</option>
+          <option value="sent">ENVIADA</option>
+          <option value="won">GANADA</option>
+       </select>
+       <button className="ff-btn-primary" onClick={handleSave} disabled={busy} style={{ background: "#10b981", color: "white", padding: "8px 16px", borderRadius: "8px", border: "none", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
+          {busy ? <Loader2 size={16} className="spin"/> : <Save size={16}/>} Guardar
+       </button>
+    </div>
+  </div>
+</div>
+
+<div className="ff-divider" style={{ height: "1px", background: "#e2e8f0", margin: "20px 0" }} />
 
         {/* FILA 1: CALIDAD */}
         <div className="ff-card row-strip">
@@ -254,13 +323,15 @@ export default function AdminQuoteDetailPage() {
                     <span className="info-icon" title={line.tip}>?</span>
                   </td>
                   <td align="right">
-                    <input 
-                      className="table-input no-spin" 
-                      type="number" 
-                      value={costs[line.key].base} 
-                      onChange={e => updateCostLine(line.key, 'base', Number(e.target.value))}
-                    />
-                  </td>
+  <input 
+    className="table-input sale-input no-spin" 
+    type="number" 
+    step="0.01"
+    // Usamos el valor calculado del análisis pero permitimos edición
+    value={line.sale === 0 ? "" : Number(line.sale).toFixed(2)} 
+    onChange={e => updateCostLine(line.key, 'sale', Number(e.target.value))}
+  />
+</td>
                   <td align="center">
                     <input 
                       className="table-input center no-spin" 
