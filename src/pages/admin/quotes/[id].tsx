@@ -186,47 +186,59 @@ export default function AdminQuoteDetailPage() {
   };
 
   async function handleSave() {
-    if (!id) return;
-    setBusy(true);
-    try {
-      const payload = {
-        boxes: Number(boxes),
-        weight_kg: Number(weightKg),
-        status: status, 
-        incoterm: incoterm, 
-        costs: {
-          c_fruit: Number(costs.fruta.base),
-          s_fruit: Number(costs.fruta.unitSale),
-          c_freight: Number(costs.flete.base),
-          s_freight: Number(costs.flete.unitSale),
-          c_origin: Number(costs.origen.base),
-          s_origin: Number(costs.origen.unitSale),
-          c_aduana: Number(costs.aduana.base),
-          s_aduana: Number(costs.aduana.unitSale),
-          c_insp: Number(costs.inspeccion.base),
-          s_insp: Number(costs.inspeccion.unitSale),
-          c_itbms: Number(costs.itbms.base),
-          s_itbms: Number(costs.itbms.unitSale),
-          c_handling: Number(costs.handling.base),
-          s_handling: Number(costs.handling.unitSale),
-          c_other: Number(costs.otros.base),
-          s_other: Number(costs.otros.unitSale)
-        },
-        mode,
-        destination: place,
-        product_id: productId,
-        product_details: { variety, color, brix }
-      };
-      const { error } = await supabase.from("quotes").update(payload).eq("id", id);
-      if (error) throw error;
-      setToast("Guardado con éxito");
-      setTimeout(() => setToast(null), 3000);
-    } catch (err: any) {
-      console.error("Error guardando:", err.message);
-    } finally {
-      setBusy(false);
-    }
+  if (!id) return;
+  setBusy(true);
+  try {
+    const payload = {
+      // 1. Mantenemos los datos de identidad para el Trigger
+      quote_number: data?.quote_number, 
+      
+      // 2. Datos obligatorios que faltaban o daban error
+      currency: data?.currency || 'USD', // Agregamos currency (Obligatorio en tu DB)
+      status: status, 
+      mode: mode,
+      destination: place,
+      boxes: Number(boxes),
+      weight_kg: Number(weightKg),
+      
+      // 3. Objetos JSONB (Aseguramos que no viajen nulos)
+      costs: {
+        c_fruit: Number(costs.fruta.base),
+        s_fruit: Number(costs.fruta.unitSale),
+        c_freight: Number(costs.flete.base),
+        s_freight: Number(costs.flete.unitSale),
+        c_origin: Number(costs.origen.base),
+        s_origin: Number(costs.origen.unitSale),
+        c_aduana: Number(costs.aduana.base),
+        s_aduana: Number(costs.aduana.unitSale),
+        c_insp: Number(costs.inspeccion.base),
+        s_insp: Number(costs.inspeccion.unitSale),
+        c_itbms: Number(costs.itbms.base),
+        s_itbms: Number(costs.itbms.unitSale),
+        c_handling: Number(costs.handling.base),
+        s_handling: Number(costs.handling.unitSale),
+        c_other: Number(costs.otros.base),
+        s_other: Number(costs.otros.unitSale)
+      },
+      product_id: productId,
+      product_details: { variety, color, brix },
+      
+      // 4. Otros campos obligatorios detectados
+      incoterm: incoterm, // Asegúrate que la columna se llame así o mapeala a 'terms'
+    };
+
+    const { error } = await supabase.from("quotes").update(payload).eq("id", id);
+    if (error) throw error;
+    
+    setToast("Guardado con éxito");
+    setTimeout(() => setToast(null), 3000);
+  } catch (err: any) {
+    console.error("Error guardando en Fresh Food:", err.message);
+    setToast("Error: " + err.message);
+  } finally {
+    setBusy(false);
   }
+}
 
   if (loading) return <AdminLayout title="Cargando..."><div className="p-10">Cargando...</div></AdminLayout>;
 
