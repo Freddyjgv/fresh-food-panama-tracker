@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, ArrowUpDown, Package, MapPin, RefreshCcw } from "lucide-react";
+import { Search, ArrowUpDown, Calendar, Package, MapPin, RefreshCcw } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import { labelStatus, statusBadgeClass } from "../../lib/shipmentFlow";
 import { ClientLayout } from "../../components/ClientLayout";
@@ -101,14 +101,13 @@ export default function ShipmentsPage() {
       subtitle="Consulta estado, documentos y fotos del proceso de exportación."
       wide
     >
-      {/* ✅ “Shell” FULL WIDTH para evitar el bloque centrado */}
       <div className="ff-client-shell">
         {/* Toolbar / Filtros */}
         <div className="ff-card ff-card-pad">
           <div className="ff-toolbar">
             <div className="ff-toolbar__left">
               <div className="ff-field">
-                <MapPin size={14} color="var(--ff-muted)" />
+                <MapPin size={16} color="#94a3b8" />
                 <select
                   className="ff-input"
                   value={destination}
@@ -125,7 +124,7 @@ export default function ShipmentsPage() {
               </div>
 
               <div className="ff-field ff-field--grow">
-                <Search size={14} color="var(--ff-muted)" />
+                <Search size={16} color="#94a3b8" />
                 <input
                   className="ff-input"
                   placeholder="Buscar por número de embarque…"
@@ -146,16 +145,14 @@ export default function ShipmentsPage() {
               <button
                 className="ff-btn ff-btn-ghost"
                 onClick={() => setDir((d) => (d === "desc" ? "asc" : "desc"))}
-                title="Ordenar por fecha"
                 type="button"
               >
                 <ArrowUpDown size={16} />
                 Fecha {dir === "desc" ? "↓" : "↑"}
               </button>
 
-              <button className="ff-btn ff-btn-ghost" type="button" onClick={() => fetchShipments()} title="Refrescar">
+              <button className="ff-btn ff-btn-ghost" type="button" onClick={() => fetchShipments()}>
                 <RefreshCcw size={16} />
-                Refrescar
               </button>
             </div>
           </div>
@@ -163,46 +160,66 @@ export default function ShipmentsPage() {
 
         <div className="ff-divider" />
 
-        {/* Listado */}
-        <div className="ff-card ff-card-pad">
-          {loading && <p className="ff-sub" style={{ margin: 0 }}>Cargando…</p>}
+        {/* Listado de Cards */}
+        <div className="ff-list-container">
+          {loading && <p className="ff-sub">Cargando…</p>}
 
           {!loading && errorMsg && (
-            <div
-              className="ff-card ff-card-pad"
-              style={{
-                borderColor: "rgba(209,119,17,.35)",
-                background: "rgba(209,119,17,.08)",
-                boxShadow: "none",
-              }}
-            >
+            <div className="ff-card ff-card-pad" style={{ borderColor: "#fca5a5" }}>
               <p style={{ margin: 0, fontWeight: 800 }}>No se pudo cargar el listado</p>
-              <p className="ff-sub" style={{ marginTop: 6 }}>{errorMsg}</p>
+              <p className="ff-sub">{errorMsg}</p>
             </div>
           )}
 
           {!loading && !errorMsg && items.length === 0 && (
-            <p className="ff-sub" style={{ margin: 0 }}>No hay embarques disponibles.</p>
+            <p className="ff-sub">No hay embarques disponibles.</p>
           )}
 
           {!loading && !errorMsg && items.length > 0 && (
             <div className="ff-list">
               {items.map((s) => (
                 <Link key={s.id} href={`/shipments/${s.id}`} className="ff-listItem">
-                  <div className="ff-listItem__left">
-                    <div className="ff-ico">
-                      <Package size={15} color="var(--ff-green-dark)" />
+                  <div className="ff-listItem__main">
+                    {/* Bloque Izquierdo: ID y Producto */}
+                    <div className="ff-listItem__left">
+                      <div className="ff-ico">
+                        <Package size={20} color="#16a34a" />
+                      </div>
+                      <div className="ff-listItem__meta">
+                        <div className="ff-listItem__title">{s.code}</div>
+                        <div className="ff-sub">Piña MD2 · 4 Palets</div>
+                      </div>
                     </div>
 
-                    <div className="ff-listItem__meta">
-                      <div className="ff-listItem__title">{s.code}</div>
-                      <div className="ff-sub">
-                        {s.destination ? `Destino: ${s.destination}` : "Destino: —"} · {formatDate(s.created_at)}
+                    {/* Bloque Central: Destino */}
+                    <div className="ff-listItem__center">
+                      <div className="ff-metric">
+                        <MapPin size={16} color="#94a3b8" />
+                        <div className="ff-metric__content">
+                          <span className="ff-metric__label">DESTINO</span>
+                          <span className="ff-metric__value">{s.destination || "—"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bloque Derecho: Fecha */}
+                    <div className="ff-listItem__right-meta">
+                      <div className="ff-metric">
+                        <Calendar size={16} color="#94a3b8" />
+                        <div className="ff-metric__content">
+                          <span className="ff-metric__label">FECHA</span>
+                          <span className="ff-metric__value">{formatDate(s.created_at)}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <span className={statusBadgeClass(s.status)}>{labelStatus(s.status)}</span>
+                  {/* Status Badge */}
+                  <div className="ff-listItem__status">
+                    <span className={`${statusBadgeClass(s.status)} status-badge`}>
+                      {labelStatus(s.status)}
+                    </span>
+                  </div>
                 </Link>
               ))}
             </div>
@@ -210,28 +227,22 @@ export default function ShipmentsPage() {
 
           {/* Paginación */}
           {!loading && !errorMsg && totalPages > 1 && (
-            <div className="ff-spread" style={{ marginTop: 12 }}>
+            <div className="ff-spread">
               <div className="ff-sub">
-                Página {page} de {totalPages} · Total: {total}
+                Página {page} de {totalPages} · {total} embarques
               </div>
-
               <div className="ff-row" style={{ gap: 8 }}>
                 <button
                   className="ff-btn ff-btn-ghost"
-                  type="button"
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1}
-                  style={{ height: 32 }}
                 >
                   Anterior
                 </button>
-
                 <button
                   className="ff-btn ff-btn-ghost"
-                  type="button"
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page >= totalPages}
-                  style={{ height: 32 }}
                 >
                   Siguiente
                 </button>
@@ -241,7 +252,6 @@ export default function ShipmentsPage() {
         </div>
       </div>
 
-{/* ✅ ADN VISUAL REFINADO: Peso Tipográfico Ajustado para Elegancia */}
       <style jsx>{`
         .ff-client-shell {
           width: 100%;
@@ -250,14 +260,12 @@ export default function ShipmentsPage() {
           padding: 0 20px;
         }
 
-        /* 1. Toolbar & Filtros con profundidad */
         .ff-toolbar {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 16px;
           flex-wrap: wrap;
-          padding: 4px 0;
         }
 
         .ff-toolbar__left {
@@ -265,149 +273,121 @@ export default function ShipmentsPage() {
           align-items: center;
           gap: 12px;
           flex: 1 1 auto;
-          min-width: 280px;
         }
 
         .ff-field {
           display: flex;
           align-items: center;
-          gap: 10px;
           position: relative;
         }
 
-        :global(.ff-field .ff-input) {
-          height: 40px; /* Un poco más compacto */
-          border: 1px solid #e2e8f0; /* Borde más sutil */
-          border-radius: 10px; /* Bordes más suaves */
-          padding: 0 12px 0 36px;
-          background: #ffffff;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.03); /* Sombra aún más suave */
-          transition: all 0.2s ease;
-          font-size: 0.9rem;
+        .ff-field--grow {
+          flex: 1;
         }
 
-        :global(.ff-field .ff-input:focus) {
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-          outline: none;
+        :global(.ff-field .ff-input) {
+          height: 40px;
+          width: 100%;
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          padding: 0 12px 0 40px;
+          background: #ffffff;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+          font-size: 0.9rem;
         }
 
         :global(.ff-field svg) {
           position: absolute;
-          left: 12px;
+          left: 14px;
           z-index: 10;
         }
 
-        /* 2. Listado de Embarques (Cards del ADN Visual) */
         .ff-list {
           display: grid;
-          gap: 12px; /* Espacio más compacto entre cards */
-          margin-top: 8px;
+          gap: 12px;
+          margin-top: 10px;
         }
 
         .ff-listItem {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 16px 20px; /* Padding más refinado */
+          padding: 16px 24px;
           border: 1px solid #f1f5f9;
-          border-radius: 14px; /* Un poco menos redondeado */
+          border-radius: 14px;
           background: #ffffff;
           text-decoration: none;
-          /* Sombra sutil de elevación */
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.03);
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          color: inherit;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+          transition: all 0.2s ease;
         }
 
         .ff-listItem:hover {
-          transform: translateY(-2px); /* Elevación más sutil */
-          box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.06), 0 3px 6px -3px rgba(0, 0, 0, 0.04);
-          border-color: #bfdbfe; /* Borde azul muy claro */
+          transform: translateY(-2px);
+          box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.08);
+          border-color: #bfdbfe;
         }
 
-        .ff-listItem__left {
-          display: flex;
+        .ff-listItem__main {
+          display: grid;
+          grid-template-columns: 1.5fr 1fr 1fr;
           align-items: center;
-          gap: 16px; /* Espacio más compacto */
+          gap: 20px;
+          flex: 1;
         }
 
-        /* Icono de Paquete con Soft Background */
+        .ff-listItem__left { display: flex; align-items: center; gap: 16px; }
+        .ff-listItem__center, .ff-listItem__right-meta { display: flex; justify-content: center; }
+
         .ff-ico {
-          width: 38px; /* Un poco más compacto */
-          height: 38px;
+          width: 40px;
+          height: 40px;
           border-radius: 10px;
           background: #f0fdf4;
           border: 1px solid #dcfce7;
           display: grid;
           place-items: center;
-          flex: 0 0 auto;
         }
 
-        /* Título e ID de Embarque (Peso 700 para Elegancia) */
         .ff-listItem__title {
-          font-size: 1.1rem; /* Ligeramente más pequeña */
-          font-weight: 700; /* Negrita estándar, refinada (ADN Admin) */
-          color: #1e293b; /* Gris slate oscuro */
-          letter-spacing: -0.01em;
-          margin-bottom: 1px;
+          font-size: 1.1rem;
+          font-weight: 700;
+          color: #1e293b;
+          line-height: 1.2;
         }
 
-        .ff-sub {
-          font-size: 0.85rem; /* Un poco más pequeña */
-          color: #64748b;
-          font-weight: 500;
-        }
+        .ff-sub { font-size: 0.85rem; color: #64748b; font-weight: 500; }
 
-        /* 3. Badges "Soft Pill" */
+        .ff-metric { display: flex; align-items: center; gap: 10px; }
+        .ff-metric__content { display: flex; flex-direction: column; }
+        .ff-metric__label { font-size: 0.65rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; }
+        .ff-metric__value { font-size: 0.9rem; font-weight: 600; color: #334155; }
+
         :global(.status-badge) {
-          padding: 5px 12px;
+          padding: 6px 14px;
           border-radius: 100px;
-          font-size: 0.7rem; /* Un poco más compacta */
-          font-weight: 700; /* Negrita estándar */
+          font-size: 0.7rem;
+          font-weight: 800;
           text-transform: uppercase;
-          letter-spacing: 0.03em;
-          border: 1px solid transparent;
         }
 
-        /* Colores basados en tu shipmentFlow.ts (Mismo esquema visual) */
-        :global(.bg-blue-100) { background: #eff6ff !important; color: #1e40af !important; border-color: #dbeafe !important; }
-        :global(.bg-green-100) { background: #f0fdf4 !important; color: #166534 !important; border-color: #dcfce7 !important; }
-        :global(.bg-yellow-100) { background: #fffbeb !important; color: #92400e !important; border-color: #fef3c7 !important; }
+        :global(.bg-blue-100) { background: #eff6ff !important; color: #1e40af !important; border: 1px solid #dbeafe !important; }
+        :global(.bg-green-100) { background: #f0fdf4 !important; color: #166534 !important; border: 1px solid #dcfce7 !important; }
 
-        /* 4. Paginación y Footer */
         .ff-spread {
           margin-top: 20px;
-          padding: 14px;
-          border-radius: 10px;
+          padding: 16px;
+          border-radius: 12px;
           background: #f8fafc;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
         }
 
-        :global(.ff-btn) {
-          height: 36px; /* Botones más compactos */
-          border-radius: 9px;
-          font-weight: 600;
-        }
-
-        :global(.ff-btn-primary) {
-          background: #1e293b; /* Gris slate muy oscuro (ADN Admin) */
-          color: white;
-          padding: 0 18px;
-        }
-
-        :global(.ff-btn-ghost) {
-          color: #475569;
-          padding: 0 10px;
-        }
-
-        @media (max-width: 768px) {
-          .ff-listItem {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 10px;
-          }
-          :global(.status-badge) {
-            align-self: flex-start;
-          }
+        @media (max-width: 900px) {
+          .ff-listItem__main { grid-template-columns: 1fr; gap: 12px; }
+          .ff-listItem { flex-direction: column; align-items: flex-start; }
+          .ff-listItem__status { margin-top: 12px; }
         }
       `}</style>
     </ClientLayout>
