@@ -153,7 +153,6 @@ export default function AdminQuotesIndex() {
   <div className="statCard action" onClick={() => router.push('/admin/quotes/new')}>
     <div className="iconBox green"><PlusCircle size={18} strokeWidth={1.5} /></div>
     <div className="statInfo">
-      <span className="statLabel">ACCIÓN</span>
       <span className="statValueSmall">Nueva Cotización</span>
     </div>
   </div>
@@ -265,9 +264,37 @@ export default function AdminQuotesIndex() {
         .mainCard { background: white; border-radius: 16px; border: 1px solid #f1f5f9; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); }
         .toolbar { padding: 16px 24px; display: flex; justify-content: space-between; border-bottom: 1px solid #f8fafc; }
         
-        .searchModern { position: relative; width: 300px; }
-        .searchIcon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #cbd5e1; }
-        .searchModern input { width: 100%; padding: 8px 12px 8px 36px; border-radius: 10px; border: 1px solid #f1f5f9; background: #fcfcfd; font-size: 13px; outline: none; }
+        .searchModern { 
+  position: relative; 
+  display: flex;
+  align-items: center;
+  width: 320px; 
+}
+
+.searchIcon { 
+  position: absolute; 
+  left: 12px; /* Espacio desde el borde izquierdo */
+  color: #94a3b8; /* Un gris más suave y moderno */
+  pointer-events: none; /* Para que al hacer clic en la lupa se active el input */
+}
+
+.searchModern input { 
+  width: 100%; 
+  padding: 8px 12px 8px 36px; /* El 36px de la izquierda es vital para que el texto no empiece encima de la lupa */
+  border-radius: 10px; 
+  border: 1px solid #f1f5f9; 
+  background: #fcfcfd; 
+  font-size: 13px; 
+  font-weight: 400;
+  outline: none; 
+  transition: all 0.2s ease;
+}
+
+.searchModern input:focus {
+  background: white;
+  border-color: #cbd5e1;
+  box-shadow: 0 0 0 3px rgba(241, 245, 249, 0.8);
+}
         .btnOutline { background: white; border: 1px solid #f1f5f9; padding: 8px 14px; border-radius: 10px; font-size: 12px; font-weight: 500; color: #64748b; display: flex; align-items: center; gap: 8px; cursor: pointer; }
 
         /* --- GRID DE 4 COLUMNAS --- */
