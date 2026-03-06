@@ -587,10 +587,16 @@ export default function AdminShipmentDetail() {
                       </div>
                       <div className="slot-actions">
                         {uploadedDoc ? (
-                          <div className="ff-row2" style={{ gap: 4 }}>
-                            <button type="button" onClick={() => download(uploadedDoc.id)} className="action-btn download"><Download size={14} /></button>
-                            <button type="button" disabled={busy} onClick={() => deleteFile(uploadedDoc.id, "doc")} className="action-btn delete"><X size={14} /></button>
-                          </div>
+  <div className="ff-row2" style={{ gap: 4 }}>
+    <button type="button" onClick={() => download(uploadedDoc.id)} className="action-btn download">
+      <Download size={14} />
+    </button>
+    
+    {/* AGREGA ESTE BOTÓN AQUÍ */}
+    <button type="button" disabled={busy} onClick={() => deleteFile(uploadedDoc.id, "doc")} className="action-btn delete">
+      <X size={14} />
+    </button>
+  </div>
                         ) : (
                           <label className="action-btn upload">
                             <PlusCircle size={14} />
@@ -632,9 +638,15 @@ export default function AdminShipmentDetail() {
                         <div className="photo-display">
                           {p.url ? <img src={p.url} alt="Envío" /> : <div className="photo-placeholder" />}
                           <div className="photo-overlay">
-                            <button type="button" onClick={() => download(p.id)} className="overlay-btn view"><Download size={16} /></button>
-                            <button type="button" onClick={() => deleteFile(p.id, "photo")} className="overlay-btn del"><X size={16} /></button>
-                          </div>
+  <button type="button" onClick={() => download(p.id)} className="overlay-btn view">
+    <Download size={16} />
+  </button>
+  
+  {/* AGREGA ESTE BOTÓN AQUÍ */}
+  <button type="button" disabled={busy} onClick={() => deleteFile(p.id, "photo")} className="overlay-btn del">
+    <X size={16} />
+  </button>
+</div>
                         </div>
                         <div className="photo-info-mini"><span className="photo-date">{fmtDT(p.created_at)}</span></div>
                       </div>
@@ -676,6 +688,8 @@ export default function AdminShipmentDetail() {
   .meta { font-size: 12px; color: var(--ff-muted); margin-top: 4px; }
   .sectionTitle { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 13px; text-transform: uppercase; letter-spacing: 0.03em; }
   .lbl { display: block; font-size: 11px; font-weight: 900; color: var(--ff-muted); margin-bottom: 6px; text-transform: uppercase; }
+  .action-btn.delete { background: #fff1f2; color: #e11d48; }
+  .overlay-btn.del { background: #e11d48; }
 
   /* --- FORMULARIO E INPUTS --- */
   .in2 {
