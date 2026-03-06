@@ -12,7 +12,6 @@ import { requireAdminOrRedirect } from "../../../lib/requireAdmin";
 import { AdminLayout } from "../../../components/AdminLayout";
 import { CompactRow } from "../../../components/CompactRow";
 
-
 // --- TYPES ---
 type QuoteRow = {
   id: string;
@@ -62,7 +61,24 @@ function StatusPill({ v }: { v: string }) {
       {labels[s] || s}
     </span>
   );
-}
+} // <--- LLAVE DE CIERRE CORRECTA
+
+const getFlag = (dest: string) => {
+  if (!dest) return "📍";
+  const d = dest.toUpperCase();
+  const flags: Record<string, string> = {
+    "AMSTERDAM": "🇳🇱", "HOLANDA": "🇳🇱", "NETHERLANDS": "🇳🇱",
+    "PARIS": "🇫🇷", "FRANCIA": "🇫🇷",
+    "BELGICA": "🇧🇪", "BELGIUM": "🇧🇪",
+    "POLONIA": "🇵🇱", "POLAND": "🇵🇱",
+    "PANAMA": "🇵🇦", "PTY": "🇵🇦",
+    "ESPAÑA": "🇪🇸", "MADRID": "🇪🇸",
+    "USA": "🇺🇸", "MIAMI": "🇺🇸",
+    "COLOMBIA": "🇨🇴", "BOGOTA": "🇨🇴"
+  };
+  const found = Object.keys(flags).find(key => d.includes(key));
+  return found ? flags[found] : "✈️"; 
+};
 
 export default function AdminQuotesIndex() {
   const router = useRouter();
@@ -71,13 +87,11 @@ export default function AdminQuotesIndex() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtros y Sort
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [sortField, setSortField] = useState<"created_at" | "client_name">("created_at");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
 
-  // KPIs Dinámicos basados en la carga actual
   const stats = useMemo(() => {
     const approved = items.filter(i => i.status === 'approved');
     const pipeline = items.reduce((acc, curr) => acc + (Number(curr.total) || 0), 0);
@@ -108,19 +122,12 @@ export default function AdminQuotesIndex() {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
-      // 1. CREAMOS UN TIMESTAMP PARA ROMPER EL CACHE
       const t = new Date().getTime();
-      
-      // 2. AGREGAMOS EL TIMESTAMP A LA URL
       const url = `/.netlify/functions/listQuotes?${queryString}&t=${t}`;
-
       const res = await fetch(url, {
         headers: { 
           Authorization: `Bearer ${session?.access_token}`,
-          // 3. HEADERS EXTRA PARA ASEGURAR DATOS FRESCOS
-          "Cache-Control": "no-cache",
-          "Pragma": "no-cache"
+          "Cache-Control": "no-cache"
         },
       });
       const json = await res.json() as ApiResponse;
@@ -141,7 +148,6 @@ export default function AdminQuotesIndex() {
   return (
     <AdminLayout title="Cotizaciones" subtitle="Gestión comercial y pipeline de ventas.">
       
-      {/* SECCIÓN DE RESUMEN (KPIs FINANCIEROS) */}
       <div className="statsGrid">
         <div className="statCard">
           <div className="iconBox blue"><TrendingUp size={20} /></div>
@@ -177,7 +183,6 @@ export default function AdminQuotesIndex() {
           </Link>
         </div>
 
-        {/* TOOLBAR PROFESIONAL */}
         <div className="toolbar">
           <div className="filterSide">
             <select className="selectModern" value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -187,185 +192,182 @@ export default function AdminQuotesIndex() {
               <option value="approved">Aprobada</option>
               <option value="rejected">Rechazada</option>
             </select>
-
             <div className="searchModern">
               <Search size={18} className="searchIcon" />
-              <input
-                placeholder="Buscar cliente o destino..."
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
+              <input placeholder="Buscar cliente o destino..." value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
           </div>
-
           <div className="sortSide">
             <div className="toggleGroup">
-              <button 
-                className={sortField === 'created_at' ? 'active' : ''} 
-                onClick={() => { setSortField('created_at'); setDir(dir === 'desc' ? 'asc' : 'desc'); }}
-              >
+              <button className={sortField === 'created_at' ? 'active' : ''} onClick={() => { setSortField('created_at'); setDir(dir === 'desc' ? 'asc' : 'desc'); }}>
                 <CalendarDays size={14} /> {dir === 'desc' && sortField === 'created_at' ? 'Recientes' : 'Fecha'}
               </button>
-              <button 
-                className={sortField === 'client_name' ? 'active' : ''} 
-                onClick={() => { setSortField('client_name'); setDir(dir === 'asc' ? 'desc' : 'asc'); }}
-              >
+              <button className={sortField === 'client_name' ? 'active' : ''} onClick={() => { setSortField('client_name'); setDir(dir === 'asc' ? 'desc' : 'asc'); }}>
                 <SortAsc size={14} /> A-Z
               </button>
             </div>
           </div>
         </div>
 
-        {/* LISTADO DE RESULTADOS */}
         <div className="listContainer">
-  {loading && <div className="loadingState">Sincronizando con base de datos...</div>}
-  
- {items.map((r: any) => (
-  <CompactRow
-    key={r.id}
-    href={`/admin/quotes/${r.id}`}
-    title={
-      <div className="rowMainLayout">
-        {/* COLUMNA 1: QUIÉN ES */}
-        <div className="leftBlock">
-          <span className="quoteIdBadge">{r.quote_number || "SIN NÚMERO"}</span>
-          <span className="clientName">{r.client_name || "Cliente No Registrado"}</span>
-        </div>
+          {loading && <div className="loadingState">Sincronizando con base de datos...</div>}
+          {items.map((r: any) => (
+            <CompactRow
+              key={r.id}
+              href={`/admin/quotes/${r.id}`}
+              title={
+                <div className="rowMainLayout">
+                  <div className="leftBlock">
+                    <span className="quoteIdBadge">{r.quote_number || "SIN NÚMERO"}</span>
+                    <span className="clientName">{r.client_name || "Cliente No Registrado"}</span>
+                  </div>
 
-        {/* COLUMNA 2: QUÉ Y DÓNDE */}
-        <div className="centerBlock">
-          <div className="routeInfo">
-            <span>PTY</span>
-            <span style={{ color: '#cbd5e1' }}>→</span>
-            <span>{r.destination || 'POR DEFINIR'}</span>
-          </div>
-          <div className="metaInfo">
-            <span>{r.boxes} Cajas</span>
-            <span style={{ opacity: 0.3 }}>|</span>
-            <span>{fmtDate(r.created_at)}</span>
-          </div>
-        </div>
+                  <div className="centerBlock">
+                    <div className="routeWithFlag">
+                      <span className="originText">PTY</span>
+                      <span className="routeArrow">→</span>
+                      <span className="destinationText">
+                        {getFlag(r.destination)} {r.destination}
+                      </span>
+                    </div>
+                    <div className="metaInfoGreyed">
+                      <span>{r.boxes} cajas</span>
+                      <span className="dot">•</span>
+                      <span>{fmtDate(r.created_at)}</span>
+                    </div>
+                  </div>
 
-        {/* COLUMNA 3: CUÁNTO Y ESTADO */}
-        <div className="rightBlock">
-  <div className="priceContainer">
-    <span className="totalAmount">
-      {r.total > 0 ? `USD ${Number(r.total).toLocaleString()}` : 'Pendiente'}
-    </span>
-    <StatusPill v={r.status} />
-  </div>
-  <div className="actionIcon">
-    <ChevronRight size={20} />
-  </div>
-</div>
-      </div>
-    }
-  />
-))}
-</div>
+                  <div className="rightBlock">
+                    <div className="priceContainerVertical">
+                      <span className="totalAmountBig">
+                        {r.currency} {Number(r.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                      <StatusPill v={r.status} />
+                    </div>
+                    <div className="actionArrow">
+                      <ChevronRight size={18} />
+                    </div>
+                  </div>
+                </div>
+              }
+            />
+          ))}
+        </div>
       </div>
 
       <style jsx>{`
-  /* El contenedor que obliga a las 3 columnas */
-.rowMainLayout {
-  display: grid;
-  /* Columna 1: 220px fija | Columna 2: Todo el resto | Columna 3: 150px fija */
-  grid-template-columns: 220px 1fr 180px; 
-  align-items: center;
-  width: 100%;
-  padding: 12px 0;
-  gap: 20px;
-}
+        .rowMainLayout {
+          display: grid;
+          grid-template-columns: 240px 1fr 200px; 
+          align-items: center;
+          width: 100%;
+          padding: 8px 0;
+          gap: 20px;
+        }
 
-/* Forzamos el comportamiento de cada riel */
-.leftBlock {
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
+        .leftBlock {
+          text-align: left;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
 
-.centerBlock {
-  text-align: center; /* ESTO ALINEA LAS COLUMNAS CENTRALES */
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
+        .quoteIdBadge {
+          background-color: #f1f5f9;
+          color: #64748b;
+          font-size: 10px;
+          font-weight: 700;
+          padding: 2px 8px;
+          border-radius: 6px;
+          width: fit-content;
+          text-transform: uppercase;
+        }
 
-.rightBlock {
-  text-align: right; /* ESTO PEGA TODO A LA DERECHA */
-  display: flex;
-  flex-direction: row; /* Precio y Status uno al lado del otro o arriba/abajo */
-  align-items: center;
-  justify-content: flex-end;
-  gap: 15px;
-}
+        .clientName { 
+          font-weight: 700; 
+          color: #0f172a; 
+          font-size: 15px; 
+        }
 
-.priceAndStatus {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
+        .centerBlock {
+          text-align: center;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+
+        .routeWithFlag {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          color: #334155;
+        }
+
+        .originText { color: #94a3b8; }
+        .routeArrow { color: #cbd5e1; }
+
+        .metaInfoGreyed {
+          display: flex;
+          gap: 8px;
+          font-size: 11px;
+          color: #94a3b8; /* El efecto greyed out */
+          font-weight: 400;
+          margin-top: 4px;
+        }
+
+        .rightBlock {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 15px;
+        }
+
+        .priceContainerVertical {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 4px;
+        }
+
+        .totalAmountBig {
+          color: #10b981;
+          font-weight: 800;
+          font-size: 16px;
+        }
+
+        .actionArrow { color: #cbd5e1; }
+
+        /* Resto de estilos del Dashboard */
         .statsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
-        .statCard { background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-        .iconBox { padding: 10px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+        .statCard { background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 15px; }
+        .iconBox { padding: 10px; border-radius: 12px; }
         .iconBox.blue { background: #eff6ff; color: #3b82f6; }
         .iconBox.green { background: #f0fdf4; color: #16a34a; }
         .iconBox.slate { background: #f8fafc; color: #64748b; }
-        .statLabel { font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
-        .statValue { font-size: 20px; font-weight: 900; color: #1e293b; display: block; margin-top: 2px; }
+        .statLabel { font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; }
+        .statValue { font-size: 20px; font-weight: 900; color: #1e293b; }
 
-        .mainCard { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); overflow: hidden; }
+        .mainCard { background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }
         .cardHeader { padding: 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; }
-        .sectionTitle { font-size: 18px; font-weight: 900; color: #1e293b; margin: 0; }
-        .sectionSub { font-size: 13px; color: #64748b; margin-top: 2px; }
-
-        .btnNewPrimary { background: #16a34a; color: white; padding: 10px 20px; border-radius: 10px; font-weight: 800; font-size: 13px; display: flex; align-items: center; gap: 8px; text-decoration: none; transition: 0.2s; }
-        .btnNewPrimary:hover { background: #15803d; transform: translateY(-1px); }
-
+        .sectionTitle { font-size: 18px; font-weight: 900; color: #1e293b; }
+        
+        .btnNewPrimary { background: #16a34a; color: white; padding: 10px 20px; border-radius: 10px; font-weight: 800; text-decoration: none; display: flex; gap: 8px; align-items: center; }
+        
         .toolbar { padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; background: #fcfcfd; border-bottom: 1px solid #f1f5f9; }
-        .filterSide { display: flex; align-items: center; gap: 12px; flex: 1; }
-        .selectModern { padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 13px; font-weight: 700; color: #475569; outline: none; cursor: pointer; }
+        .filterSide { display: flex; gap: 12px; flex: 1; }
+        .selectModern { padding: 8px; border-radius: 8px; border: 1px solid #e2e8f0; font-weight: 700; }
         .searchModern { position: relative; flex: 1; max-width: 350px; }
-        .searchIcon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
-        .searchModern input { width: 100%; padding: 9px 12px 9px 38px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 13px; outline: none; }
-        .searchModern input:focus { border-color: #16a34a; }
+        .searchModern input { width: 100%; padding: 8px 8px 8px 35px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .searchIcon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); }
 
-        .toggleGroup { display: flex; background: #f1f5f9; padding: 4px; border-radius: 10px; gap: 4px; }
-        .toggleGroup button { border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 6px; color: #64748b; background: transparent; }
-        .toggleGroup button.active { background: white; color: #1e293b; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .toggleGroup { display: flex; background: #f1f5f9; padding: 4px; border-radius: 10px; }
+        .toggleGroup button { border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 800; color: #64748b; background: transparent; }
+        .toggleGroup button.active { background: white; color: #1e293b; }
 
         .listContainer { padding: 20px 24px; display: grid; gap: 12px; }
-        .quoteIdBadge {
-  background: #1e293b;
-  color: #ffffff;
-  padding: 4px 12px;
-  border-radius: 6px;
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
-  font-size: 11px;
-  font-weight: 700;
-  min-width: 120px; /* Un poco más ancho para el nuevo formato */
-  text-align: center;
-  letter-spacing: 0.5px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
-}
-
-.noPrice {
-  color: #94a3b8;
-  font-style: italic;
-  font-size: 11px;
-}
-        .clientName { font-weight: 800; color: #1e293b; font-size: 15px; }
-        .routeTag { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #64748b; margin-top: 2px; }
-        
-        .rowSub { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #64748b; margin-top: 4px; }
-        .dataItem { display: flex; align-items: center; gap: 4px; }
-        .totalAmount { color: #16a34a; font-weight: 900; font-size: 13px; }
-        .dot { color: #cbd5e1; }
-        
-        .statusPill { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; border-radius: 6px; border: 1px solid; padding: 4px 10px; }
-        .emptyState { padding: 60px; text-align: center; color: #94a3b8; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .statusPill { font-size: 10px; font-weight: 900; text-transform: uppercase; border-radius: 6px; border: 1px solid; padding: 2px 8px; }
         .loadingState { padding: 40px; text-align: center; color: #64748b; font-weight: 600; }
       `}</style>
     </AdminLayout>
