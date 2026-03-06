@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, ArrowUpDown, Calendar, Package, MapPin, RefreshCcw } from "lucide-react";
+import { Search, ArrowUpDown, Calendar, Package, MapPin, RefreshCcw, ChevronRight } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import { labelStatus, statusBadgeClass } from "../../lib/shipmentFlow";
 import { ClientLayout } from "../../components/ClientLayout";
@@ -17,17 +17,15 @@ function formatDate(iso?: string) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("es-PA");
+  return d.toLocaleDateString("es-PA", { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 export default function ShipmentsPage() {
   const pageSize = 20;
-
   const [page, setPage] = useState(1);
   const [dir, setDir] = useState<"asc" | "desc">("desc");
   const [destination, setDestination] = useState("");
   const [search, setSearch] = useState("");
-
   const [items, setItems] = useState<Shipment[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -35,21 +33,15 @@ export default function ShipmentsPage() {
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil((total || 0) / pageSize)), [total]);
 
-  async function fetchShipments(next?: {
-    page?: number;
-    dir?: "asc" | "desc";
-    destination?: string;
-    search?: string;
-  }) {
+  async function fetchShipments(next?: { page?: number; dir?: "asc" | "desc"; destination?: string; search?: string; }) {
     setLoading(true);
     setErrorMsg("");
-
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token;
 
     if (!token) {
       setLoading(false);
-      setErrorMsg("Sesión inválida. Vuelve a iniciar sesión.");
+      setErrorMsg("Sesión inválida.");
       return;
     }
 
@@ -57,337 +49,300 @@ export default function ShipmentsPage() {
     params.set("page", String(next?.page ?? page));
     params.set("pageSize", String(pageSize));
     params.set("dir", next?.dir ?? dir);
-
-    const dest = next?.destination ?? destination;
-    const q = next?.search ?? search;
-
-    if (dest) params.set("destination", dest);
-    if (q) params.set("q", q);
+    if (next?.destination ?? destination) params.set("destination", next?.destination ?? destination);
+    if (next?.search ?? search) params.set("q", next?.search ?? search);
 
     const res = await fetch(`/.netlify/functions/listShipments?${params.toString()}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
     if (!res.ok) {
-      const txt = await res.text().catch(() => "");
       setLoading(false);
-      setErrorMsg(`Error listando embarques (${res.status}). ${txt ? txt.slice(0, 160) : ""}`);
+      setErrorMsg(`Error (${res.status})`);
       return;
     }
 
     const json = await res.json();
-    const newItems: Shipment[] = (json.items ?? json.data ?? []) as Shipment[];
-    const newTotal: number = Number(json.total ?? json.count ?? newItems.length ?? 0);
-
-    setItems(newItems);
-    setTotal(newTotal);
+    setItems((json.items ?? json.data ?? []) as Shipment[]);
+    setTotal(Number(json.total ?? json.count ?? 0));
     setLoading(false);
   }
 
-  useEffect(() => {
-    fetchShipments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, dir, destination]);
-
-  async function applySearch() {
-    const nextPage = 1;
-    setPage(nextPage);
-    await fetchShipments({ page: nextPage, search });
-  }
+  useEffect(() => { fetchShipments(); }, [page, dir, destination]);
 
   return (
-    <ClientLayout
-      title="Embarques"
-      subtitle="Consulta estado, documentos y fotos del proceso de exportación."
-      wide
-    >
+    <ClientLayout title="Mis Embarques" subtitle="Gestiona y rastrea tus exportaciones en tiempo real." wide>
       <div className="ff-client-shell">
-        {/* Toolbar / Filtros */}
-        <div className="ff-card ff-card-pad">
-          <div className="ff-toolbar">
-            <div className="ff-toolbar__left">
-              <div className="ff-field">
-                <MapPin size={16} color="#94a3b8" />
-                <select
-                  className="ff-input"
-                  value={destination}
-                  onChange={(e) => {
-                    setPage(1);
-                    setDestination(e.target.value);
-                  }}
-                >
-                  <option value="">Todos los destinos</option>
-                  <option value="MAD">Madrid (MAD)</option>
-                  <option value="AMS">Amsterdam (AMS)</option>
-                  <option value="CDG">Paris (CDG)</option>
-                </select>
-              </div>
-
-              <div className="ff-field ff-field--grow">
-                <Search size={16} color="#94a3b8" />
-                <input
-                  className="ff-input"
-                  placeholder="Buscar por número de embarque…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") applySearch();
-                  }}
-                />
-              </div>
+        
+        {/* Header / Search Bar */}
+        <div className="ff-search-section">
+          <div className="ff-search-container">
+            <div className="ff-input-wrapper">
+              <Search size={18} className="ff-icon-search" />
+              <input 
+                className="ff-main-input" 
+                placeholder="Buscar por código de embarque..." 
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && fetchShipments({ page: 1, search })}
+              />
             </div>
+            
+            <select 
+              className="ff-select-minimal"
+              value={destination}
+              onChange={(e) => { setPage(1); setDestination(e.target.value); }}
+            >
+              <option value="">Todos los destinos</option>
+              <option value="MAD">Madrid (MAD)</option>
+              <option value="AMS">Amsterdam (AMS)</option>
+              <option value="CDG">Paris (CDG)</option>
+            </select>
 
-            <div className="ff-toolbar__right">
-              <button className="ff-btn ff-btn-primary" type="button" onClick={applySearch}>
-                Buscar
-              </button>
-
-              <button
-                className="ff-btn ff-btn-ghost"
-                onClick={() => setDir((d) => (d === "desc" ? "asc" : "desc"))}
-                type="button"
-              >
-                <ArrowUpDown size={16} />
-                Fecha {dir === "desc" ? "↓" : "↑"}
-              </button>
-
-              <button className="ff-btn ff-btn-ghost" type="button" onClick={() => fetchShipments()}>
-                <RefreshCcw size={16} />
-              </button>
-            </div>
+            <button className="ff-btn-refresh" onClick={() => fetchShipments()}>
+              <RefreshCcw size={18} />
+            </button>
           </div>
         </div>
 
-        <div className="ff-divider" />
-
-        {/* Listado de Cards */}
-        <div className="ff-list-container">
-          {loading && <p className="ff-sub">Cargando…</p>}
-
-          {!loading && errorMsg && (
-            <div className="ff-card ff-card-pad" style={{ borderColor: "#fca5a5" }}>
-              <p style={{ margin: 0, fontWeight: 800 }}>No se pudo cargar el listado</p>
-              <p className="ff-sub">{errorMsg}</p>
-            </div>
-          )}
-
-          {!loading && !errorMsg && items.length === 0 && (
-            <p className="ff-sub">No hay embarques disponibles.</p>
-          )}
-
-          {!loading && !errorMsg && items.length > 0 && (
-            <div className="ff-list">
+        {/* Listado */}
+        <div className="ff-list-wrapper">
+          {loading ? (
+            <div className="ff-loading-state">Cargando embarques...</div>
+          ) : items.length === 0 ? (
+            <div className="ff-empty-state">No se encontraron embarques.</div>
+          ) : (
+            <div className="ff-grid-list">
               {items.map((s) => (
-                <Link key={s.id} href={`/shipments/${s.id}`} className="ff-listItem">
-                  <div className="ff-listItem__main">
-                    {/* Bloque Izquierdo: ID y Producto */}
-                    <div className="ff-listItem__left">
-                      <div className="ff-ico">
-                        <Package size={20} color="#16a34a" />
+                <Link key={s.id} href={`/shipments/${s.id}`} className={`ff-card-item status-border-${s.status}`}>
+                  <div className="ff-card-content">
+                    
+                    {/* Col 1: ID & Info */}
+                    <div className="ff-col-info">
+                      <div className="ff-icon-box">
+                        <Package size={22} />
                       </div>
-                      <div className="ff-listItem__meta">
-                        <div className="ff-listItem__title">{s.code}</div>
-                        <div className="ff-sub">Piña MD2 · 4 Palets</div>
+                      <div>
+                        <h3 className="ff-ship-code">{s.code}</h3>
+                        <p className="ff-ship-sub">Piña MD2 · 4 Palets</p>
                       </div>
                     </div>
 
-                    {/* Bloque Central: Destino */}
-                    <div className="ff-listItem__center">
-                      <div className="ff-metric">
-                        <MapPin size={16} color="#94a3b8" />
-                        <div className="ff-metric__content">
-                          <span className="ff-metric__label">DESTINO</span>
-                          <span className="ff-metric__value">{s.destination || "—"}</span>
+                    {/* Col 2: Destino (Centrado) */}
+                    <div className="ff-col-center">
+                      <div className="ff-meta-item">
+                        <MapPin size={16} />
+                        <div>
+                          <span className="ff-meta-label">DESTINO</span>
+                          <span className="ff-meta-value">{s.destination || "—"}</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Bloque Derecho: Fecha */}
-                    <div className="ff-listItem__right-meta">
-                      <div className="ff-metric">
-                        <Calendar size={16} color="#94a3b8" />
-                        <div className="ff-metric__content">
-                          <span className="ff-metric__label">FECHA</span>
-                          <span className="ff-metric__value">{formatDate(s.created_at)}</span>
+                    {/* Col 3: Fecha (Centrado) */}
+                    <div className="ff-col-center">
+                      <div className="ff-meta-item">
+                        <Calendar size={16} />
+                        <div>
+                          <span className="ff-meta-label">FECHA SALIDA</span>
+                          <span className="ff-meta-value">{formatDate(s.created_at)}</span>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Status Badge */}
-                  <div className="ff-listItem__status">
-                    <span className={`${statusBadgeClass(s.status)} status-badge`}>
-                      {labelStatus(s.status)}
-                    </span>
+                    {/* Col 4: Status & Action */}
+                    <div className="ff-col-status">
+                      <span className={`ff-badge-pill ${statusBadgeClass(s.status)}`}>
+                        {labelStatus(s.status)}
+                      </span>
+                      <ChevronRight size={20} className="ff-arrow-icon" />
+                    </div>
+
                   </div>
                 </Link>
               ))}
             </div>
           )}
-
-          {/* Paginación */}
-          {!loading && !errorMsg && totalPages > 1 && (
-            <div className="ff-spread">
-              <div className="ff-sub">
-                Página {page} de {totalPages} · {total} embarques
-              </div>
-              <div className="ff-row" style={{ gap: 8 }}>
-                <button
-                  className="ff-btn ff-btn-ghost"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                >
-                  Anterior
-                </button>
-                <button
-                  className="ff-btn ff-btn-ghost"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                >
-                  Siguiente
-                </button>
-              </div>
-            </div>
-          )}
         </div>
+
+        {/* Paginación Simple */}
+        {totalPages > 1 && (
+          <div className="ff-pagination">
+            <span className="ff-sub">Página {page} de {totalPages}</span>
+            <div className="ff-nav-btns">
+              <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="ff-btn-nav">Anterior</button>
+              <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="ff-btn-nav">Siguiente</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <style jsx>{`
         .ff-client-shell {
-          width: 100%;
-          max-width: 1200px;
+          max-width: 1100px;
           margin: 0 auto;
-          padding: 0 20px;
+          padding: 40px 20px;
+          font-family: 'Inter', -apple-system, sans-serif;
         }
 
-        .ff-toolbar {
+        /* Search Section */
+        .ff-search-section { margin-bottom: 32px; }
+        .ff-search-container {
           display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 16px;
-          flex-wrap: wrap;
-        }
-
-        .ff-toolbar__left {
-          display: flex;
-          align-items: center;
           gap: 12px;
-          flex: 1 1 auto;
-        }
-
-        .ff-field {
-          display: flex;
           align-items: center;
-          position: relative;
-        }
-
-        .ff-field--grow {
-          flex: 1;
-        }
-
-        :global(.ff-field .ff-input) {
-          height: 40px;
-          width: 100%;
-          border: 1px solid #e2e8f0;
-          border-radius: 10px;
-          padding: 0 12px 0 40px;
-          background: #ffffff;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-          font-size: 0.9rem;
-        }
-
-        :global(.ff-field svg) {
-          position: absolute;
-          left: 14px;
-          z-index: 10;
-        }
-
-        .ff-list {
-          display: grid;
-          gap: 12px;
-          margin-top: 10px;
-        }
-
-        .ff-listItem {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 16px 24px;
+          background: #fff;
+          padding: 8px;
+          border-radius: 16px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.03);
           border: 1px solid #f1f5f9;
-          border-radius: 14px;
-          background: #ffffff;
-          text-decoration: none;
-          color: inherit;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
-          transition: all 0.2s ease;
         }
-
-        .ff-listItem:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.08);
-          border-color: #bfdbfe;
-        }
-
-        .ff-listItem__main {
-          display: grid;
-          grid-template-columns: 1.5fr 1fr 1fr;
-          align-items: center;
-          gap: 20px;
+        .ff-input-wrapper {
+          position: relative;
           flex: 1;
+          display: flex;
+          align-items: center;
+        }
+        .ff-icon-search {
+          position: absolute;
+          left: 16px;
+          color: #94a3b8;
+        }
+        .ff-main-input {
+          width: 100%;
+          height: 48px;
+          padding: 0 16px 0 48px;
+          border: none;
+          background: #f8fafc;
+          border-radius: 12px;
+          font-size: 0.95rem;
+          outline: none;
+          transition: all 0.2s;
+        }
+        .ff-main-input:focus { background: #fff; box-shadow: inset 0 0 0 2px #e2e8f0; }
+
+        .ff-select-minimal {
+          height: 48px;
+          padding: 0 16px;
+          border: 1px solid #f1f5f9;
+          border-radius: 12px;
+          background: #fff;
+          color: #64748b;
+          font-weight: 500;
+          outline: none;
         }
 
-        .ff-listItem__left { display: flex; align-items: center; gap: 16px; }
-        .ff-listItem__center, .ff-listItem__right-meta { display: flex; justify-content: center; }
+        .ff-btn-refresh {
+          width: 48px;
+          height: 48px;
+          display: grid;
+          place-items: center;
+          border-radius: 12px;
+          border: 1px solid #f1f5f9;
+          background: #fff;
+          color: #64748b;
+          cursor: pointer;
+        }
 
-        .ff-ico {
-          width: 40px;
-          height: 40px;
-          border-radius: 10px;
+        /* Grid List */
+        .ff-grid-list { display: grid; gap: 16px; }
+        
+        .ff-card-item {
+          display: block;
+          text-decoration: none;
+          background: #fff;
+          border-radius: 20px;
+          border: 1px solid #f1f5f9;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          position: relative;
+          overflow: hidden;
+        }
+        .ff-card-item:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 12px 24px rgba(0,0,0,0.06);
+          border-color: #e2e8f0;
+        }
+
+        /* Border Dinámico Izquierdo */
+        .status-border-in_transit { border-left: 6px solid #3b82f6; }
+        .status-border-delivered { border-left: 6px solid #10b981; }
+        .status-border-pending { border-left: 6px solid #f59e0b; }
+
+        .ff-card-content {
+          display: grid;
+          grid-template-columns: 1.5fr 1fr 1fr 1.2fr;
+          align-items: center;
+          padding: 24px 32px;
+        }
+
+        /* Columnas */
+        .ff-col-info { display: flex; align-items: center; gap: 20px; }
+        .ff-icon-box {
+          width: 52px;
+          height: 52px;
           background: #f0fdf4;
-          border: 1px solid #dcfce7;
+          color: #16a34a;
+          border-radius: 14px;
           display: grid;
           place-items: center;
         }
-
-        .ff-listItem__title {
-          font-size: 1.1rem;
-          font-weight: 700;
-          color: #1e293b;
-          line-height: 1.2;
-        }
-
-        .ff-sub { font-size: 0.85rem; color: #64748b; font-weight: 500; }
-
-        .ff-metric { display: flex; align-items: center; gap: 10px; }
-        .ff-metric__content { display: flex; flex-direction: column; }
-        .ff-metric__label { font-size: 0.65rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; }
-        .ff-metric__value { font-size: 0.9rem; font-weight: 600; color: #334155; }
-
-        :global(.status-badge) {
-          padding: 6px 14px;
-          border-radius: 100px;
-          font-size: 0.7rem;
+        .ff-ship-code {
+          font-size: 1.25rem;
           font-weight: 800;
+          color: #0f172a;
+          margin: 0;
+          letter-spacing: -0.02em;
+        }
+        .ff-ship-sub { font-size: 0.85rem; color: #64748b; margin: 2px 0 0 0; font-weight: 500; }
+
+        .ff-col-center { display: flex; justify-content: center; }
+        .ff-meta-item { display: flex; align-items: center; gap: 12px; color: #94a3b8; }
+        .ff-meta-content { display: flex; flex-direction: column; }
+        .ff-meta-label { display: block; font-size: 0.65rem; font-weight: 800; color: #cbd5e1; letter-spacing: 0.05em; }
+        .ff-meta-value { display: block; font-size: 0.95rem; font-weight: 600; color: #334155; }
+
+        .ff-col-status { display: flex; align-items: center; justify-content: flex-end; gap: 20px; }
+        
+        /* Soft Pills */
+        :global(.ff-badge-pill) {
+          padding: 8px 16px;
+          border-radius: 100px;
+          font-size: 0.75rem;
+          font-weight: 700;
+          letter-spacing: 0.02em;
           text-transform: uppercase;
         }
+        :global(.bg-blue-100) { background: #eff6ff !important; color: #2563eb !important; }
+        :global(.bg-green-100) { background: #ecfdf5 !important; color: #059669 !important; }
+        :global(.bg-yellow-100) { background: #fffbeb !important; color: #d97706 !important; }
 
-        :global(.bg-blue-100) { background: #eff6ff !important; color: #1e40af !important; border: 1px solid #dbeafe !important; }
-        :global(.bg-green-100) { background: #f0fdf4 !important; color: #166534 !important; border: 1px solid #dcfce7 !important; }
+        .ff-arrow-icon { color: #cbd5e1; transition: transform 0.2s; }
+        .ff-card-item:hover .ff-arrow-icon { transform: translateX(4px); color: #64748b; }
 
-        .ff-spread {
-          margin-top: 20px;
-          padding: 16px;
-          border-radius: 12px;
-          background: #f8fafc;
+        /* Pagination */
+        .ff-pagination {
           display: flex;
           justify-content: space-between;
           align-items: center;
+          margin-top: 40px;
+          padding-top: 24px;
+          border-top: 1px solid #f1f5f9;
         }
+        .ff-btn-nav {
+          padding: 8px 16px;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          background: #fff;
+          font-weight: 600;
+          color: #475569;
+          cursor: pointer;
+        }
+        .ff-btn-nav:disabled { opacity: 0.5; cursor: not-allowed; }
 
         @media (max-width: 900px) {
-          .ff-listItem__main { grid-template-columns: 1fr; gap: 12px; }
-          .ff-listItem { flex-direction: column; align-items: flex-start; }
-          .ff-listItem__status { margin-top: 12px; }
+          .ff-card-content { grid-template-columns: 1fr; gap: 20px; padding: 24px; }
+          .ff-col-center { justify-content: flex-start; }
+          .ff-col-status { justify-content: space-between; }
         }
       `}</style>
     </ClientLayout>
