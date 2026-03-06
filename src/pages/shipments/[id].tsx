@@ -209,7 +209,7 @@ export default function ShipmentDetailPage() {
                   {data.photos.map((img) => (
                     <div key={img.id} className="photo-thumb" onClick={() => download(img.id)}>
                       <img 
-                        src={img.url || "/placeholder-img.png"} 
+                        src={img.url || ""} 
                         alt={img.filename} 
                         style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '6px', cursor: 'pointer', border: '1px solid #eee' }}
                       />
@@ -248,10 +248,9 @@ export default function ShipmentDetailPage() {
                 )}
               </div>
             </div>
-
-          </div>
-        </div>
-      )}
+          </div> 
+        </div> // <-- Cierre de "page"
+      )} 
 
       <style jsx>{`
         .page { display: flex; flex-direction: column; gap: 16px; }
@@ -275,7 +274,7 @@ export default function ShipmentDetailPage() {
         .meta-footer { margin-top: 16px; padding-top: 12px; border-top: 1px dashed #eee; font-size: 12px; color: #999; }
         .empty-state { padding: 20px; text-align: center; color: #aaa; font-size: 13px; border: 1px dashed #ddd; border-radius: 8px; margin-top: 10px; }
         .photo-thumb:hover { transform: scale(1.02); transition: 0.2s; }
-        .doc-row:hover { border-color: var(--ff-green-dark) !important; }
+        .doc-row:hover { border-color: #2e7d32 !important; }
         @media (max-width: 768px) { .hero { flex-direction: column; gap: 16px; align-items: flex-start; } .grid2 { grid-template-columns: 1fr; } }
       `}</style>
     </ClientLayout>
