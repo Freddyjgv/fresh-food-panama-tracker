@@ -166,12 +166,13 @@ export default function AdminShipments() {
 
       {/* 1. HEADER: 4 GRIDS (CLON DE QUOTES) */}
       <div className="statsGrid">
-        <div className="statCard action" onClick={() => setShowModal(true)}>
-          <div className="iconBox green"><PlusCircle size={18} strokeWidth={1.5} /></div>
-          <div className="statInfo">
-            <span className="statValueAction">Nuevo Embarque</span>
-          </div>
-        </div>
+  {/* CAMBIA ESTA LÍNEA: Asegúrate que diga setShowModal(true) */}
+  <div className="statCard action" onClick={() => setShowModal(true)}>
+    <div className="iconBox green"><PlusCircle size={18} strokeWidth={1.5} /></div>
+    <div className="statInfo">
+      <span className="statValueAction">Nuevo Embarque</span>
+    </div>
+  </div>
         <div className="statCard">
           <div className="iconBox blue"><LayoutGrid size={18} strokeWidth={1.5} /></div>
           <div className="statInfo">
