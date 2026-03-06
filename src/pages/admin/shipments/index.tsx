@@ -314,6 +314,8 @@ export default function AdminShipments() {
       {/* 4. CSS MAESTRO - Dashboard + Modal */}
       <style jsx>{`
         .statsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .statInfo { display: flex; flex-direction: column; gap: 4px; }
+}
         .statCard { background: white; padding: 16px; border-radius: 12px; border: 1px solid #f1f5f9; display: flex; align-items: center; gap: 12px; }
         .statCard.action { border: 1px solid #dcfce7; cursor: pointer; transition: 0.2s; }
         .statCard.action:hover { background: #f0fdf4; border-color: #86efac; transform: translateY(-1px); }
@@ -337,7 +339,18 @@ export default function AdminShipments() {
         .rowWrapper:hover { background: #fbfcfe; }
         .rowGrid { display: grid; grid-template-columns: 240px 1fr 140px 140px; align-items: center; padding: 14px 0; }
         .idBadge { background: #f8fafc; color: #64748b; font-size: 10px; padding: 2px 8px; border-radius: 5px; }
-        .techBadge { background: #f0fdf4; color: #16a34a; font-size: 10px; padding: 2px 8px; border-radius: 5px; display: flex; align-items: center; gap: 4px; }
+        .techBadge { 
+  display: inline-flex;    /* Alinea el icono y el texto en la misma línea */
+  align-items: center;     /* Centra verticalmente el icono con el texto */
+  gap: 6px;                /* El espacio entre el icono (medio) y el texto (producto) */
+  padding: 3px 8px;        /* El aire interno de la etiqueta */
+  border-radius: 8px;      /* Qué tan redondeada es la etiqueta */
+  background: #f0fdf4;     /* Color de fondo verde muy clarito */
+  color: #16a34a;          /* Color del texto e icono (Verde Esmeralda) */
+  font-size: 10px;         /* Tamaño de la fuente (pequeña y técnica) */
+  font-weight: 700;        /* Grosor de la letra */
+  text-transform: uppercase; /* Pone el nombre del producto en mayúsculas */
+}
         .clientName { font-size: 13.5px; color: #1e293b; margin-top: 4px; display: block; }
         .routeLine { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #475569; }
         .status-pill-modern { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 600; }
