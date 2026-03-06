@@ -396,11 +396,6 @@ export default function AdminShipmentDetail() {
     clean((data as any)?.client?.name) ||
     "—";
 
-  // ... (mismos imports, tipos y funciones auxiliares fmtDT, productLine, etc.)
-
-export default function AdminShipmentDetail() {
-  // ... (mismos states y funciones useEffect, load, mark, upload, etc. hasta el return)
-
   return (
     <AdminLayout title="Detalle Logístico" subtitle="Gestión de hitos y expedición documental">
       
