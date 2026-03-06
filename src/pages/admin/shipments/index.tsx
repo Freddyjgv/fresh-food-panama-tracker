@@ -11,7 +11,7 @@ import { labelStatus } from "../../../lib/shipmentFlow";
 import { requireAdminOrRedirect } from "../../../lib/requireAdmin";
 import { AdminLayout } from "../../../components/AdminLayout";
 
-// --- HELPERS (Sin cambios en lógica) ---
+// --- HELPERS ---
 const getFlag = (code: string) => {
   if (!code) return '🌐';
   const codePoints = code.toUpperCase().split('').map(char => 127397 + char.charCodeAt(0));
@@ -55,7 +55,6 @@ export default function AdminShipments() {
   const [allVarieties, setAllVarieties] = useState<any[]>([]);
   const [loadingList, setLoadingList] = useState(true);
 
-  // FORM STATE (Sin cambios)
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [mode, setMode] = useState<'Marítima' | 'Aérea'>('Aérea'); 
@@ -164,56 +163,38 @@ export default function AdminShipments() {
         </div>
       )}
 
-      {/* 1. HEADER: 4 GRIDS (CLON DE QUOTES) */}
+      {/* 1. HEADER KPIs */}
       <div className="statsGrid">
-       <div className="statCard action" onClick={() => setShowModal(true)}>
-        <div className="iconBox green">
-        <PlusCircle size={18} strokeWidth={1.5} />
-      </div>
-    <div className="statInfo">
-      <span className="statValueAction">Nuevo Embarque</span>
-    </div>
-  </div>
+        <div className="statCard action" onClick={() => setShowModal(true)}>
+          <div className="iconBox green"><PlusCircle size={18} strokeWidth={1.5} /></div>
+          <div className="statInfo"><span className="statValueAction">Nuevo Embarque</span></div>
+        </div>
         <div className="statCard">
           <div className="iconBox blue"><LayoutGrid size={18} strokeWidth={1.5} /></div>
-          <div className="statInfo">
-            <span className="statLabel">TOTAL ACTIVOS</span>
-            <span className="statValue">{items.length}</span>
-          </div>
+          <div className="statInfo"><span className="statLabel">TOTAL ACTIVOS</span><span className="statValue">{items.length}</span></div>
         </div>
         <div className="statCard">
           <div className="iconBox orange"><Truck size={18} strokeWidth={1.5} /></div>
-          <div className="statInfo">
-            <span className="statLabel">EN TRÁNSITO</span>
-            <span className="statValue">{items.filter(i => i.status?.includes('TRANSIT')).length}</span>
-          </div>
+          <div className="statInfo"><span className="statLabel">EN TRÁNSITO</span><span className="statValue">{items.filter(i => i.status?.includes('TRANSIT')).length}</span></div>
         </div>
         <div className="statCard">
           <div className="iconBox slate"><TrendingUp size={18} strokeWidth={1.5} /></div>
-          <div className="statInfo">
-            <span className="statLabel">KPI MES</span>
-            <span className="statValue">Operativo</span>
-          </div>
+          <div className="statInfo"><span className="statLabel">KPI MES</span><span className="statValue">Operativo</span></div>
         </div>
       </div>
 
+      {/* 2. LISTADO PRINCIPAL */}
       <div className="mainCard">
-        {/* 2. TOOLBAR REFINADO */}
         <div className="toolbar">
           <div className="searchModern">
             <Search size={16} className="searchIcon" strokeWidth={1.5} />
-            <input 
-              placeholder="Buscar por cliente, destino o # embarque..." 
-              value={q} 
-              onChange={e => setQ(e.target.value)} 
-            />
+            <input placeholder="Buscar por cliente, destino o # embarque..." value={q} onChange={e => setQ(e.target.value)} />
           </div>
           <button className="btnOutline" onClick={() => setDir(dir === 'asc' ? 'desc' : 'asc')}>
             <SortAsc size={14} /> {dir === 'desc' ? 'Recientes' : 'Antiguos'}
           </button>
         </div>
 
-        {/* 3. LISTADO: 4 COLUMNAS */}
         <div className="listContainer">
           {loadingList ? (
             <div className="loadingState">Cargando logística...</div>
@@ -221,8 +202,6 @@ export default function AdminShipments() {
             items.map((s: any) => (
               <div key={s.id} className="rowWrapper" onClick={() => router.push(`/admin/shipments/${s.id}`)}>
                 <div className="rowGrid">
-                  
-                  {/* COL 1: IDENTIDAD */}
                   <div className="colIdent">
                     <div className="badgeLine">
                       <span className="idBadge">{s.code || 'S/REF'}</span>
@@ -233,27 +212,11 @@ export default function AdminShipments() {
                     </div>
                     <span className="clientName">{s.client_name}</span>
                   </div>
-
-                  {/* COL 2: LOGÍSTICA (RUTA) */}
                   <div className="colLogis">
-                    <div className="routeLine">
-                      <span className="city">PTY</span>
-                      <span className="arrow">→</span>
-                      <span className="city">{s.destination}</span>
-                    </div>
+                    <div className="routeLine"><span className="city">PTY</span><span className="arrow">→</span><span className="city">{s.destination}</span></div>
                   </div>
-
-                  {/* COL 3: FECHA / INFO */}
-                  <div className="colMonto">
-                    <span className="dateText">{fmtDate(s.created_at)}</span>
-                  </div>
-
-                  {/* COL 4: STATUS */}
-                  <div className="colStatus">
-                    <StatusPill status={s.status} />
-                    <ChevronRight size={16} className="chevron" strokeWidth={1.5} />
-                  </div>
-
+                  <div className="colMonto"><span className="dateText">{fmtDate(s.created_at)}</span></div>
+                  <div className="colStatus"><StatusPill status={s.status} /><ChevronRight size={16} className="chevron" strokeWidth={1.5} /></div>
                 </div>
               </div>
             ))
@@ -261,7 +224,7 @@ export default function AdminShipments() {
         </div>
       </div>
 
-      {/* POPUP MODAL COMPLETO, UNIFICADO Y CLEAN */}
+      {/* 3. MODAL COMPLETO (RESTAURADO) */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -274,76 +237,49 @@ export default function AdminShipments() {
             </header>
 
             <form onSubmit={handleCreate} className="modal-form">
-              
-              {/* 1. SECCIÓN CLIENTE */}
               <section className="form-section">
-                <div className="section-header">
-                  <Users size={15} strokeWidth={1.5} />
-                  <span>Información del Cliente</span>
-                </div>
+                <div className="section-header"><Users size={15} /><span>Información del Cliente</span></div>
                 <div className="input-group">
                   <label>Cliente Final</label>
                   <select required value={formData.client_id} onChange={e => setFormData({...formData, client_id: e.target.value})}>
                     <option value="">Selecciona un cliente...</option>
-                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {clients?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
               </section>
 
-              {/* 2. SECCIÓN ESPECIFICACIONES (PRODUCTO + CALIDAD + CANTIDAD) */}
               <section className="form-section">
-                <div className="section-header">
-                  <Package size={15} strokeWidth={1.5} />
-                  <span>Detalles de Mercancía</span>
-                </div>
-                
+                <div className="section-header"><Package size={15} /><span>Detalles de Mercancía</span></div>
                 <div className="grid-2">
                   <div className="input-group">
                     <label>Producto</label>
                     <select required value={formData.product_id} onChange={e => setFormData({...formData, product_id: e.target.value, variety_id: ''})}>
                       <option value="">Producto...</option>
-                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {products?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
                   <div className="input-group">
                     <label>Variedad</label>
                     <select required disabled={!formData.product_id} value={formData.variety_id} onChange={e => setFormData({...formData, variety_id: e.target.value})}>
                       <option value="">Variedad...</option>
-                      {filteredVarieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                      {filteredVarieties?.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                     </select>
                   </div>
                 </div>
-
-                {/* Calidad: Calibre, Color y Brix */}
                 <div className="grid-3" style={{ marginBottom: '16px' }}>
-                  <div className="input-group">
-                    <label><Hash size={11} style={{marginRight: '4px'}}/> Calibre</label>
-                    <input type="text" placeholder="Ej: 6" value={formData.calibre} onChange={e => setFormData({...formData, calibre: e.target.value})} />
-                  </div>
-                  <div className="input-group">
-                    <label><Palette size={11} style={{marginRight: '4px'}}/> Color</label>
-                    <input type="text" placeholder="Ej: 2.5" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} />
-                  </div>
-                  <div className="input-group">
-                    <label><ThermometerSun size={11} style={{marginRight: '4px'}}/> Brix</label>
-                    <input type="text" placeholder=">13" value={formData.brix_grade} onChange={e => setFormData({...formData, brix_grade: e.target.value})} />
-                  </div>
+                  <div className="input-group"><label><Hash size={11}/> Calibre</label><input type="text" placeholder="Ej: 6" value={formData.calibre} onChange={e => setFormData({...formData, calibre: e.target.value})} /></div>
+                  <div className="input-group"><label><Palette size={11}/> Color</label><input type="text" placeholder="Ej: 2.5" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} /></div>
+                  <div className="input-group"><label><ThermometerSun size={11}/> Brix</label><input type="text" placeholder=">13" value={formData.brix_grade} onChange={e => setFormData({...formData, brix_grade: e.target.value})} /></div>
                 </div>
-
-                {/* Cantidades: Cajas, Pallets y Peso */}
                 <div className="grid-3">
-                  <div className="input-group"><label>Cajas</label><input type="number" placeholder="0" value={formData.boxes} onChange={e => setFormData({...formData, boxes: e.target.value})} /></div>
-                  <div className="input-group"><label>Pallets</label><input type="number" placeholder="0" value={formData.pallets} onChange={e => setFormData({...formData, pallets: e.target.value})} /></div>
-                  <div className="input-group"><label>Peso (Kg)</label><input type="number" step="0.01" placeholder="0.00" value={formData.estimated_weight} onChange={e => setFormData({...formData, estimated_weight: e.target.value})} /></div>
+                  <div className="input-group"><label>Cajas</label><input type="number" value={formData.boxes} onChange={e => setFormData({...formData, boxes: e.target.value})} /></div>
+                  <div className="input-group"><label>Pallets</label><input type="number" value={formData.pallets} onChange={e => setFormData({...formData, pallets: e.target.value})} /></div>
+                  <div className="input-group"><label>Peso (Kg)</label><input type="number" step="0.01" value={formData.estimated_weight} onChange={e => setFormData({...formData, estimated_weight: e.target.value})} /></div>
                 </div>
               </section>
 
-              {/* 3. SECCIÓN LOGÍSTICA (RUTA UNIFICADA) */}
               <section className="form-section">
-                <div className="section-header">
-                  <Globe size={15} strokeWidth={1.5} />
-                  <span>Ruta y Destino</span>
-                </div>
+                <div className="section-header"><Globe size={15} /><span>Ruta y Destino</span></div>
                 <div className="grid-2">
                   <div className="input-group">
                     <label>Modalidad</label>
@@ -359,121 +295,74 @@ export default function AdminShipments() {
                     </select>
                   </div>
                 </div>
-                
                 <div className="input-group">
-                  <label>Destino Final (Aeropuerto/Puerto)</label>
-                  <input list="places-list-admin" required placeholder="Ej: 🇪🇸 MAD Madrid-Barajas" value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} />
-                  <datalist id="places-list-admin">
-                    {MASTER_PLACES.map(p => <option key={p.code} value={`${getFlag(p.country)} ${p.name}`} />)}
-                  </datalist>
+                  <label>Destino Final</label>
+                  <input list="places-list" required placeholder="Ej: MAD Madrid" value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} />
+                  <datalist id="places-list">{MASTER_PLACES.map(p => <option key={p.code} value={`${getFlag(p.country)} ${p.name}`} />)}</datalist>
                 </div>
               </section>
 
               <footer className="modal-footer-clean">
                 <button type="button" onClick={() => setShowModal(false)} className="btn-cancel">Cancelar</button>
-                <button type="submit" disabled={submitting || success} className="btn-save">
-                  {submitting ? <Loader2 className="spin" size={18} /> : <span>Confirmar Embarque</span>}
-                </button>
+                <button type="submit" disabled={submitting} className="btn-save">{submitting ? <Loader2 className="spin" /> : "Confirmar Embarque"}</button>
               </footer>
             </form>
           </div>
         </div>
       )}
 
+      {/* 4. CSS MAESTRO - Dashboard + Modal */}
       <style jsx>{`
-        /* --- ESTILOS MAESTROS (Fieles a Quotes) --- */
         .statsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
         .statCard { background: white; padding: 16px; border-radius: 12px; border: 1px solid #f1f5f9; display: flex; align-items: center; gap: 12px; }
-        .statCard.action { border: 1px solid #dcfce7; cursor: pointer; transition: 0.2s; gap: 16px; }
+        .statCard.action { border: 1px solid #dcfce7; cursor: pointer; transition: 0.2s; }
         .statCard.action:hover { background: #f0fdf4; border-color: #86efac; transform: translateY(-1px); }
-        
         .iconBox { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; }
         .iconBox.green { background: #f0fdf4; color: #16a34a; }
         .iconBox.blue { background: #eff6ff; color: #3b82f6; }
         .iconBox.orange { background: #fff7ed; color: #ea580c; }
         .iconBox.slate { background: #f8fafc; color: #64748b; }
+        .statLabel { font-size: 10px; font-weight: 500; color: #94a3b8; text-transform: uppercase; }
+        .statValue { font-size: 16px; font-weight: 600; color: #1e293b; }
+        .statValueAction { font-size: 14px; font-weight: 500; color: #16a34a; }
 
-        .statLabel { font-size: 10px; font-weight: 500; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
-        .statValue { font-size: 16px; font-weight: 500; color: #1e293b; display: block; }
-        .statValueAction { font-size: 14px; font-weight: 500; color: #16a34a; letter-spacing: -0.01em; }
-
-        .mainCard { background: white; border-radius: 16px; border: 1px solid #f1f5f9; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); }
+        .mainCard { background: white; border-radius: 16px; border: 1px solid #f1f5f9; }
         .toolbar { padding: 16px 24px; display: flex; justify-content: space-between; border-bottom: 1px solid #f8fafc; }
+        .searchModern { position: relative; width: 380px; display: flex; align-items: center; }
+        .searchIcon { position: absolute; left: 14px; color: #94a3b8; }
+        .searchModern input { width: 100%; padding: 10px 40px; border-radius: 12px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 13.5px; }
+        .btnOutline { background: white; border: 1px solid #f1f5f9; padding: 8px 14px; border-radius: 10px; font-size: 12px; color: #64748b; cursor: pointer; display: flex; align-items: center; gap: 8px; }
         
-        .searchModern { position: relative; display: flex; align-items: center; width: 380px; }
-        .searchIcon { position: absolute; left: 14px; color: #94a3b8; pointer-events: none; z-index: 10; }
-        .searchModern input { width: 100%; padding: 10px 16px 10px 40px; border-radius: 12px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 13.5px; outline: none; transition: 0.2s; }
-        .searchModern input:focus { background: white; border-color: #cbd5e1; }
-
-        .btnOutline { background: white; border: 1px solid #f1f5f9; padding: 8px 14px; border-radius: 10px; font-size: 12px; font-weight: 500; color: #64748b; display: flex; align-items: center; gap: 8px; cursor: pointer; }
-
-        .listContainer { padding: 8px 0; }
-        .rowWrapper { padding: 0 24px; cursor: pointer; transition: 0.1s; border-bottom: 1px solid #f8fafc; }
+        .rowWrapper { padding: 0 24px; cursor: pointer; border-bottom: 1px solid #f8fafc; }
         .rowWrapper:hover { background: #fbfcfe; }
         .rowGrid { display: grid; grid-template-columns: 240px 1fr 140px 140px; align-items: center; padding: 14px 0; }
-
-        .badgeLine { display: flex; gap: 6px; margin-bottom: 4px; }
-        .idBadge { background: #f8fafc; color: #64748b; font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 5px; }
-        .techBadge { background: #f0fdf4; color: #16a34a; font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 5px; display: flex; align-items: center; gap: 4px; }
-        
-        .clientName { font-size: 13.5px; font-weight: 400; color: #1e293b; }
+        .idBadge { background: #f8fafc; color: #64748b; font-size: 10px; padding: 2px 8px; border-radius: 5px; }
+        .techBadge { background: #f0fdf4; color: #16a34a; font-size: 10px; padding: 2px 8px; border-radius: 5px; display: flex; align-items: center; gap: 4px; }
+        .clientName { font-size: 13.5px; color: #1e293b; margin-top: 4px; display: block; }
         .routeLine { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #475569; }
-        .arrow { color: #cbd5e1; }
-        .colMonto { text-align: right; }
-        .dateText { color: #64748b; font-size: 13px; font-weight: 400; }
-        .colStatus { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
-        .status-pill-modern { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+        .status-pill-modern { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 600; }
         .pill-green { background: #f0fdf4; color: #166534; }
         .pill-blue { background: #eff6ff; color: #1e40af; }
-        .pill-gray { background: #f8fafc; color: #475569; }
 
-        .loadingState { padding: 40px; text-align: center; color: #94a3b8; font-size: 13px; }
-        .toast-container { position: fixed; top: 24px; right: 24px; z-index: 3000; }
-        .toast-card { background: white; padding: 12px 24px; border-radius: 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-
-        /* SELECT MODERNO Y LIGERO */
-select {
-  appearance: none; /* Quitamos la flecha fea del navegador */
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 14px center;
-  background-size: 16px;
-  
-  width: 100%;
-  height: 46px;
-  padding: 0 40px 0 16px; /* Más espacio a la derecha por la flecha */
-  background-color: #f8fafc; /* Un fondo casi blanco, muy ligero */
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 400; /* Fuente fina para ligereza */
-  color: #1e293b;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer;
-}
-
-select:focus {
-  background-color: #ffffff;
-  border-color: #16a34a; /* Tu verde esmeralda */
-  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.05);
-  outline: none;
-}
-
-/* EFECTO HOVER */
-select:hover {
-  border-color: #cbd5e1;
-}
-
-/* LABEL ULTRA FINO */
-.input-group label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #94a3b8; /* Gris azulado suave */
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 8px;
-  display: block;
-}
+        .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+        .modal-content { background: white; width: 95%; max-width: 540px; max-height: 90vh; overflow-y: auto; border-radius: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.1); }
+        .modal-header { padding: 24px 32px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+        .modal-title { font-size: 18px; font-weight: 600; color: #1e293b; margin: 0; }
+        .modal-form { padding: 32px; display: flex; flex-direction: column; gap: 24px; }
+        .form-section { display: flex; flex-direction: column; gap: 16px; }
+        .section-header { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: #16a34a; text-transform: uppercase; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .input-group label { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; display: block; }
+        input, select { width: 100%; height: 46px; padding: 0 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 14px; }
+        .mode-selector-clean { display: flex; background: #f1f5f9; padding: 4px; border-radius: 12px; gap: 4px; }
+        .mode-selector-clean button { flex: 1; height: 36px; border-radius: 8px; border: none; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; background: transparent; color: #64748b; transition: 0.2s; }
+        .mode-selector-clean button.active { background: white; color: #1e293b; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .btn-save { background: #16a34a; color: white; height: 48px; border-radius: 12px; font-weight: 600; border: none; cursor: pointer; flex: 2; }
+        .btn-cancel { background: #f8fafc; color: #64748b; height: 48px; border-radius: 12px; border: 1px solid #e2e8f0; cursor: pointer; flex: 1; }
+        .modal-footer-clean { display: flex; gap: 12px; padding-top: 16px; }
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </AdminLayout>
   );
