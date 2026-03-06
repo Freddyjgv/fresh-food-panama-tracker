@@ -268,21 +268,26 @@ export default function AdminQuotesIndex() {
   position: relative; 
   display: flex;
   align-items: center;
-  width: 350px; 
+  width: 380px; 
 }
 
 .searchIcon { 
   position: absolute; 
-  left: 14px; /* Espacio desde el borde izquierdo */
-  color: #94a3b8; /* Un gris más suave y moderno */
-  pointer-events: none; /* Para que al hacer clic en la lupa se active el input */
+  /* 1. Posicionamos la lupa con un margen inicial */
+  left: 16px; 
+  color: #94a3b8; 
+  pointer-events: none;
+  z-index: 10;
 }
 
 .searchModern input { 
   width: 100%; 
-  padding: 10px 16px 10px 44px; /* El 36px de la izquierda es vital para que el texto no empiece encima de la lupa */
+  /* 2. El 52px es la clave: 
+     Aproximadamente 16px (margen inicial) + 16px (lupa) + 20px (GAP horizontal) 
+  */
+  padding: 10px 16px 10px 52px; 
   border-radius: 12px; 
-  border: 1px solid #f1f5f9; 
+  border: 1px solid #e2e8f0; 
   background: #f8fafc; 
   font-size: 13.5px; 
   font-weight: 400;
@@ -293,7 +298,6 @@ export default function AdminQuotesIndex() {
 .searchModern input:focus {
   background: white;
   border-color: #cbd5e1;
-  box-shadow: 0 0 0 3px rgba(241, 245, 249, 0.8);
 }
         .btnOutline { background: white; border: 1px solid #f1f5f9; padding: 8px 14px; border-radius: 10px; font-size: 12px; font-weight: 500; color: #64748b; display: flex; align-items: center; gap: 8px; cursor: pointer; }
 
