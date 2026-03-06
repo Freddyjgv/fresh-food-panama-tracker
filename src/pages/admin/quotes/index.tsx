@@ -268,36 +268,29 @@ export default function AdminQuotesIndex() {
   position: relative; 
   display: flex;
   align-items: center;
-  width: 380px; 
+  width: 380px;
+  /* Margen externo por si quieres separar TODO el buscador de otros elementos */
+  margin-left: 10px; 
 }
 
 .searchIcon { 
   position: absolute; 
-  /* 1. Posicionamos la lupa con un margen inicial */
-  left: 16px; 
+  /* Separamos la lupa del borde izquierdo del rectángulo gris */
+  left: 14px; 
   color: #94a3b8; 
-  pointer-events: none;
   z-index: 10;
 }
 
 .searchModern input { 
   width: 100%; 
-  /* 2. El 52px es la clave: 
-     Aproximadamente 16px (margen inicial) + 16px (lupa) + 20px (GAP horizontal) 
-  */
-  padding: 10px 16px 10px 52px; 
+  /* Bajamos de 60px a 40px: el texto ahora empieza a una distancia 
+     estándar de la lupa, pero la lupa tiene aire a su izquierda */
+  padding: 10px 16px 10px 40px; 
   border-radius: 12px; 
   border: 1px solid #e2e8f0; 
   background: #f8fafc; 
   font-size: 13.5px; 
-  font-weight: 400;
-  outline: none; 
-  transition: all 0.2s ease;
-}
-
-.searchModern input:focus {
-  background: white;
-  border-color: #cbd5e1;
+  outline: none;
 }
         .btnOutline { background: white; border: 1px solid #f1f5f9; padding: 8px 14px; border-radius: 10px; font-size: 12px; font-weight: 500; color: #64748b; display: flex; align-items: center; gap: 8px; cursor: pointer; }
 
