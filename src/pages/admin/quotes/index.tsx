@@ -72,7 +72,7 @@ const getFlag = (dest: string) => {
     "BELGICA": "🇧🇪", "BELGIUM": "🇧🇪",
     "POLONIA": "🇵🇱", "POLAND": "🇵🇱",
     "PANAMA": "🇵🇦", "PTY": "🇵🇦",
-    "ESPAÑA": "🇪🇸", "MADRID": "🇪🇸",
+    "ESPAÑA": "🇪🇸", "MADRID": "🇪🇸", "BARAJAS": "🇪🇸",
     "USA": "🇺🇸", "MIAMI": "🇺🇸",
     "COLOMBIA": "🇨🇴", "BOGOTA": "🇨🇴"
   };
@@ -296,12 +296,18 @@ export default function AdminQuotesIndex() {
 }
 
 .leftBlock { display: flex; flex-direction: column; text-align: left; }
-.quoteIdBadge { 
-  background-color: #f1f5f9; color: #64748b; 
-  font-size: 10px; font-weight: 700; padding: 2px 8px; 
-  border-radius: 6px; width: fit-content; margin-bottom: 4px; 
-}
-.clientName { font-weight: 700; color: #0f172a; font-size: 15px; }
+.quoteIdBadge {
+  background-color: #f1f5f9; 
+  color: #64748b; 
+  font-size: 12px;           /* Subimos de 10px a 12px */
+  font-weight: 700;          /* Mantenemos negrilla para que resalte */
+  padding: 4px 10px;         /* Más aire interno */
+  border-radius: 6px;
+  text-transform: uppercase;
+  display: inline-block;
+  margin-bottom: 6px;        /* Más separación del nombre */
+  letter-spacing: 0.5px;
+.clientName { font-weight: 400; color: #1e293b; font-size: 12px; }
 
 .centerBlock { text-align: center; display: flex; flex-direction: column; align-items: center; }
 .routeWithFlag { 
