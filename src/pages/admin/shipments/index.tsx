@@ -259,70 +259,95 @@ export default function AdminShipments() {
         </div>
       </div>
 
-      {/* POPUP MODAL (Lógica intacta, solo ajuste leve de espaciado) */}
+      {/* POPUP MODAL COMPLETO, UNIFICADO Y CLEAN */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <header className="modal-header">
               <div className="header-info">
-                <h2>Nuevo Embarque</h2>
-                <div className="id-badge">CORRELATIVO AUTOMÁTICO</div>
+                <h2 className="modal-title">Nuevo Embarque</h2>
+                <span className="modal-subtitle">Registra la carga en el sistema logístico</span>
               </div>
-              <button onClick={() => setShowModal(false)} className="close-btn"><X size={24} /></button>
+              <button onClick={() => setShowModal(false)} className="close-btn"><X size={20} strokeWidth={1.5} /></button>
             </header>
 
             <form onSubmit={handleCreate} className="modal-form">
+              
+              {/* 1. SECCIÓN CLIENTE */}
               <section className="form-section">
-                <h3><Users size={16} /> DATOS DEL CLIENTE</h3>
-                <div className="input-group full-width">
-                  <label>Seleccionar Cliente</label>
+                <div className="section-header">
+                  <Users size={15} strokeWidth={1.5} />
+                  <span>Información del Cliente</span>
+                </div>
+                <div className="input-group">
+                  <label>Cliente Final</label>
                   <select required value={formData.client_id} onChange={e => setFormData({...formData, client_id: e.target.value})}>
-                    <option value="">Buscar cliente...</option>
+                    <option value="">Selecciona un cliente...</option>
                     {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
               </section>
 
+              {/* 2. SECCIÓN ESPECIFICACIONES (PRODUCTO + CALIDAD + CANTIDAD) */}
               <section className="form-section">
-                <h3><Package size={16} /> ESPECIFICACIONES</h3>
+                <div className="section-header">
+                  <Package size={15} strokeWidth={1.5} />
+                  <span>Detalles de Mercancía</span>
+                </div>
+                
                 <div className="grid-2">
                   <div className="input-group">
                     <label>Producto</label>
                     <select required value={formData.product_id} onChange={e => setFormData({...formData, product_id: e.target.value, variety_id: ''})}>
-                      <option value="">Seleccione...</option>
+                      <option value="">Producto...</option>
                       {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
                   <div className="input-group">
                     <label>Variedad</label>
                     <select required disabled={!formData.product_id} value={formData.variety_id} onChange={e => setFormData({...formData, variety_id: e.target.value})}>
-                      <option value="">Seleccione variedad</option>
+                      <option value="">Variedad...</option>
                       {filteredVarieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                     </select>
                   </div>
                 </div>
 
-                <div className="grid-3">
-                  <div className="input-group"><label><Hash size={12}/> Calibre</label><input type="text" value={formData.calibre} onChange={e => setFormData({...formData, calibre: e.target.value})} /></div>
-                  <div className="input-group"><label><Palette size={12}/> Color</label><input type="text" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} /></div>
-                  <div className="input-group"><label><ThermometerSun size={12}/> Brix</label><input type="text" value={formData.brix_grade} onChange={e => setFormData({...formData, brix_grade: e.target.value})} /></div>
+                {/* Calidad: Calibre, Color y Brix */}
+                <div className="grid-3" style={{ marginBottom: '16px' }}>
+                  <div className="input-group">
+                    <label><Hash size={11} style={{marginRight: '4px'}}/> Calibre</label>
+                    <input type="text" placeholder="Ej: 6" value={formData.calibre} onChange={e => setFormData({...formData, calibre: e.target.value})} />
+                  </div>
+                  <div className="input-group">
+                    <label><Palette size={11} style={{marginRight: '4px'}}/> Color</label>
+                    <input type="text" placeholder="Ej: 2.5" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} />
+                  </div>
+                  <div className="input-group">
+                    <label><ThermometerSun size={11} style={{marginRight: '4px'}}/> Brix</label>
+                    <input type="text" placeholder=">13" value={formData.brix_grade} onChange={e => setFormData({...formData, brix_grade: e.target.value})} />
+                  </div>
                 </div>
 
+                {/* Cantidades: Cajas, Pallets y Peso */}
                 <div className="grid-3">
-                  <div className="input-group"><label>Cajas</label><input type="number" value={formData.boxes} onChange={e => setFormData({...formData, boxes: e.target.value})} /></div>
-                  <div className="input-group"><label>Pallets</label><input type="number" value={formData.pallets} onChange={e => setFormData({...formData, pallets: e.target.value})} /></div>
-                  <div className="input-group"><label>Peso (Kg)</label><input type="number" step="0.01" value={formData.estimated_weight} onChange={e => setFormData({...formData, estimated_weight: e.target.value})} /></div>
+                  <div className="input-group"><label>Cajas</label><input type="number" placeholder="0" value={formData.boxes} onChange={e => setFormData({...formData, boxes: e.target.value})} /></div>
+                  <div className="input-group"><label>Pallets</label><input type="number" placeholder="0" value={formData.pallets} onChange={e => setFormData({...formData, pallets: e.target.value})} /></div>
+                  <div className="input-group"><label>Peso (Kg)</label><input type="number" step="0.01" placeholder="0.00" value={formData.estimated_weight} onChange={e => setFormData({...formData, estimated_weight: e.target.value})} /></div>
                 </div>
               </section>
 
+              {/* 3. SECCIÓN LOGÍSTICA (RUTA UNIFICADA) */}
               <section className="form-section">
-                <h3><Globe size={16} /> HUB LOGÍSTICO</h3>
-                <div className="logistic-grid">
+                <div className="section-header">
+                  <Globe size={15} strokeWidth={1.5} />
+                  <span>Ruta y Destino</span>
+                </div>
+                <div className="grid-2">
                   <div className="input-group">
                     <label>Modalidad</label>
-                    <div className="mode-selector">
-                      <button type="button" className={mode === 'Marítima' ? 'active' : ''} onClick={() => setMode('Marítima')}><Anchor size={16} /> Marítima</button>
-                      <button type="button" className={mode === 'Aérea' ? 'active' : ''} onClick={() => setMode('Aérea')}><Plane size={16} /> Aérea</button>
+                    <div className="mode-selector-clean">
+                      <button type="button" className={mode === 'Marítima' ? 'active' : ''} onClick={() => setMode('Marítima')}><Anchor size={14} /> Marítimo</button>
+                      <button type="button" className={mode === 'Aérea' ? 'active' : ''} onClick={() => setMode('Aérea')}><Plane size={14} /> Aéreo</button>
                     </div>
                   </div>
                   <div className="input-group">
@@ -333,20 +358,19 @@ export default function AdminShipments() {
                   </div>
                 </div>
                 
-                <div className="input-group full-width">
-                  <label>Lugar de Destino</label>
-                  <input list="places-list-admin" required placeholder="Puerto o aeropuerto..." value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} />
+                <div className="input-group">
+                  <label>Destino Final (Aeropuerto/Puerto)</label>
+                  <input list="places-list-admin" required placeholder="Ej: 🇪🇸 MAD Madrid-Barajas" value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} />
                   <datalist id="places-list-admin">
                     {MASTER_PLACES.map(p => <option key={p.code} value={`${getFlag(p.country)} ${p.name}`} />)}
                   </datalist>
                 </div>
               </section>
 
-              <footer className="modal-footer">
-                <button type="button" onClick={() => setShowModal(false)} className="btn-abort">Cancelar</button>
-                <button type="submit" disabled={submitting || success} className={`btn-submit ${success ? 'success' : ''}`}>
-                  {submitting ? <Loader2 className="spin" size={20} /> : success ? <CheckCircle size={20} /> : <Save size={20} />}
-                  <span>{success ? 'Registro Exitoso' : 'Crear Embarque'}</span>
+              <footer className="modal-footer-clean">
+                <button type="button" onClick={() => setShowModal(false)} className="btn-cancel">Cancelar</button>
+                <button type="submit" disabled={submitting || success} className="btn-save">
+                  {submitting ? <Loader2 className="spin" size={18} /> : <span>Confirmar Embarque</span>}
                 </button>
               </footer>
             </form>
@@ -405,25 +429,49 @@ export default function AdminShipments() {
         .toast-container { position: fixed; top: 24px; right: 24px; z-index: 3000; }
         .toast-card { background: white; padding: 12px 24px; border-radius: 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
 
-        /* MODAL (Mínimo ajuste estético) */
-        .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 20px; }
-        .modal-content { background: white; width: 600px; border-radius: 20px; max-height: 90vh; overflow-y: auto; }
-        .modal-header { padding: 24px 32px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; }
-        .modal-form { padding: 32px; }
-        .form-section { margin-bottom: 24px; }
-        .form-section h3 { font-size: 11px; color: #16a34a; letter-spacing: 0.1em; margin-bottom: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-        .input-group label { display: block; font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 6px; }
-        input, select { width: 100%; height: 40px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0 12px; font-size: 14px; }
-        .mode-selector { display: flex; background: #f8fafc; padding: 4px; border-radius: 8px; }
-        .mode-selector button { flex: 1; border: none; padding: 8px; border-radius: 6px; font-size: 12px; cursor: pointer; background: transparent; color: #64748b; }
-        .mode-selector button.active { background: white; color: #16a34a; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .modal-footer { display: flex; gap: 12px; margin-top: 24px; }
-        .btn-submit { flex: 2; background: #16a34a; color: white; border: none; height: 48px; border-radius: 10px; font-weight: 600; cursor: pointer; }
-        .btn-abort { flex: 1; background: #f1f5f9; border: none; border-radius: 10px; color: #64748b; cursor: pointer; }
-        .spin { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        /* SELECT MODERNO Y LIGERO */
+select {
+  appearance: none; /* Quitamos la flecha fea del navegador */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px;
+  
+  width: 100%;
+  height: 46px;
+  padding: 0 40px 0 16px; /* Más espacio a la derecha por la flecha */
+  background-color: #f8fafc; /* Un fondo casi blanco, muy ligero */
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 400; /* Fuente fina para ligereza */
+  color: #1e293b;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+select:focus {
+  background-color: #ffffff;
+  border-color: #16a34a; /* Tu verde esmeralda */
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.05);
+  outline: none;
+}
+
+/* EFECTO HOVER */
+select:hover {
+  border-color: #cbd5e1;
+}
+
+/* LABEL ULTRA FINO */
+.input-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8; /* Gris azulado suave */
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+  display: block;
+}
       `}</style>
     </AdminLayout>
   );
