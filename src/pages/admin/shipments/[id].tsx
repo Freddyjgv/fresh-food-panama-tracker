@@ -21,7 +21,8 @@ import {
   Package,
   PlusCircle,
   CheckCircle,
-  Loader2
+  Loader2,
+  X
 } from "lucide-react";
 
 type ShipmentMilestone = {
@@ -175,6 +176,49 @@ export default function AdminShipmentDetail() {
     }
     return token;
   }
+
+  async function deleteFile(fileId: string, kind: "doc" | "photo") {
+  // 1. Confirmación de seguridad
+  if (!confirm("¿Estás seguro de que deseas eliminar este archivo? Esta acción no se puede deshacer.")) return;
+
+  setBusy(true);
+  const token = await getTokenOrRedirect();
+  if (!token) {
+    setBusy(false);
+    return;
+  }
+
+  try {
+    // 2. Llamada a tu API (Netlify Function)
+    const res = await fetch("/.netlify/functions/deleteFile", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json", 
+        Authorization: `Bearer ${token}` 
+      },
+      body: JSON.stringify({ 
+        fileId, 
+        kind, 
+        shipmentId: data?.id 
+      }),
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(txt || "Error al eliminar el archivo");
+    }
+
+    // 3. Feedback y recarga de datos
+    showToast("Archivo eliminado correctamente 🗑️");
+    if (data?.id) load(data.id); 
+
+  } catch (err: any) {
+    console.error("Error deleting file:", err);
+    showToast(err.message || "No se pudo eliminar");
+  } finally {
+    setBusy(false);
+  }
+}
 
   useEffect(() => {
     (async () => {
@@ -421,7 +465,7 @@ export default function AdminShipmentDetail() {
         </div>
       ) : null}
 
-      <div className="ff-card2" style={{ padding: 12 }}>
+<div className="ff-card2" style={{ padding: 12 }}>
         {!authReady ? (
           <div className="muted">Verificando permisos…</div>
         ) : loading ? (
@@ -443,20 +487,13 @@ export default function AdminShipmentDetail() {
                     </span>
 
                     <div style={{ minWidth: 0 }}>
-                      {/* 1) Numero de embarque */}
                       <div className="code">{data.code}</div>
-
-                      {/* 2) Cliente debajo */}
                       <div className="meta" style={{ marginTop: 2 }}>
                         Cliente: <b>{clientName}</b>
                       </div>
-
-                      {/* 3) Producto+Variedad - Modalidad */}
                       <div className="meta" style={{ marginTop: 2 }}>
                         <b>{productLine(data)}</b>
                       </div>
-
-                      {/* 4) fecha creado */}
                       <div className="meta" style={{ marginTop: 2 }}>
                         Destino: <b>{data.destination}</b> · Creado: {fmtDT(data.created_at)}
                       </div>
@@ -488,10 +525,9 @@ export default function AdminShipmentDetail() {
                     className="in2"
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
-                    placeholder="Ej: Inspector aprobó packing / incidencia, etc."
+                    placeholder="Ej: Inspector aprobó packing..."
                   />
                 </div>
-
                 <div>
                   <label className="lbl">Vuelo *</label>
                   <input
@@ -501,7 +537,6 @@ export default function AdminShipmentDetail() {
                     placeholder="Ej: IB1234"
                   />
                 </div>
-
                 <div>
                   <label className="lbl">AWB (opcional)</label>
                   <input
@@ -516,62 +551,12 @@ export default function AdminShipmentDetail() {
               <div className="ff-divider" style={{ margin: "12px 0" }} />
 
               <div className="actionsGrid">
-                <button
-                  className="ff-primary"
-                  type="button"
-                  disabled={busy || !canMark("PACKED").ok}
-                  onClick={() => mark("PACKED")}
-                  title={!canMark("PACKED").ok ? canMark("PACKED").reason : ""}
-                >
-                  <PackageCheck size={16} />
-                  En Empaque
-                </button>
-
-                <button
-                  className="ff-primary"
-                  type="button"
-                  disabled={busy || !canMark("DOCS_READY").ok}
-                  onClick={() => mark("DOCS_READY")}
-                  title={!canMark("DOCS_READY").ok ? canMark("DOCS_READY").reason : ""}
-                >
-                  <ClipboardCheck size={16} />
-                  Documentación lista
-                </button>
-
-                <button
-                  className="ff-primary"
-                  type="button"
-                  disabled={busy || !canMark("AT_ORIGIN").ok}
-                  onClick={() => mark("AT_ORIGIN")}
-                  title={!canMark("AT_ORIGIN").ok ? canMark("AT_ORIGIN").reason : ""}
-                >
-                  <MapPin size={16} />
-                  En Origen
-                </button>
-
-                <button
-                  className="ff-primary"
-                  type="button"
-                  disabled={busy || !canMark("IN_TRANSIT").ok}
-                  onClick={() => mark("IN_TRANSIT")}
-                  title={!canMark("IN_TRANSIT").ok ? canMark("IN_TRANSIT").reason : ""}
-                >
-                  <Plane size={16} />
-                  En tránsito
-                </button>
-
-                <button
-                  className="ff-primary"
-                  type="button"
-                  disabled={busy || !canMark("AT_DESTINATION").ok}
-                  onClick={() => mark("AT_DESTINATION")}
-                  title={!canMark("AT_DESTINATION").ok ? canMark("AT_DESTINATION").reason : ""}
-                >
-                  <PackageCheck size={16} />
-                  En Destino
-                </button>
+                <button className="ff-primary" type="button" disabled={busy || !canMark("PACKED").ok} onClick={() => mark("PACKED")} title={!canMark("PACKED").ok ? canMark("PACKED").reason : ""}><PackageCheck size={16} /> En Empaque</button>
+                <button className="ff-primary" type="button" disabled={busy || !canMark("DOCS_READY").ok} onClick={() => mark("DOCS_READY")} title={!canMark("DOCS_READY").ok ? canMark("DOCS_READY").reason : ""}><ClipboardCheck size={16} /> Documentación lista</button>
+                <button className="ff-primary" type="button" disabled={busy || !canMark("AT_ORIGIN").ok} onClick={() => mark("AT_ORIGIN")} title={!canMark("AT_ORIGIN").ok ? canMark("AT_ORIGIN").reason : ""}><MapPin size={16} /> En Origen</button>
+                <button className="ff-primary" type="button" disabled={busy || !canMark("IN_TRANSIT").ok} onClick={() => mark("IN_TRANSIT")} title={!canMark("IN_TRANSIT").ok ? canMark("IN_TRANSIT").reason : ""}><Plane size={16} /> En tránsito</button>
+                <button className="ff-primary" type="button" disabled={busy || !canMark("AT_DESTINATION").ok} onClick={() => mark("AT_DESTINATION")} title={!canMark("AT_DESTINATION").ok ? canMark("AT_DESTINATION").reason : ""}><PackageCheck size={16} /> En Destino</button>
               </div>
-
               {busy ? <div className="muted" style={{ marginTop: 10 }}>Procesando…</div> : null}
             </div>
 
@@ -580,43 +565,23 @@ export default function AdminShipmentDetail() {
             {/* Datos + Timeline */}
             <div className="grid2">
               <div className="ff-card2 soft">
-                <div className="sectionTitle">
-                  <Info size={16} /> Datos
-                </div>
-
+                <div className="sectionTitle"><Info size={16} /> Datos</div>
                 <div className="kv"><span>Producto + Variedad</span><b>{productShort(data)}</b></div>
                 <div className="kv"><span>Cajas</span><b>{data.boxes ?? "-"}</b></div>
                 <div className="kv"><span>Pallets</span><b>{data.pallets ?? "-"}</b></div>
-                <div className="kv"><span>Peso total estimado</span><b>{data.weight_kg ? `${data.weight_kg} kg` : "-"}</b></div>
-
+                <div className="kv"><span>Peso estimado</span><b>{data.weight_kg ? `${data.weight_kg} kg` : "-"}</b></div>
                 <div className="ff-divider" style={{ margin: "10px 0" }} />
-
                 <div className="row2">
                   <div>
-                    <label className="lbl">Calibre * (obligatorio para En Empaque)</label>
-                    <input
-                      className="in2"
-                      value={caliber}
-                      onChange={(e) => setCaliber(e.target.value)}
-                      placeholder="Ej: 5-7"
-                    />
+                    <label className="lbl">Calibre *</label>
+                    <input className="in2" value={caliber} onChange={(e) => setCaliber(e.target.value)} />
                   </div>
                   <div>
-                    <label className="lbl">Color * (obligatorio para En Empaque)</label>
-                    <input
-                      className="in2"
-                      value={color}
-                      onChange={(e) => setColor(e.target.value)}
-                      placeholder="Ej: 2.75 - 3"
-                    />
+                    <label className="lbl">Color *</label>
+                    <input className="in2" value={color} onChange={(e) => setColor(e.target.value)} />
                   </div>
                 </div>
-
-                <div className="muted" style={{ marginTop: 10 }}>
-                  * Se valida en UI para evitar errores operativos.
-                </div>
               </div>
-
               <div className="ff-card2">
                 <div className="sectionTitle">Hitos</div>
                 <ModernTimeline milestones={timelineItems as any} />
@@ -625,93 +590,60 @@ export default function AdminShipmentDetail() {
 
             <div className="ff-divider" />
 
-            {/* Documentos */}
+            {/* EXPEDIENTE DIGITAL CORREGIDO */}
             <section className="glass-card docs-section">
-  <div className="section-header-compact">
-    <div className="title-group">
-      <FileText size={18} className="text-green-600" />
-      <h4>Expediente Digital</h4>
-    </div>
-    <span className="doc-counter">{data.documents?.length || 0} / {DOC_TYPES.length} Archivos</span>
-  </div>
+              <div className="section-header-compact">
+                <div className="title-group">
+                  <FileText size={18} className="text-green-600" />
+                  <h4>Expediente Digital</h4>
+                </div>
+                <span className="doc-counter">{data.documents?.length || 0} / {DOC_TYPES.length} Archivos</span>
+              </div>
 
-  <div className="docs-grid-modern">
-   {DOC_TYPES.map((type) => {
-    // 1. Buscamos si el documento ya existe
-    const uploadedDoc = data.documents?.find(d => d.doc_type === type.v);
+              <div className="docs-grid-modern">
+                {DOC_TYPES.map((type) => {
+                  const uploadedDoc = data.documents?.find(d => d.doc_type === type.v);
+                  const isUploadingThis = busy && docType === type.v;
+                  return (
+                    <div key={type.v} className={`doc-slot ${uploadedDoc ? 'is-filled' : 'is-empty'}`}>
+                      <div className="slot-body">
+                        <div className="slot-icon">
+                          {isUploadingThis ? <Loader2 size={14} className="spin" /> : uploadedDoc ? <CheckCircle size={14} /> : <PlusCircle size={14} />}
+                        </div>
+                        <div className="slot-info">
+                          <span className="slot-label">{type.l}</span>
+                          <span className="slot-status">{uploadedDoc ? 'Cargado' : isUploadingThis ? 'Subiendo...' : 'Pendiente'}</span>
+                        </div>
+                      </div>
+                      <div className="slot-actions">
+                        {uploadedDoc ? (
+                          <div className="ff-row2" style={{ gap: 6 }}>
+                            <button type="button" onClick={() => download(uploadedDoc.id)} className="action-btn download"><Download size={14} /></button>
+                            <button type="button" disabled={busy} onClick={() => deleteFile(uploadedDoc.id, "doc")} className="action-btn delete"><X size={14} /></button>
+                          </div>
+                        ) : (
+                          <label className={`action-btn upload ${busy ? 'disabled' : ''}`}>
+                            <PlusCircle size={14} />
+                            <input type="file" hidden disabled={busy} onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) { setDocType(type.v); upload("doc", f); }
+                              e.currentTarget.value = "";
+                            }} />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section> {/* <--- CIERRE DE SECTION QUE FALTABA */}
 
-    // 2. DECLARAMOS la variable que te falta:
-    // Es true si el sistema está ocupado Y el tipo que se está procesando es este slot
-    const isUploadingThis = busy && docType === type.v; // <--- ESTA LÍNEA ES LA QUE FALTA
-
-    return (
-      <div key={type.v} className={`doc-slot ${uploadedDoc ? 'is-filled' : 'is-empty'}`}>
-        <div className="slot-body">
-          <div className="slot-icon">
-            {isUploadingThis ? (
-              <Loader2 size={14} className="spin" />
-            ) : uploadedDoc ? (
-              <CheckCircle size={14} />
-            ) : (
-              <PlusCircle size={14} />
-            )}
-          </div>
-          <div className="slot-info">
-            <span className="slot-label">{type.l}</span>
-            
-            {/* Visualización del nombre del archivo si existe */}
-            {uploadedDoc ? (
-              <>
-                <span className="file-name-preview" title={uploadedDoc.filename}>
-                  {uploadedDoc.filename}
-                </span>
-                <span className="slot-date">{fmtDT(uploadedDoc.created_at)}</span>
-              </>
-            ) : isUploadingThis ? (
-              <span className="slot-date">Subiendo archivo...</span>
-            ) : (
-              <span className="slot-date">Pendiente</span>
-            )}
-          </div>
-        </div>
-          
-          <div className="slot-actions">
-            {uploadedDoc ? (
-              <button onClick={() => download(uploadedDoc.id)} className="action-btn download" title="Descargar">
-                <Download size={14} />
-              </button>
-            ) : (
-              <label className="action-btn upload" title="Subir archivo">
-                <PlusCircle size={14} />
-                <input 
-                  type="file" 
-                  hidden 
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) {
-                      setDocType(type.v); // Seteamos el tipo automáticamente
-                      upload("doc", f);
-                    }
-                    e.currentTarget.value = "";
-                  }} 
-                />
-              </label>
-            )}
-          </div>
-        </div>
-      );
-    })}
-  </div>
-</section>
+            <div className="ff-divider" />
 
             {/* Fotos */}
             <div className="ff-card2">
-              <div className="sectionTitle">
-                <ImageIcon size={16} /> Fotos
-              </div>
-
+              <div className="sectionTitle"><ImageIcon size={16} /> Fotos</div>
               <div className="ff-divider" style={{ margin: "10px 0" }} />
-
               <input
                 className="in2"
                 type="file"
@@ -723,7 +655,6 @@ export default function AdminShipmentDetail() {
                 }}
                 style={{ maxWidth: 420 }}
               />
-
               <div style={{ marginTop: 10 }}>
                 {data.photos?.length ? (
                   <div className="photoGrid">
@@ -731,11 +662,10 @@ export default function AdminShipmentDetail() {
                       <div key={p.id} className="photoCard">
                         {p.url ? <img src={p.url} className="photoImg" alt={p.filename} /> : <div className="photoPlaceholder" />}
                         <div className="photoBody">
-                          <div className="photoTitle" title={p.filename}>{p.filename}</div>
+                          <div className="photoTitle">{p.filename}</div>
                           <div className="photoMeta">{fmtDT(p.created_at)}</div>
                           <button className="btnSmall full" type="button" onClick={() => download(p.id)}>
-                            <Download size={16} />
-                            Ver / Descargar
+                            <Download size={16} /> Ver / Descargar
                           </button>
                         </div>
                       </div>
