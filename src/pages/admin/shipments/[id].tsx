@@ -477,7 +477,7 @@ export default function AdminShipmentDetail() {
           </div>
         ) : data ? (
           <>
-            {/* Header resumen */}
+            {/* 1. HEADER RESUMEN */}
             <div className="cardHead">
               <div className="ff-spread2" style={{ alignItems: "flex-start" }}>
                 <div style={{ minWidth: 0 }}>
@@ -485,7 +485,6 @@ export default function AdminShipmentDetail() {
                     <span className="codeIcon" aria-hidden="true">
                       <Package size={16} color="var(--ff-green-dark)" />
                     </span>
-
                     <div style={{ minWidth: 0 }}>
                       <div className="code">{data.code}</div>
                       <div className="meta" style={{ marginTop: 2 }}>
@@ -500,7 +499,6 @@ export default function AdminShipmentDetail() {
                     </div>
                   </div>
                 </div>
-
                 <div className="ff-row2" style={{ gap: 8, justifyContent: "flex-end" }}>
                   <span className="chipSoft">Estado: {labelStatus(data.status)}</span>
                 </div>
@@ -509,77 +507,50 @@ export default function AdminShipmentDetail() {
 
             <div className="ff-divider" />
 
-            {/* Acciones rápidas */}
+            {/* 2. ACCIONES RÁPIDAS */}
             <div className="ff-card2" style={{ padding: 12, background: "rgba(15,23,42,.02)" }}>
               <div className="sectionTitle">Acciones rápidas</div>
               <div className="muted" style={{ marginTop: 2 }}>
-                Los hitos avanzan en cadena. Para <b>En tránsito</b> el <b>Vuelo</b> es obligatorio. Para <b>En empaque</b>, <b>Calibre</b> y <b>Color</b> son obligatorios.
+                Los hitos avanzan en cadena. Para <b>En tránsito</b> el <b>Vuelo</b> es obligatorio.
               </div>
-
               <div className="ff-divider" style={{ margin: "12px 0" }} />
-
               <div className="row3" style={{ gridTemplateColumns: "1.2fr .9fr .9fr" }}>
                 <div>
-                  <label className="lbl">Nota (opcional)</label>
-                  <input
-                    className="in2"
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    placeholder="Ej: Inspector aprobó packing..."
-                  />
+                  <label className="lbl">Nota</label>
+                  <input className="in2" value={note} onChange={(e) => setNote(e.target.value)} placeholder="..." />
                 </div>
                 <div>
                   <label className="lbl">Vuelo *</label>
-                  <input
-                    className="in2"
-                    value={flight}
-                    onChange={(e) => setFlight(e.target.value)}
-                    placeholder="Ej: IB1234"
-                  />
+                  <input className="in2" value={flight} onChange={(e) => setFlight(e.target.value)} placeholder="Ej: IB1234" />
                 </div>
                 <div>
-                  <label className="lbl">AWB (opcional)</label>
-                  <input
-                    className="in2"
-                    value={awb}
-                    onChange={(e) => setAwb(e.target.value)}
-                    placeholder="Ej: 123-45678901"
-                  />
+                  <label className="lbl">AWB</label>
+                  <input className="in2" value={awb} onChange={(e) => setAwb(e.target.value)} placeholder="Ej: 123-..." />
                 </div>
               </div>
-
               <div className="ff-divider" style={{ margin: "12px 0" }} />
-
               <div className="actionsGrid">
-                <button className="ff-primary" type="button" disabled={busy || !canMark("PACKED").ok} onClick={() => mark("PACKED")} title={!canMark("PACKED").ok ? canMark("PACKED").reason : ""}><PackageCheck size={16} /> En Empaque</button>
-                <button className="ff-primary" type="button" disabled={busy || !canMark("DOCS_READY").ok} onClick={() => mark("DOCS_READY")} title={!canMark("DOCS_READY").ok ? canMark("DOCS_READY").reason : ""}><ClipboardCheck size={16} /> Documentación lista</button>
-                <button className="ff-primary" type="button" disabled={busy || !canMark("AT_ORIGIN").ok} onClick={() => mark("AT_ORIGIN")} title={!canMark("AT_ORIGIN").ok ? canMark("AT_ORIGIN").reason : ""}><MapPin size={16} /> En Origen</button>
-                <button className="ff-primary" type="button" disabled={busy || !canMark("IN_TRANSIT").ok} onClick={() => mark("IN_TRANSIT")} title={!canMark("IN_TRANSIT").ok ? canMark("IN_TRANSIT").reason : ""}><Plane size={16} /> En tránsito</button>
-                <button className="ff-primary" type="button" disabled={busy || !canMark("AT_DESTINATION").ok} onClick={() => mark("AT_DESTINATION")} title={!canMark("AT_DESTINATION").ok ? canMark("AT_DESTINATION").reason : ""}><PackageCheck size={16} /> En Destino</button>
+                <button className="ff-primary" type="button" disabled={busy} onClick={() => mark("PACKED")}><PackageCheck size={16} /> En Empaque</button>
+                <button className="ff-primary" type="button" disabled={busy} onClick={() => mark("DOCS_READY")}><ClipboardCheck size={16} /> Documentación lista</button>
+                <button className="ff-primary" type="button" disabled={busy} onClick={() => mark("AT_ORIGIN")}><MapPin size={16} /> En Origen</button>
+                <button className="ff-primary" type="button" disabled={busy} onClick={() => mark("IN_TRANSIT")}><Plane size={16} /> En tránsito</button>
+                <button className="ff-primary" type="button" disabled={busy} onClick={() => mark("AT_DESTINATION")}><PackageCheck size={16} /> En Destino</button>
               </div>
-              {busy ? <div className="muted" style={{ marginTop: 10 }}>Procesando…</div> : null}
+              {busy && <div className="muted" style={{ marginTop: 10 }}>Procesando…</div>}
             </div>
 
             <div className="ff-divider" />
 
-            {/* Datos + Timeline */}
+            {/* 3. DATOS + TIMELINE */}
             <div className="grid2">
               <div className="ff-card2 soft">
                 <div className="sectionTitle"><Info size={16} /> Datos</div>
-                <div className="kv"><span>Producto + Variedad</span><b>{productShort(data)}</b></div>
                 <div className="kv"><span>Cajas</span><b>{data.boxes ?? "-"}</b></div>
                 <div className="kv"><span>Pallets</span><b>{data.pallets ?? "-"}</b></div>
-                <div className="kv"><span>Peso estimado</span><b>{data.weight_kg ? `${data.weight_kg} kg` : "-"}</b></div>
                 <div className="ff-divider" style={{ margin: "10px 0" }} />
                 <div className="row2">
-                  <div>
-                    <label className="lbl">Calibre *</label>
-                    <input className="in2" value={caliber} onChange={(e) => setCaliber(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="lbl">Color *</label>
-                    <input className="in2" value={color} onChange={(e) => setColor(e.target.value)} />
-                  </div>
+                  <div><label className="lbl">Calibre *</label><input className="in2" value={caliber} onChange={(e) => setCaliber(e.target.value)} /></div>
+                  <div><label className="lbl">Color *</label><input className="in2" value={color} onChange={(e) => setColor(e.target.value)} /></div>
                 </div>
               </div>
               <div className="ff-card2">
@@ -590,16 +561,15 @@ export default function AdminShipmentDetail() {
 
             <div className="ff-divider" />
 
-            {/* EXPEDIENTE DIGITAL CORREGIDO */}
+            {/* 4. EXPEDIENTE DIGITAL (DOCUMENTOS) */}
             <section className="glass-card docs-section">
               <div className="section-header-compact">
                 <div className="title-group">
                   <FileText size={18} className="text-green-600" />
                   <h4>Expediente Digital</h4>
                 </div>
-                <span className="doc-counter">{data.documents?.length || 0} / {DOC_TYPES.length} Archivos</span>
+                <span className="doc-counter">{data.documents?.length || 0} / {DOC_TYPES.length}</span>
               </div>
-
               <div className="docs-grid-modern">
                 {DOC_TYPES.map((type) => {
                   const uploadedDoc = data.documents?.find(d => d.doc_type === type.v);
@@ -612,22 +582,21 @@ export default function AdminShipmentDetail() {
                         </div>
                         <div className="slot-info">
                           <span className="slot-label">{type.l}</span>
-                          <span className="slot-status">{uploadedDoc ? 'Cargado' : isUploadingThis ? 'Subiendo...' : 'Pendiente'}</span>
+                          <span className="slot-status">{uploadedDoc ? 'Cargado' : 'Pendiente'}</span>
                         </div>
                       </div>
                       <div className="slot-actions">
                         {uploadedDoc ? (
-                          <div className="ff-row2" style={{ gap: 6 }}>
+                          <div className="ff-row2" style={{ gap: 4 }}>
                             <button type="button" onClick={() => download(uploadedDoc.id)} className="action-btn download"><Download size={14} /></button>
                             <button type="button" disabled={busy} onClick={() => deleteFile(uploadedDoc.id, "doc")} className="action-btn delete"><X size={14} /></button>
                           </div>
                         ) : (
-                          <label className={`action-btn upload ${busy ? 'disabled' : ''}`}>
+                          <label className="action-btn upload">
                             <PlusCircle size={14} />
                             <input type="file" hidden disabled={busy} onChange={(e) => {
                               const f = e.target.files?.[0];
                               if (f) { setDocType(type.v); upload("doc", f); }
-                              e.currentTarget.value = "";
                             }} />
                           </label>
                         )}
@@ -636,43 +605,43 @@ export default function AdminShipmentDetail() {
                   );
                 })}
               </div>
-            </section> {/* <--- CIERRE DE SECTION QUE FALTABA */}
+            </section>
 
             <div className="ff-divider" />
 
-            {/* Fotos */}
+            {/* 5. FOTOS */}
             <div className="ff-card2">
-              <div className="sectionTitle"><ImageIcon size={16} /> Fotos</div>
-              <div className="ff-divider" style={{ margin: "10px 0" }} />
-              <input
-                className="in2"
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) upload("photo", f);
-                  e.currentTarget.value = "";
-                }}
-                style={{ maxWidth: 420 }}
-              />
+              <div className="section-header-compact">
+                <div className="title-group">
+                  <ImageIcon size={18} className="text-blue-600" />
+                  <h4 style={{ margin: 0 }}>Registro Fotográfico</h4>
+                </div>
+                <label className="upload-photo-btn">
+                  <PlusCircle size={14} /> Subir Foto
+                  <input type="file" accept="image/*" hidden disabled={busy} onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) upload("photo", f);
+                  }} />
+                </label>
+              </div>
               <div style={{ marginTop: 10 }}>
                 {data.photos?.length ? (
-                  <div className="photoGrid">
+                  <div className="modern-photo-grid">
                     {data.photos.map((p) => (
-                      <div key={p.id} className="photoCard">
-                        {p.url ? <img src={p.url} className="photoImg" alt={p.filename} /> : <div className="photoPlaceholder" />}
-                        <div className="photoBody">
-                          <div className="photoTitle">{p.filename}</div>
-                          <div className="photoMeta">{fmtDT(p.created_at)}</div>
-                          <button className="btnSmall full" type="button" onClick={() => download(p.id)}>
-                            <Download size={16} /> Ver / Descargar
-                          </button>
+                      <div key={p.id} className="photo-card-new">
+                        <div className="photo-display">
+                          {p.url ? <img src={p.url} alt="Envío" /> : <div className="photo-placeholder" />}
+                          <div className="photo-overlay">
+                            <button type="button" onClick={() => download(p.id)} className="overlay-btn view"><Download size={16} /></button>
+                            <button type="button" onClick={() => deleteFile(p.id, "photo")} className="overlay-btn del"><X size={16} /></button>
+                          </div>
                         </div>
+                        <div className="photo-info-mini"><span className="photo-date">{fmtDT(p.created_at)}</span></div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="muted">Aún no hay fotos.</div>
+                  <div className="muted">No hay fotos registradas.</div>
                 )}
               </div>
             </div>
@@ -680,510 +649,118 @@ export default function AdminShipmentDetail() {
         ) : null}
       </div>
 
-      <style jsx>{`
-      /* --- ESTILO DE DOCUMENTOS COMPACTO --- */
-.docs-section {
-  padding: 24px !important;
-}
+     <style jsx>{`
+  /* --- CONTENEDORES BASE --- */
+  .ff-card2 {
+    background: var(--ff-surface);
+    border: 1px solid var(--ff-border);
+    border-radius: var(--ff-radius);
+    box-shadow: var(--ff-shadow);
+    padding: 12px;
+  }
+  .soft { background: rgba(15, 23, 42, 0.02); }
+  .ff-divider { height: 1px; background: var(--ff-border); margin: 20px 0; }
+  .ff-row2 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ff-spread2 { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
-.section-header-compact {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
+  /* --- HEADER Y TEXTOS --- */
+  .cardHead { border: 1px solid var(--ff-border); background: var(--ff-surface); border-radius: var(--ff-radius); padding: 12px; }
+  .codeRow { display: flex; align-items: flex-start; gap: 10px; }
+  .codeIcon { 
+    width: 32px; height: 32px; border-radius: 8px; 
+    border: 1px solid rgba(31, 122, 58, 0.18); 
+    background: rgba(31, 122, 58, 0.08); 
+    display: grid; place-items: center; 
+  }
+  .code { font-weight: 950; font-size: 16px; letter-spacing: -0.2px; }
+  .meta { font-size: 12px; color: var(--ff-muted); margin-top: 4px; }
+  .sectionTitle { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 13px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .lbl { display: block; font-size: 11px; font-weight: 900; color: var(--ff-muted); margin-bottom: 6px; text-transform: uppercase; }
 
-.title-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+  /* --- FORMULARIO E INPUTS --- */
+  .in2 {
+    width: 100%; height: 38px; border: 1px solid var(--ff-border);
+    border-radius: var(--ff-radius); padding: 0 10px; font-size: 13px;
+    outline: none; background: #fff;
+  }
+  .in2:focus { border-color: var(--ff-green); box-shadow: 0 0 0 3px rgba(31, 122, 58, 0.1); }
+  
+  .ff-primary {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    background: var(--ff-green); color: #fff; border: none;
+    border-radius: var(--ff-radius); height: 36px; padding: 0 12px;
+    font-weight: 900; font-size: 12px; cursor: pointer;
+  }
+  .ff-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.title-group h4 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 800;
-  color: #1e293b;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
+  /* --- GRIDS RESPONSIVOS --- */
+  .row3, .actionsGrid { display: grid; gap: 10px; grid-template-columns: 1fr; }
+  .grid2 { display: grid; gap: 12px; grid-template-columns: 1fr; }
+  
+  @media (min-width: 980px) {
+    .row3 { grid-template-columns: 1.2fr 0.9fr 0.9fr; }
+    .actionsGrid { grid-template-columns: repeat(5, 1fr); }
+    .grid2 { grid-template-columns: 0.95fr 1.05fr; }
+  }
 
-.doc-counter {
-  font-size: 11px;
-  font-weight: 700;
-  background: #f1f5f9;
-  color: #64748b;
-  padding: 4px 10px;
-  border-radius: 8px;
-}
+  /* --- EXPEDIENTE DIGITAL (SLOTS) --- */
+  .docs-section { padding: 20px; border-radius: 16px; background: #fff; border: 1px solid #f1f5f9; }
+  .section-header-compact { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .docs-grid-modern { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  
+  .doc-slot {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-radius: 12px; border: 1px solid #f1f5f9;
+    background: #fff; transition: 0.2s;
+  }
+  .doc-slot.is-filled { background: #f0fdf480; border-color: #dcfce7; }
+  .doc-slot.is-empty { border-style: dashed; background: #f8fafc; }
 
-.docs-grid-modern {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 12px;
-}
+  .slot-body { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .slot-info { display: flex; flex-direction: column; min-width: 0; }
+  .slot-label { font-size: 12px; font-weight: 800; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .slot-status { font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; }
 
-.doc-slot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-radius: 14px;
-  border: 1px solid #f1f5f9;
-  transition: all 0.2s ease;
-  background: #ffffff;
-}
+  /* --- FOTOS --- */
+  .modern-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+  .photo-card-new { border-radius: 12px; overflow: hidden; border: 1px solid #f1f5f9; background: #fff; position: relative; }
+  .photo-display { aspect-ratio: 1/1; background: #f8fafc; position: relative; }
+  .photo-display img { width: 100%; height: 100%; object-fit: cover; }
+  
+  .photo-overlay {
+    position: absolute; inset: 0; background: rgba(15, 23, 42, 0.7);
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    opacity: 0; transition: 0.2s;
+  }
+  .photo-card-new:hover .photo-overlay { opacity: 1; }
+  .overlay-btn { 
+    width: 32px; height: 32px; border-radius: 8px; border: none; 
+    display: grid; place-items: center; cursor: pointer; color: #fff;
+  }
+  .overlay-btn.view { background: #16a34a; }
+  .overlay-btn.del { background: #e11d48; }
 
-.doc-slot.is-empty {
-  border: 1px dashed #e2e8f0;
-  background: #fbfcfe;
-}
+  /* --- BOTONES DE ACCIÓN SLOTS --- */
+  .action-btn { 
+    width: 28px; height: 28px; border-radius: 8px; border: none; 
+    display: grid; place-items: center; cursor: pointer; transition: 0.2s;
+  }
+  .action-btn.download { background: #fff; color: #16a34a; border: 1px solid #dcfce7; }
+  .action-btn.delete { background: #fff1f2; color: #e11d48; }
+  .action-btn.upload { background: #f1f5f9; color: #64748b; }
+  .action-btn:hover { transform: scale(1.05); }
 
-.doc-slot.is-filled {
-  border: 1px solid #dcfce7;
-  background: #f0fdf450; /* Un toque verde muy suave */
-}
+  .upload-photo-btn {
+    font-size: 11px; font-weight: 800; color: #2563eb; background: #eff6ff;
+    padding: 6px 12px; border-radius: 8px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px; border: 1px solid #dbeafe;
+  }
 
-.doc-slot:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
-}
-
-.slot-body {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.slot-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-}
-
-.is-empty .slot-icon { background: #f1f5f9; color: #94a3b8; }
-.is-filled .slot-icon { background: #16a34a; color: white; }
-
-.slot-info {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.slot-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: #334155;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.slot-date {
-  font-size: 10px;
-  color: #94a3b8;
-  margin-top: 1px;
-}
-
-.action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: none;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transition: 0.2s;
-}
-
-.action-btn.upload {
-  background: #f1f5f9;
-  color: #64748b;
-}
-
-.action-btn.upload:hover {
-  background: #e2e8f0;
-  color: #1e293b;
-}
-
-.action-btn.download {
-  background: white;
-  color: #16a34a;
-  border: 1px solid #dcfce7;
-}
-
-.action-btn.download:hover {
-  background: #16a34a;
-  color: white;
-}
-        .ff-card2 {
-          background: var(--ff-surface);
-          border: 1px solid var(--ff-border);
-          border-radius: var(--ff-radius);
-          box-shadow: var(--ff-shadow);
-          padding: 12px;
-        }
-        .soft {
-          background: rgba(15, 23, 42, 0.02);
-        }
-
-        .ff-row2 {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-wrap: wrap;
-          min-width: 0;
-        }
-        .ff-spread2 {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          flex-wrap: wrap;
-          min-width: 0;
-        }
-
-        .cardHead {
-          border: 1px solid var(--ff-border);
-          background: var(--ff-surface);
-          border-radius: var(--ff-radius);
-          padding: 12px;
-        }
-
-        .codeRow {
-          display: flex;
-          align-items: flex-start;
-          gap: 10px;
-          min-width: 0;
-        }
-        .codeIcon {
-          width: 32px;
-          height: 32px;
-          border-radius: 8px;
-          border: 1px solid rgba(31, 122, 58, 0.18);
-          background: rgba(31, 122, 58, 0.08);
-          display: grid;
-          place-items: center;
-          flex: 0 0 auto;
-        }
-
-        .code {
-          font-weight: 950;
-          font-size: 16px;
-          letter-spacing: -0.2px;
-          line-height: 20px;
-        }
-        .meta {
-          font-size: 12px;
-          color: var(--ff-muted);
-          margin-top: 4px;
-          line-height: 16px;
-          word-break: break-word;
-        }
-
-        .sectionTitle {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-weight: 900;
-          font-size: 13px;
-        }
-        .lbl {
-          display: block;
-          font-size: 12px;
-          font-weight: 900;
-          color: var(--ff-muted);
-          margin-bottom: 6px;
-        }
-
-        .row3 {
-          display: grid;
-          gap: 10px;
-          grid-template-columns: 1fr;
-        }
-        @media (min-width: 980px) {
-          .row3 {
-            grid-template-columns: 1.2fr 0.9fr 0.9fr;
-          }
-        }
-
-        .row2 {
-          display: grid;
-          gap: 10px;
-          grid-template-columns: 1fr;
-        }
-        @media (min-width: 980px) {
-          .row2 {
-            grid-template-columns: 1fr 1fr;
-          }
-        }
-
-        .actionsGrid {
-          display: grid;
-          gap: 10px;
-          grid-template-columns: 1fr;
-        }
-        @media (min-width: 980px) {
-          .actionsGrid {
-            grid-template-columns: repeat(5, 1fr);
-          }
-        }
-
-        .in2 {
-          width: 100%;
-          height: 38px;
-          border: 1px solid var(--ff-border);
-          border-radius: var(--ff-radius);
-          padding: 0 10px;
-          font-size: 13px;
-          outline: none;
-          background: #fff;
-          min-width: 0;
-        }
-        .in2:focus {
-          border-color: rgba(31, 122, 58, 0.4);
-          box-shadow: 0 0 0 4px rgba(31, 122, 58, 0.1);
-        }
-
-        .btnSmall {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          height: 34px;
-          padding: 0 10px;
-          border-radius: var(--ff-radius);
-          border: 1px solid var(--ff-border);
-          background: #fff;
-          font-size: 12px;
-          font-weight: 900;
-          cursor: pointer;
-          color: var(--ff-text);
-          text-decoration: none;
-          white-space: nowrap;
-        }
-        .btnSmall:hover {
-          background: rgba(15, 23, 42, 0.03);
-        }
-
-        .ff-primary {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          border: 1px solid rgba(31, 122, 58, 0.35);
-          background: var(--ff-green);
-          color: #fff;
-          border-radius: var(--ff-radius);
-          height: 36px;
-          padding: 0 12px;
-          font-weight: 900;
-          font-size: 12px;
-          cursor: pointer;
-          white-space: nowrap;
-        }
-        .ff-primary:disabled {
-          opacity: 0.55;
-          cursor: not-allowed;
-        }
-
-        .chip {
-          border-radius: 999px;
-          padding: 6px 10px;
-          font-size: 12px;
-          font-weight: 900;
-          background: rgba(15, 23, 42, 0.04);
-          border: 1px solid rgba(15, 23, 42, 0.12);
-          white-space: nowrap;
-        }
-        .chipSoft {
-          border-radius: 999px;
-          padding: 6px 10px;
-          font-size: 12px;
-          font-weight: 900;
-          background: rgba(31, 122, 58, 0.08);
-          border: 1px solid rgba(31, 122, 58, 0.22);
-          color: var(--ff-green-dark);
-          white-space: nowrap;
-        }
-        .statusPill {
-          border-radius: 999px;
-          padding: 6px 10px;
-          font-size: 12px;
-          font-weight: 950;
-          border: 1px solid rgba(15, 23, 42, 0.12);
-          background: #fff;
-          white-space: nowrap;
-        }
-
-        .grid2 {
-          display: grid;
-          gap: 12px;
-          grid-template-columns: 1fr;
-        }
-        @media (min-width: 1100px) {
-          .grid2 {
-            grid-template-columns: 0.95fr 1.05fr;
-          }
-        }
-
-        .kv {
-          display: flex;
-          justify-content: space-between;
-          padding: 8px 0;
-          border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-          gap: 10px;
-        }
-
-        .docGrid {
-          display: grid;
-          gap: 8px;
-          grid-template-columns: 1fr;
-        }
-        @media (min-width: 980px) {
-          .docGrid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-        }
-        @media (min-width: 1200px) {
-          .docGrid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-          }
-        }
-
-        .docPill {
-          height: 36px;
-          border-radius: 12px;
-          border: 1px solid var(--ff-border);
-          background: #fff;
-          font-size: 12px;
-          font-weight: 900;
-          padding: 0 10px;
-          cursor: pointer;
-          text-align: left;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        .docPill:hover {
-          background: rgba(15, 23, 42, 0.03);
-        }
-        .docPillOn {
-          border-color: rgba(31, 122, 58, 0.35);
-          background: rgba(31, 122, 58, 0.08);
-          color: var(--ff-green-dark);
-        }
-        .docPill:disabled {
-          opacity: 0.65;
-          cursor: not-allowed;
-        }
-
-        .list {
-          display: grid;
-          gap: 10px;
-        }
-        .itemRow {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          padding: 10px;
-          border: 1px solid var(--ff-border);
-          border-radius: var(--ff-radius);
-          background: var(--ff-surface);
-          align-items: center;
-        }
-        @media (max-width: 720px) {
-          .itemRow {
-            flex-direction: column;
-            align-items: stretch;
-          }
-          .itemTitle {
-            max-width: 100%;
-          }
-        }
-
-        .itemTitle {
-          font-weight: 900;
-          font-size: 13px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          max-width: 520px;
-        }
-        .itemMeta {
-          margin-top: 2px;
-          font-size: 12px;
-          color: var(--ff-muted);
-        }
-
-        .photoGrid {
-          display: grid;
-          gap: 10px;
-          grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-        }
-        .photoCard {
-          border: 1px solid var(--ff-border);
-          border-radius: var(--ff-radius);
-          overflow: hidden;
-          background: var(--ff-surface);
-        }
-        .photoImg {
-          width: 100%;
-          height: 150px;
-          object-fit: cover;
-          display: block;
-        }
-        .photoPlaceholder {
-          width: 100%;
-          height: 150px;
-          background: rgba(15, 23, 42, 0.04);
-        }
-        .photoBody {
-          padding: 10px;
-        }
-        .photoTitle {
-          font-weight: 900;
-          font-size: 13px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .photoMeta {
-          font-size: 12px;
-          color: var(--ff-muted);
-          margin-top: 2px;
-        }
-        .full {
-          width: 100%;
-          justify-content: center;
-          margin-top: 10px;
-        }
-
-        .muted {
-          font-size: 12px;
-          color: var(--ff-muted);
-        }
-
-        .msgWarn {
-          border: 1px solid rgba(209, 119, 17, 0.35);
-          background: rgba(209, 119, 17, 0.08);
-          padding: 10px;
-          border-radius: var(--ff-radius);
-          font-size: 12px;
-        }
-
-        .msgOk {
-          border: 1px solid rgba(31, 122, 58, 0.3);
-          background: rgba(31, 122, 58, 0.08);
-          border-radius: var(--ff-radius);
-          padding: 10px;
-          font-weight: 900;
-          font-size: 12px;
-        }
-      `}</style>
+  /* --- ESTADOS --- */
+  .muted { font-size: 12px; color: var(--ff-muted); }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+`}</style>
     </AdminLayout>
   );
   
