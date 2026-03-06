@@ -7,35 +7,31 @@ const supabase = createClient(
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method Not Allowed" };
-  const supabaseUrl = process.env.SUPABASE_URL || "";
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { fileId, kind, shipmentId } = JSON.parse(event.body || "{}");
-
-    // 1. Obtener la ruta del archivo en Storage antes de borrar la fila
-    const table = kind === "doc" ? "shipment_documents" : "shipment_photos";
-    const { data: fileData, error: fetchError } = await supabase
-      .from(table)
-      .select("storage_path")
+    const { fileId } = JSON.parse(event.body || "{}");
+    
+    // 1. Buscamos en la tabla UNIFICADA: shipment_files
+    const { data: fileRow, error: fetchError } = await supabase
+      .from("shipment_files")
+      .select("storage_path, bucket")
       .eq("id", fileId)
       .single();
 
-    if (fetchError || !fileData) throw new Error("Archivo no encontrado en DB");
+    if (fetchError || !fileRow) {
+      return { statusCode: 404, body: "Archivo no encontrado en shipment_files" };
+    }
 
-    // 2. Borrar el archivo físico del Storage
-    const bucket = kind === "doc" ? "shipment-docs" : "shipment-photos";
+    // 2. Borramos del Storage usando el bucket que ya viene en la fila
     const { error: storageError } = await supabase.storage
-      .from(bucket)
-      .remove([fileData.storage_path]);
+      .from(fileRow.bucket) 
+      .remove([fileRow.storage_path]);
 
-    if (storageError) console.error("Error Storage:", storageError);
+    if (storageError) console.error("Storage error (no crítico):", storageError);
 
-    // 3. Borrar la fila de la base de datos
+    // 3. Borramos la fila de la tabla shipment_files
     const { error: dbError } = await supabase
-      .from(table)
+      .from("shipment_files")
       .delete()
       .eq("id", fileId);
 
@@ -43,12 +39,10 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: "Eliminado correctamente" }),
+      body: JSON.stringify({ message: "Eliminado con éxito" }),
     };
-  } catch (error: any) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: error.message }),
-    };
+
+  } catch (err: any) {
+    return { statusCode: 500, body: err.message };
   }
 };
