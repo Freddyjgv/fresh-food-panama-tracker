@@ -1,161 +1,118 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, ArrowUpDown, Calendar, Package, MapPin, RefreshCcw } from "lucide-react";
-import { supabase } from "../../lib/supabaseClient";
+import { 
+  Search, 
+  Calendar, 
+  Package, 
+  MapPin, 
+  RefreshCcw, 
+  Plane, 
+  Ship, 
+  ChevronRight 
+} from "lucide-react";
+
+// --- VERIFICA ESTAS RUTAS ---
+import { supabase } from "../../lib/supabaseClient"; 
 import { labelStatus, statusBadgeClass } from "../../lib/shipmentFlow";
 import { ClientLayout } from "../../components/ClientLayout";
 
-type Shipment = {
-  id: string;
-  code: string;
-  destination?: string | null;
-  status: string;
-  created_at?: string;
-};
-
-function formatDate(iso?: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("es-PA", { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
 export default function ShipmentsPage() {
-  const pageSize = 20;
-  const [page, setPage] = useState(1);
-  const [dir, setDir] = useState<"asc" | "desc">("desc");
-  const [destination, setDestination] = useState("");
+  const [items, setItems] = useState<any[]>([]);
   const [search, setSearch] = useState("");
-  const [items, setItems] = useState<Shipment[]>([]);
-  const [total, setTotal] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string>("");
+  const [destination, setDestination] = useState("");
 
-  const totalPages = useMemo(() => Math.max(1, Math.ceil((total || 0) / pageSize)), [total]);
+  const fetchShipments = async () => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) return;
 
-  async function fetchShipments(next?: { page?: number; dir?: "asc" | "desc"; destination?: string; search?: string; }) {
-    setLoading(true);
-    setErrorMsg("");
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
-
-    if (!token) {
-      setLoading(false);
-      setErrorMsg("Sesión inválida.");
-      return;
+      const res = await fetch(`/.netlify/functions/listShipments?q=${search}&destination=${destination}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setItems(json.items || json.data || []);
+      }
+    } catch (e) {
+      console.error("Error cargando embarques");
     }
+  };
 
-    const params = new URLSearchParams();
-    params.set("page", String(next?.page ?? page));
-    params.set("pageSize", String(pageSize));
-    params.set("dir", next?.dir ?? dir);
-    
-    const d = next?.destination ?? destination;
-    const q = next?.search ?? search;
-    if (d) params.set("destination", d);
-    if (q) params.set("q", q);
-
-    const res = await fetch(`/.netlify/functions/listShipments?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!res.ok) {
-      setLoading(false);
-      setErrorMsg(`Error (${res.status})`);
-      return;
-    }
-
-    const json = await res.json();
-    setItems((json.items ?? json.data ?? []) as Shipment[]);
-    setTotal(Number(json.total ?? json.count ?? 0));
-    setLoading(false);
-  }
-
-  // ✅ FUNCIÓN CORREGIDA
-  async function applySearch() {
-    setPage(1);
-    await fetchShipments({ page: 1, search });
-  }
-
-  useEffect(() => { 
-    fetchShipments(); 
-  }, [page, dir, destination]);
+  useEffect(() => { fetchShipments(); }, [destination]);
 
   return (
-    <ClientLayout title="Embarques" subtitle="Gestión de exportaciones." wide>
-      <div className="ff-page-container">
+    <ClientLayout title="Mis Embarques" subtitle="Gestión logística" wide>
+      <div className="modern-container">
         
-        {/* Toolbar Minimalista */}
-        <div className="ff-toolbar">
-          <div className="ff-search-group">
-            <Search size={14} color="#94a3b8" />
+        {/* BUSCADOR ESTILO MOCKUP */}
+        <div className="modern-toolbar">
+          <div className="search-box">
+            <Search size={18} color="#94a3b8" />
             <input 
-              className="ff-input-clean" 
-              placeholder="Buscar código..." 
+              placeholder="Buscar por código..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && applySearch()}
+              onKeyDown={(e) => e.key === "Enter" && fetchShipments()}
             />
           </div>
-          
-          <select 
-            className="ff-select-clean"
-            value={destination}
-            onChange={(e) => { setPage(1); setDestination(e.target.value); }}
-          >
-            <option value="">Destinos</option>
+          <select className="modern-select" value={destination} onChange={(e) => setDestination(e.target.value)}>
+            <option value="">Todos los destinos</option>
             <option value="MAD">Madrid</option>
             <option value="AMS">Amsterdam</option>
           </select>
-
-          <button className="ff-btn-search" onClick={applySearch}>Buscar</button>
-          <button className="ff-btn-icon" onClick={() => fetchShipments()}><RefreshCcw size={14} /></button>
+          <button className="btn-search" onClick={fetchShipments}>Buscar</button>
+          <button className="btn-icon" onClick={() => fetchShipments()}><RefreshCcw size={18} /></button>
         </div>
 
-        {/* Listado */}
-        <div className="ff-list-grid">
+        {/* LISTADO DE TARJETAS BLANCAS (MOCKUP STYLE) */}
+        <div className="shipments-list">
           {items.map((s) => (
-            <Link key={s.id} href={`/shipments/${s.id}`} className={`ff-card status-l-${s.status}`}>
-              <div className="ff-card-layout">
+            <Link key={s.id} href={`/shipments/${s.id}`} className="card-link">
+              <div className={`ship-card status-border-${String(s.status).toLowerCase()}`}>
                 
-                {/* ID / Producto */}
-                <div className="ff-section-main">
-                  <div className="ff-icon-wrapper">
-                    <Package size={16} color="#64748b" />
+                {/* 1. Icono y ID */}
+                <div className="card-col main-info">
+                  <div className="icon-frame">
+                    <Package size={22} strokeWidth={1.5} />
                   </div>
-                  <div>
-                    <h3 className="ff-ship-id">{s.code}</h3>
-                    <p className="ff-ship-sub">Piña MD2 · 4 Palets</p>
+                  <div className="id-texts">
+                    <span className="code-id">{s.code}</span>
+                    <span className="sub-detail">Piña MD2 · 4 Palets</span>
                   </div>
                 </div>
 
-                {/* Destino */}
-                <div className="ff-section-center">
-                  <div className="ff-metric">
-                    <MapPin size={13} color="#cbd5e1" />
-                    <div>
-                      <span className="ff-label-small">DESTINO</span>
-                      <span className="ff-value-small">{s.destination || "—"}</span>
+                {/* 2. Modalidad de Envío */}
+                <div className="card-col center-content">
+                  <div className="metric-item">
+                    {s.destination?.includes("MAD") ? <Plane size={16} color="#94a3b8" /> : <Ship size={16} color="#94a3b8" />}
+                    <div className="metric-texts">
+                      <span className="m-label">MODALIDAD / DESTINO</span>
+                      <span className="m-value">{s.destination || "Pendiente"}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Fecha */}
-                <div className="ff-section-center">
-                  <div className="ff-metric">
-                    <Calendar size={13} color="#cbd5e1" />
-                    <div>
-                      <span className="ff-label-small">FECHA</span>
-                      <span className="ff-value-small">{formatDate(s.created_at)}</span>
+                {/* 3. Fecha */}
+                <div className="card-col center-content">
+                  <div className="metric-item">
+                    <Calendar size={16} color="#94a3b8" />
+                    <div className="metric-texts">
+                      <span className="m-label">FECHA SALIDA</span>
+                      <span className="m-value">
+                        {s.created_at ? new Date(s.created_at).toLocaleDateString('es-PA') : '--'}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Status */}
-                <div className="ff-section-right">
-                  <span className={`ff-pill ${statusBadgeClass(s.status)}`}>
+                {/* 4. Status Badge con punto de hito */}
+                <div className="card-col end-content">
+                  <span className={`${statusBadgeClass(s.status)} status-pill-modern`}>
+                    <span className="pill-dot" />
                     {labelStatus(s.status)}
                   </span>
+                  <ChevronRight size={20} className="arrow-icon" />
                 </div>
 
               </div>
@@ -165,127 +122,83 @@ export default function ShipmentsPage() {
       </div>
 
       <style jsx>{`
-        .ff-page-container {
-          max-width: 1000px;
-          margin: 0 auto;
-          padding: 24px;
-        }
+        .modern-container { max-width: 1100px; margin: 0 auto; padding: 20px; }
 
-        /* Toolbar */
-        .ff-toolbar {
-          display: flex;
-          gap: 12px;
-          margin-bottom: 24px;
-          align-items: center;
+        .modern-toolbar {
+          display: flex; gap: 12px; background: white; padding: 10px;
+          border-radius: 12px; border: 1px solid #eef2f6; margin-bottom: 30px;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.02);
         }
-        .ff-search-group {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          background: #fff;
-          border: 1px solid #e2e8f0;
-          padding: 0 12px;
-          border-radius: 6px;
-          height: 36px;
+        .search-box {
+          flex: 1; display: flex; align-items: center; gap: 10px;
+          background: #f8fafc; padding: 0 15px; border-radius: 10px; height: 44px;
         }
-        .ff-input-clean {
-          border: none;
-          outline: none;
-          width: 100%;
-          font-size: 0.85rem;
-          color: #1e293b;
-        }
-        .ff-select-clean {
-          height: 36px;
-          border: 1px solid #e2e8f0;
-          border-radius: 6px;
-          padding: 0 8px;
-          font-size: 0.8rem;
-          color: #64748b;
-          background: #fff;
-        }
-        .ff-btn-search {
-          height: 36px;
-          padding: 0 16px;
-          background: #1e293b;
-          color: white;
-          border-radius: 6px;
-          font-size: 0.8rem;
-          font-weight: 600;
-        }
-        .ff-btn-icon {
-          width: 36px;
-          height: 36px;
-          border: 1px solid #e2e8f0;
-          background: #fff;
-          border-radius: 6px;
-          display: grid;
-          place-items: center;
-          color: #94a3b8;
-        }
+        .search-box input { border: none; background: transparent; width: 100%; outline: none; font-size: 0.9rem; }
+        .modern-select { border: 1px solid #eef2f6; border-radius: 10px; padding: 0 12px; font-weight: 600; color: #64748b; font-size: 0.85rem; }
+        .btn-search { background: #1e293b; color: white; border: none; padding: 0 20px; border-radius: 10px; font-weight: 600; cursor: pointer; }
+        .btn-icon { background: white; border: 1px solid #eef2f6; border-radius: 10px; padding: 10px; color: #94a3b8; cursor: pointer; }
 
-        /* Cards Minimalistas */
-        .ff-card {
-          display: block;
-          text-decoration: none;
+        /* TARJETA BLANCA DISEÑO MOCKUP */
+        .card-link { text-decoration: none; display: block; }
+        .ship-card {
           background: #ffffff !important;
-          border: 1px solid #f1f5f9;
-          border-radius: 8px;
-          margin-bottom: 8px;
-          transition: all 0.2s;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.02);
-        }
-        .ff-card:hover {
-          border-color: #cbd5e1;
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.04);
-        }
-
-        /* ADN Borde Status */
-        .status-l-in_transit { border-left: 3px solid #3b82f6 !important; }
-        .status-l-delivered { border-left: 3px solid #10b981 !important; }
-        .status-l-pending { border-left: 3px solid #f59e0b !important; }
-
-        .ff-card-layout {
+          border: 1px solid #f1f5f9 !important;
+          border-radius: 16px !important;
           display: grid;
-          grid-template-columns: 1.2fr 1fr 1fr 0.8fr;
+          grid-template-columns: 1.4fr 1fr 1fr 1fr;
           align-items: center;
-          padding: 12px 20px;
+          padding: 18px 24px !important;
+          margin-bottom: 15px;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
+          position: relative;
+        }
+        .ship-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 15px 30px rgba(0,0,0,0.05) !important;
+          border-color: #cbd5e1 !important;
         }
 
-        .ff-section-main { display: flex; align-items: center; gap: 12px; }
-        .ff-icon-wrapper {
-          width: 32px;
-          height: 32px;
-          background: #f8fafc;
-          border-radius: 6px;
-          display: grid;
-          place-items: center;
+        /* BORDES DE COLOR SEGÚN STATUS */
+        .status-border-created { border-left: 5px solid #94a3b8 !important; }
+        .status-border-packed { border-left: 5px solid #3b82f6 !important; }
+        .status-border-docs_ready { border-left: 5px solid #8b5cf6 !important; }
+        .status-border-in_transit { border-left: 5px solid #f59e0b !important; }
+        .status-border-at_destination { border-left: 5px solid #10b981 !important; }
+
+        .card-col { display: flex; align-items: center; gap: 16px; }
+        .center-content { justify-content: center; }
+        .end-content { justify-content: flex-end; gap: 20px; }
+
+        .icon-frame {
+          width: 48px; height: 48px; background: #f0fdf4; color: #16a34a;
+          border-radius: 12px; display: grid; place-items: center;
         }
-        .ff-ship-id { font-size: 0.9rem; font-weight: 700; color: #0f172a; margin: 0; }
-        .ff-ship-sub { font-size: 0.75rem; color: #94a3b8; margin: 0; }
+        .code-id { display: block; font-size: 1.15rem; font-weight: 800; color: #0f172a; letter-spacing: -0.02em; }
+        .sub-detail { font-size: 0.8rem; color: #94a3b8; font-weight: 500; }
 
-        .ff-section-center { display: flex; justify-content: center; }
-        .ff-metric { display: flex; align-items: center; gap: 8px; }
-        .ff-label-small { display: block; font-size: 0.55rem; font-weight: 800; color: #cbd5e1; letter-spacing: 0.02em; }
-        .ff-value-small { display: block; font-size: 0.8rem; font-weight: 600; color: #475569; }
+        .metric-item { display: flex; align-items: center; gap: 12px; }
+        .metric-texts { display: flex; flex-direction: column; }
+        .m-label { font-size: 0.6rem; font-weight: 800; color: #cbd5e1; letter-spacing: 0.05em; }
+        .m-value { font-size: 0.9rem; font-weight: 600; color: #475569; }
 
-        .ff-section-right { display: flex; justify-content: flex-end; }
-        :global(.ff-pill) {
-          padding: 4px 10px;
-          border-radius: 100px;
-          font-size: 0.65rem;
-          font-weight: 700;
+        /* BADGE MODERNIZADO */
+        :global(.status-pill-modern) {
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 8px 16px !important; border-radius: 100px !important;
+          font-size: 0.75rem !important; font-weight: 700 !important;
           text-transform: uppercase;
         }
-        :global(.bg-blue-100) { background: #eff6ff !important; color: #2563eb !important; }
-        :global(.bg-green-100) { background: #f0fdf4 !important; color: #16a34a !important; }
+        .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
-        @media (max-width: 768px) {
-          .ff-card-layout { grid-template-columns: 1fr; gap: 12px; }
-          .ff-section-center, .ff-section-right { justify-content: flex-start; }
-        }
+        :global(.ff-badge-blue) { background: #eff6ff !important; color: #2563eb !important; }
+        :global(.ff-badge-orange) { background: #fff7ed !important; color: #ea580c !important; }
+        :global(.ff-badge-green) { background: #f0fdf4 !important; color: #16a34a !important; }
+
+        .arrow-icon { color: #e2e8f0; transition: transform 0.2s; }
+        .ship-card:hover .arrow-icon { transform: translateX(5px); color: #64748b; }
+
+        @media (max-width: 900px) { .ship-card { grid-template-columns: 1fr; gap: 20px; } }
       `}</style>
     </ClientLayout>
   );
