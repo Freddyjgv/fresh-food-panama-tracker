@@ -166,11 +166,11 @@ export default function AdminShipments() {
 
       {/* 1. HEADER: 4 GRIDS (CLON DE QUOTES) */}
       <div className="statsGrid">
-       <div className="statCard action" onClick={() => setShowModal(true)} style={{ cursor: 'pointer', position: 'relative', zIndex: 999 }}>
+       <div className="statCard action" onClick={() => setShowModal(true)}>
         <div className="iconBox green">
         <PlusCircle size={18} strokeWidth={1.5} />
-        </div>
-        <div className="statInfo">
+      </div>
+    <div className="statInfo">
       <span className="statValueAction">Nuevo Embarque</span>
     </div>
   </div>
@@ -262,105 +262,219 @@ export default function AdminShipments() {
       </div>
 
       {/* POPUP MODAL COMPLETO, UNIFICADO Y CLEAN */}
-      {/* EL POPUP (Se activa con el click) */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <header className="modal-header">
               <div className="header-info">
                 <h2 className="modal-title">Nuevo Embarque</h2>
-                <span className="modal-subtitle">Configuración de carga logística</span>
+                <span className="modal-subtitle">Registra la carga en el sistema logístico</span>
               </div>
-              <button type="button" onClick={() => setShowModal(false)} className="close-btn"><X size={20} /></button>
+              <button onClick={() => setShowModal(false)} className="close-btn"><X size={20} strokeWidth={1.5} /></button>
             </header>
 
             <form onSubmit={handleCreate} className="modal-form">
-              {/* Sección Cliente */}
-              <div className="input-group">
-                <label>Cliente Final</label>
-                <select required value={formData.client_id} onChange={e => setFormData({...formData, client_id: e.target.value})}>
-                  <option value="">Selecciona...</option>
-                  {clients?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
+              
+              {/* 1. SECCIÓN CLIENTE */}
+              <section className="form-section">
+                <div className="section-header">
+                  <Users size={15} strokeWidth={1.5} />
+                  <span>Información del Cliente</span>
+                </div>
+                <div className="input-group">
+                  <label>Cliente Final</label>
+                  <select required value={formData.client_id} onChange={e => setFormData({...formData, client_id: e.target.value})}>
+                    <option value="">Selecciona un cliente...</option>
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              </section>
 
-              {/* Especificaciones en Grilla */}
-              <div className="grid-2">
-                 <div className="input-group">
+              {/* 2. SECCIÓN ESPECIFICACIONES (PRODUCTO + CALIDAD + CANTIDAD) */}
+              <section className="form-section">
+                <div className="section-header">
+                  <Package size={15} strokeWidth={1.5} />
+                  <span>Detalles de Mercancía</span>
+                </div>
+                
+                <div className="grid-2">
+                  <div className="input-group">
                     <label>Producto</label>
-                    <select required value={formData.product_id} onChange={e => setFormData({...formData, product_id: e.target.value})}>
-                       {products?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    <select required value={formData.product_id} onChange={e => setFormData({...formData, product_id: e.target.value, variety_id: ''})}>
+                      <option value="">Producto...</option>
+                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
-                 </div>
-                 <div className="input-group">
+                  </div>
+                  <div className="input-group">
                     <label>Variedad</label>
-                    <select value={formData.variety_id} onChange={e => setFormData({...formData, variety_id: e.target.value})}>
-                       {allVarieties?.filter(v => v.product_id === formData.product_id).map(v => (
-                         <option key={v.id} value={v.id}>{v.name}</option>
-                       ))}
+                    <select required disabled={!formData.product_id} value={formData.variety_id} onChange={e => setFormData({...formData, variety_id: e.target.value})}>
+                      <option value="">Variedad...</option>
+                      {filteredVarieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                     </select>
-                 </div>
-              </div>
+                  </div>
+                </div>
 
-              {/* Calidad y Cantidad */}
-              <div className="grid-3">
-                <div className="input-group"><label>Calibre</label><input value={formData.calibre} onChange={e => setFormData({...formData, calibre: e.target.value})} /></div>
-                <div className="input-group"><label>Color</label><input value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} /></div>
-                <div className="input-group"><label>Brix</label><input value={formData.brix_grade} onChange={e => setFormData({...formData, brix_grade: e.target.value})} /></div>
-              </div>
+                {/* Calidad: Calibre, Color y Brix */}
+                <div className="grid-3" style={{ marginBottom: '16px' }}>
+                  <div className="input-group">
+                    <label><Hash size={11} style={{marginRight: '4px'}}/> Calibre</label>
+                    <input type="text" placeholder="Ej: 6" value={formData.calibre} onChange={e => setFormData({...formData, calibre: e.target.value})} />
+                  </div>
+                  <div className="input-group">
+                    <label><Palette size={11} style={{marginRight: '4px'}}/> Color</label>
+                    <input type="text" placeholder="Ej: 2.5" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} />
+                  </div>
+                  <div className="input-group">
+                    <label><ThermometerSun size={11} style={{marginRight: '4px'}}/> Brix</label>
+                    <input type="text" placeholder=">13" value={formData.brix_grade} onChange={e => setFormData({...formData, brix_grade: e.target.value})} />
+                  </div>
+                </div>
 
-              <div className="grid-3">
-                <div className="input-group"><label>Cajas</label><input type="number" value={formData.boxes} onChange={e => setFormData({...formData, boxes: e.target.value})} /></div>
-                <div className="input-group"><label>Pallets</label><input type="number" value={formData.pallets} onChange={e => setFormData({...formData, pallets: e.target.value})} /></div>
-                <div className="input-group"><label>Peso (Kg)</label><input type="number" value={formData.estimated_weight} onChange={e => setFormData({...formData, estimated_weight: e.target.value})} /></div>
-              </div>
+                {/* Cantidades: Cajas, Pallets y Peso */}
+                <div className="grid-3">
+                  <div className="input-group"><label>Cajas</label><input type="number" placeholder="0" value={formData.boxes} onChange={e => setFormData({...formData, boxes: e.target.value})} /></div>
+                  <div className="input-group"><label>Pallets</label><input type="number" placeholder="0" value={formData.pallets} onChange={e => setFormData({...formData, pallets: e.target.value})} /></div>
+                  <div className="input-group"><label>Peso (Kg)</label><input type="number" step="0.01" placeholder="0.00" value={formData.estimated_weight} onChange={e => setFormData({...formData, estimated_weight: e.target.value})} /></div>
+                </div>
+              </section>
+
+              {/* 3. SECCIÓN LOGÍSTICA (RUTA UNIFICADA) */}
+              <section className="form-section">
+                <div className="section-header">
+                  <Globe size={15} strokeWidth={1.5} />
+                  <span>Ruta y Destino</span>
+                </div>
+                <div className="grid-2">
+                  <div className="input-group">
+                    <label>Modalidad</label>
+                    <div className="mode-selector-clean">
+                      <button type="button" className={mode === 'Marítima' ? 'active' : ''} onClick={() => setMode('Marítima')}><Anchor size={14} /> Marítimo</button>
+                      <button type="button" className={mode === 'Aérea' ? 'active' : ''} onClick={() => setMode('Aérea')}><Plane size={14} /> Aéreo</button>
+                    </div>
+                  </div>
+                  <div className="input-group">
+                    <label>Incoterm</label>
+                    <select value={formData.incoterm} onChange={e => setFormData({...formData, incoterm: e.target.value})}>
+                      {['FOB', 'CIF', 'CIP', 'FCA', 'CFR', 'DDP'].map(i => <option key={i} value={i}>{i}</option>)}
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="input-group">
+                  <label>Destino Final (Aeropuerto/Puerto)</label>
+                  <input list="places-list-admin" required placeholder="Ej: 🇪🇸 MAD Madrid-Barajas" value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} />
+                  <datalist id="places-list-admin">
+                    {MASTER_PLACES.map(p => <option key={p.code} value={`${getFlag(p.country)} ${p.name}`} />)}
+                  </datalist>
+                </div>
+              </section>
 
               <footer className="modal-footer-clean">
                 <button type="button" onClick={() => setShowModal(false)} className="btn-cancel">Cancelar</button>
-                <button type="submit" className="btn-save">Confirmar Embarque</button>
+                <button type="submit" disabled={submitting || success} className="btn-save">
+                  {submitting ? <Loader2 className="spin" size={18} /> : <span>Confirmar Embarque</span>}
+                </button>
               </footer>
             </form>
           </div>
         </div>
       )}
-      {/* 2. EL CSS QUE REPARA LA ESTÉTICA (Cópialo todo) */}
-      <style jsx>{`
-        .modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(15, 23, 42, 0.5);
-          backdrop-filter: blur(4px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 9999;
-        }
-        .modal-content {
-          background: white;
-          width: 100%;
-          max-width: 520px;
-          border-radius: 20px;
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-          overflow: hidden;
-          animation: slideIn 0.2s ease-out;
-        }
-        @keyframes slideIn {
-          from { transform: translateY(20px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-        .modal-header { padding: 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; }
-        .modal-title { font-size: 18px; font-weight: 600; color: #1e293b; margin: 0; }
-        .modal-subtitle { font-size: 13px; color: #64748b; }
-        .modal-form { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-        .input-group label { display: block; font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-bottom: 6px; }
-        input, select { width: 100%; height: 42px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0 12px; font-size: 14px; }
-        .modal-footer-clean { display: flex; gap: 12px; margin-top: 10px; }
-        .btn-save { flex: 2; background: #16a34a; color: white; border: none; height: 44px; border-radius: 10px; font-weight: 600; cursor: pointer; }
-        .btn-cancel { flex: 1; background: #f1f5f9; color: #64748b; border: none; border-radius: 10px; cursor: pointer; }
-      `}</style>
 
+      <style jsx>{`
+        /* --- ESTILOS MAESTROS (Fieles a Quotes) --- */
+        .statsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .statCard { background: white; padding: 16px; border-radius: 12px; border: 1px solid #f1f5f9; display: flex; align-items: center; gap: 12px; }
+        .statCard.action { border: 1px solid #dcfce7; cursor: pointer; transition: 0.2s; gap: 16px; }
+        .statCard.action:hover { background: #f0fdf4; border-color: #86efac; transform: translateY(-1px); }
+        
+        .iconBox { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; }
+        .iconBox.green { background: #f0fdf4; color: #16a34a; }
+        .iconBox.blue { background: #eff6ff; color: #3b82f6; }
+        .iconBox.orange { background: #fff7ed; color: #ea580c; }
+        .iconBox.slate { background: #f8fafc; color: #64748b; }
+
+        .statLabel { font-size: 10px; font-weight: 500; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+        .statValue { font-size: 16px; font-weight: 500; color: #1e293b; display: block; }
+        .statValueAction { font-size: 14px; font-weight: 500; color: #16a34a; letter-spacing: -0.01em; }
+
+        .mainCard { background: white; border-radius: 16px; border: 1px solid #f1f5f9; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); }
+        .toolbar { padding: 16px 24px; display: flex; justify-content: space-between; border-bottom: 1px solid #f8fafc; }
+        
+        .searchModern { position: relative; display: flex; align-items: center; width: 380px; }
+        .searchIcon { position: absolute; left: 14px; color: #94a3b8; pointer-events: none; z-index: 10; }
+        .searchModern input { width: 100%; padding: 10px 16px 10px 40px; border-radius: 12px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 13.5px; outline: none; transition: 0.2s; }
+        .searchModern input:focus { background: white; border-color: #cbd5e1; }
+
+        .btnOutline { background: white; border: 1px solid #f1f5f9; padding: 8px 14px; border-radius: 10px; font-size: 12px; font-weight: 500; color: #64748b; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+
+        .listContainer { padding: 8px 0; }
+        .rowWrapper { padding: 0 24px; cursor: pointer; transition: 0.1s; border-bottom: 1px solid #f8fafc; }
+        .rowWrapper:hover { background: #fbfcfe; }
+        .rowGrid { display: grid; grid-template-columns: 240px 1fr 140px 140px; align-items: center; padding: 14px 0; }
+
+        .badgeLine { display: flex; gap: 6px; margin-bottom: 4px; }
+        .idBadge { background: #f8fafc; color: #64748b; font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 5px; }
+        .techBadge { background: #f0fdf4; color: #16a34a; font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 5px; display: flex; align-items: center; gap: 4px; }
+        
+        .clientName { font-size: 13.5px; font-weight: 400; color: #1e293b; }
+        .routeLine { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #475569; }
+        .arrow { color: #cbd5e1; }
+        .colMonto { text-align: right; }
+        .dateText { color: #64748b; font-size: 13px; font-weight: 400; }
+        .colStatus { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+        .status-pill-modern { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+        .pill-green { background: #f0fdf4; color: #166534; }
+        .pill-blue { background: #eff6ff; color: #1e40af; }
+        .pill-gray { background: #f8fafc; color: #475569; }
+
+        .loadingState { padding: 40px; text-align: center; color: #94a3b8; font-size: 13px; }
+        .toast-container { position: fixed; top: 24px; right: 24px; z-index: 3000; }
+        .toast-card { background: white; padding: 12px 24px; border-radius: 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+
+        /* SELECT MODERNO Y LIGERO */
+select {
+  appearance: none; /* Quitamos la flecha fea del navegador */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px;
+  
+  width: 100%;
+  height: 46px;
+  padding: 0 40px 0 16px; /* Más espacio a la derecha por la flecha */
+  background-color: #f8fafc; /* Un fondo casi blanco, muy ligero */
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 400; /* Fuente fina para ligereza */
+  color: #1e293b;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+select:focus {
+  background-color: #ffffff;
+  border-color: #16a34a; /* Tu verde esmeralda */
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.05);
+  outline: none;
+}
+
+/* EFECTO HOVER */
+select:hover {
+  border-color: #cbd5e1;
+}
+
+/* LABEL ULTRA FINO */
+.input-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8; /* Gris azulado suave */
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+  display: block;
+}
+      `}</style>
     </AdminLayout>
   );
 }
