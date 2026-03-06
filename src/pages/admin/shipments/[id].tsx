@@ -636,21 +636,44 @@ export default function AdminShipmentDetail() {
   </div>
 
   <div className="docs-grid-modern">
-    {DOC_TYPES.map((type) => {
-      // Buscar si este documento ya fue subido
-      const uploadedDoc = data.documents?.find(d => d.doc_type === type.v);
-      
-      return (
-        <div key={type.v} className={`doc-slot ${uploadedDoc ? 'is-filled' : 'is-empty'}`}>
-          <div className="slot-body">
-            <div className="slot-icon">
-              {uploadedDoc ? <CheckCircle size={14} /> : <FileText size={14} />}
-            </div>
-            <div className="slot-info">
-              <span className="slot-label">{type.l}</span>
-              {uploadedDoc && <span className="slot-date">{fmtDT(uploadedDoc.created_at)}</span>}
-            </div>
+   {DOC_TYPES.map((type) => {
+    // 1. Buscamos si el documento ya existe
+    const uploadedDoc = data.documents?.find(d => d.doc_type === type.v);
+
+    // 2. DECLARAMOS la variable que te falta:
+    // Es true si el sistema está ocupado Y el tipo que se está procesando es este slot
+    const isUploadingThis = busy && docType === type.v; // <--- ESTA LÍNEA ES LA QUE FALTA
+
+    return (
+      <div key={type.v} className={`doc-slot ${uploadedDoc ? 'is-filled' : 'is-empty'}`}>
+        <div className="slot-body">
+          <div className="slot-icon">
+            {isUploadingThis ? (
+              <Loader2 size={14} className="spin" />
+            ) : uploadedDoc ? (
+              <CheckCircle size={14} />
+            ) : (
+              <PlusCircle size={14} />
+            )}
           </div>
+          <div className="slot-info">
+            <span className="slot-label">{type.l}</span>
+            
+            {/* Visualización del nombre del archivo si existe */}
+            {uploadedDoc ? (
+              <>
+                <span className="file-name-preview" title={uploadedDoc.filename}>
+                  {uploadedDoc.filename}
+                </span>
+                <span className="slot-date">{fmtDT(uploadedDoc.created_at)}</span>
+              </>
+            ) : isUploadingThis ? (
+              <span className="slot-date">Subiendo archivo...</span>
+            ) : (
+              <span className="slot-date">Pendiente</span>
+            )}
+          </div>
+        </div>
           
           <div className="slot-actions">
             {uploadedDoc ? (
