@@ -1,18 +1,17 @@
-// src/pages/admin/shipments/index.tsx
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/router";
 import {
-  ArrowUpDown, Search, Plus, ChevronRight, Calendar,
-  MapPin, Ship, Plane, Filter, Users, LayoutGrid, X,
-  Package, Truck, CheckCircle2, Box, Anchor, CheckCircle,
-  Save, Loader2, Hash, Palette, ThermometerSun, Globe
+  Search, PlusCircle, ChevronRight, Ship, Plane, 
+  Package, Anchor, CheckCircle, Save, Loader2, 
+  TrendingUp, LayoutGrid, X, Users, Globe, Hash, 
+  Palette, ThermometerSun, SortAsc, Truck, CheckCircle2
 } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { labelStatus } from "../../../lib/shipmentFlow";
 import { requireAdminOrRedirect } from "../../../lib/requireAdmin";
 import { AdminLayout } from "../../../components/AdminLayout";
 
-// --- HELPERS ---
+// --- HELPERS (Sin cambios en lógica) ---
 const getFlag = (code: string) => {
   if (!code) return '🌐';
   const codePoints = code.toUpperCase().split('').map(char => 127397 + char.charCodeAt(0));
@@ -38,9 +37,9 @@ function StatusPill({ status }: { status: string }) {
   const isTransit = ["IN_TRANSIT", "DEPARTED", "ARRIVED_PTY"].includes(s);
   let Icon = (isTransit) ? Truck : (isFinal) ? CheckCircle2 : Package;
   return (
-    <span className={`status-pill ${isFinal ? 'pill-green' : isTransit ? 'pill-blue' : 'pill-gray'}`}>
-      <Icon size={14} strokeWidth={2.5} />
-      <span className="pill-text">{label}</span>
+    <span className={`status-pill-modern ${isFinal ? 'pill-green' : isTransit ? 'pill-blue' : 'pill-gray'}`}>
+      <Icon size={12} strokeWidth={2} />
+      <span>{label}</span>
     </span>
   );
 }
@@ -56,10 +55,10 @@ export default function AdminShipments() {
   const [allVarieties, setAllVarieties] = useState<any[]>([]);
   const [loadingList, setLoadingList] = useState(true);
 
-  // FORM STATE
+  // FORM STATE (Sin cambios)
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [mode, setMode] = useState<'Marítima' | 'Aérea'>('Aérea'); // Preseleccionado Aérea
+  const [mode, setMode] = useState<'Marítima' | 'Aérea'>('Aérea'); 
   const [formData, setFormData] = useState({
     client_id: '', product_id: '', variety_id: '', calibre: '', color: '',
     brix_grade: '>13', boxes: '', pallets: '', estimated_weight: '',
@@ -157,68 +156,110 @@ export default function AdminShipments() {
   };
 
   return (
-    <AdminLayout title="Logística" subtitle="Administración central de carga.">
+    <AdminLayout title="Logística" subtitle="Administración central de embarques y carga activa.">
       
       {toast && (
         <div className="toast-container">
-          <div className="toast-card"><CheckCircle size={18} color="#1f7a3a" /><span>{toast.msg}</span></div>
+          <div className="toast-card"><CheckCircle size={18} color="#16a34a" /><span>{toast.msg}</span></div>
         </div>
       )}
 
-      {/* HEADER ACTIONS */}
-      <div className="stats-bar">
-        <div className="stat-card action" onClick={() => setShowModal(true)}>
-          <div className="card-icon green"><Plus size={20} /></div>
-          <div><p className="card-label">NUEVA CARGA</p><p className="card-val"><b>Crear Embarque</b></p></div>
-        </div>
-        <div className="stat-card">
-          <div className="card-icon blue"><LayoutGrid size={20} /></div>
-          <div><p className="card-label">SISTEMA</p><p className="card-val"><b>{items.length}</b> Embarques</p></div>
-        </div>
-      </div>
-
-      {/* FILTER BAR */}
-      <div className="filter-area">
-        <div className="search-pill">
-          <Search size={18} />
-          <input type="text" placeholder="Buscar por código o cliente..." value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-        <button className="sort-pill" onClick={() => setDir(dir === "asc" ? "desc" : "asc")}>
-          <ArrowUpDown size={14} /> <span>{dir === 'desc' ? 'Recientes' : 'Antiguos'}</span>
-        </button>
-      </div>
-
-      {/* LIST */}
-      <div className="list-stack">
-        {loadingList ? <div className="loading-state">Cargando logística...</div> : 
-          items.map((s) => (
-          <div key={s.id} className="s-row" onClick={() => router.push(`/admin/shipments/${s.id}`)}>
-            <div className="s-col-info">
-              <div className={`mode-ico ${s.product_mode === 'Aérea' ? 'air' : 'sea'}`}>
-                {s.product_mode === 'Aérea' ? <Plane size={16} /> : <Ship size={16} />}
-              </div>
-              <div className="id-txt">
-                <span className="code">{s.code || 'S/REF'}</span>
-                <span className="client">{s.client_name}</span>
-              </div>
-            </div>
-            <div className="s-col-meta">
-              <div className="meta-item"><MapPin size={12} /> {s.destination}</div>
-              <div className="meta-item gray"><Calendar size={12} /> {fmtDate(s.created_at)}</div>
-            </div>
-            <div className="s-col-prod">
-              <span className="p-n">{s.product_name}</span>
-              <span className="p-v">{s.product_variety}</span>
-            </div>
-            <div className="s-col-stat">
-              <StatusPill status={s.status} />
-              <ChevronRight size={18} className="chevron" />
-            </div>
+      {/* 1. HEADER: 4 GRIDS (CLON DE QUOTES) */}
+      <div className="statsGrid">
+        <div className="statCard action" onClick={() => setShowModal(true)}>
+          <div className="iconBox green"><PlusCircle size={18} strokeWidth={1.5} /></div>
+          <div className="statInfo">
+            <span className="statValueAction">Nuevo Embarque</span>
           </div>
-        ))}
+        </div>
+        <div className="statCard">
+          <div className="iconBox blue"><LayoutGrid size={18} strokeWidth={1.5} /></div>
+          <div className="statInfo">
+            <span className="statLabel">TOTAL ACTIVOS</span>
+            <span className="statValue">{items.length}</span>
+          </div>
+        </div>
+        <div className="statCard">
+          <div className="iconBox orange"><Truck size={18} strokeWidth={1.5} /></div>
+          <div className="statInfo">
+            <span className="statLabel">EN TRÁNSITO</span>
+            <span className="statValue">{items.filter(i => i.status?.includes('TRANSIT')).length}</span>
+          </div>
+        </div>
+        <div className="statCard">
+          <div className="iconBox slate"><TrendingUp size={18} strokeWidth={1.5} /></div>
+          <div className="statInfo">
+            <span className="statLabel">KPI MES</span>
+            <span className="statValue">Operativo</span>
+          </div>
+        </div>
       </div>
 
-      {/* POPUP MODAL */}
+      <div className="mainCard">
+        {/* 2. TOOLBAR REFINADO */}
+        <div className="toolbar">
+          <div className="searchModern">
+            <Search size={16} className="searchIcon" strokeWidth={1.5} />
+            <input 
+              placeholder="Buscar por cliente, destino o # embarque..." 
+              value={q} 
+              onChange={e => setQ(e.target.value)} 
+            />
+          </div>
+          <button className="btnOutline" onClick={() => setDir(dir === 'asc' ? 'desc' : 'asc')}>
+            <SortAsc size={14} /> {dir === 'desc' ? 'Recientes' : 'Antiguos'}
+          </button>
+        </div>
+
+        {/* 3. LISTADO: 4 COLUMNAS */}
+        <div className="listContainer">
+          {loadingList ? (
+            <div className="loadingState">Cargando logística...</div>
+          ) : (
+            items.map((s: any) => (
+              <div key={s.id} className="rowWrapper" onClick={() => router.push(`/admin/shipments/${s.id}`)}>
+                <div className="rowGrid">
+                  
+                  {/* COL 1: IDENTIDAD */}
+                  <div className="colIdent">
+                    <div className="badgeLine">
+                      <span className="idBadge">{s.code || 'S/REF'}</span>
+                      <span className="techBadge">
+                        {s.product_mode === 'Aérea' ? <Plane size={10} strokeWidth={2} /> : <Ship size={10} strokeWidth={2} />}
+                        <span style={{ marginLeft: '4px' }}>{s.product_name || 'Carga'}</span>
+                      </span>
+                    </div>
+                    <span className="clientName">{s.client_name}</span>
+                  </div>
+
+                  {/* COL 2: LOGÍSTICA (RUTA) */}
+                  <div className="colLogis">
+                    <div className="routeLine">
+                      <span className="city">PTY</span>
+                      <span className="arrow">→</span>
+                      <span className="city">{s.destination}</span>
+                    </div>
+                  </div>
+
+                  {/* COL 3: FECHA / INFO */}
+                  <div className="colMonto">
+                    <span className="dateText">{fmtDate(s.created_at)}</span>
+                  </div>
+
+                  {/* COL 4: STATUS */}
+                  <div className="colStatus">
+                    <StatusPill status={s.status} />
+                    <ChevronRight size={16} className="chevron" strokeWidth={1.5} />
+                  </div>
+
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* POPUP MODAL (Lógica intacta, solo ajuste leve de espaciado) */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -231,7 +272,6 @@ export default function AdminShipments() {
             </header>
 
             <form onSubmit={handleCreate} className="modal-form">
-              
               <section className="form-section">
                 <h3><Users size={16} /> DATOS DEL CLIENTE</h3>
                 <div className="input-group full-width">
@@ -244,7 +284,7 @@ export default function AdminShipments() {
               </section>
 
               <section className="form-section">
-                <h3><Package size={16} /> ESPECIFICACIONES DE PRODUCTO</h3>
+                <h3><Package size={16} /> ESPECIFICACIONES</h3>
                 <div className="grid-2">
                   <div className="input-group">
                     <label>Producto</label>
@@ -263,8 +303,8 @@ export default function AdminShipments() {
                 </div>
 
                 <div className="grid-3">
-                  <div className="input-group"><label><Hash size={12}/> Calibre</label><input type="text" placeholder="Ej: 5" value={formData.calibre} onChange={e => setFormData({...formData, calibre: e.target.value})} /></div>
-                  <div className="input-group"><label><Palette size={12}/> Color</label><input type="text" placeholder="Ej: 2.5" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} /></div>
+                  <div className="input-group"><label><Hash size={12}/> Calibre</label><input type="text" value={formData.calibre} onChange={e => setFormData({...formData, calibre: e.target.value})} /></div>
+                  <div className="input-group"><label><Palette size={12}/> Color</label><input type="text" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} /></div>
                   <div className="input-group"><label><ThermometerSun size={12}/> Brix</label><input type="text" value={formData.brix_grade} onChange={e => setFormData({...formData, brix_grade: e.target.value})} /></div>
                 </div>
 
@@ -279,7 +319,7 @@ export default function AdminShipments() {
                 <h3><Globe size={16} /> HUB LOGÍSTICO</h3>
                 <div className="logistic-grid">
                   <div className="input-group">
-                    <label>Modalidad de Envío</label>
+                    <label>Modalidad</label>
                     <div className="mode-selector">
                       <button type="button" className={mode === 'Marítima' ? 'active' : ''} onClick={() => setMode('Marítima')}><Anchor size={16} /> Marítima</button>
                       <button type="button" className={mode === 'Aérea' ? 'active' : ''} onClick={() => setMode('Aérea')}><Plane size={16} /> Aérea</button>
@@ -315,77 +355,73 @@ export default function AdminShipments() {
       )}
 
       <style jsx>{`
-        .toast-container { position: fixed; top: 24px; right: 24px; z-index: 3000; animation: slideIn 0.3s ease; }
-        .toast-card { background: white; padding: 12px 24px; border-radius: 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); border-left: 5px solid #1f7a3a; font-weight: 700; color: #1e293b; }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        /* --- ESTILOS MAESTROS (Fieles a Quotes) --- */
+        .statsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .statCard { background: white; padding: 16px; border-radius: 12px; border: 1px solid #f1f5f9; display: flex; align-items: center; gap: 12px; }
+        .statCard.action { border: 1px solid #dcfce7; cursor: pointer; transition: 0.2s; gap: 16px; }
+        .statCard.action:hover { background: #f0fdf4; border-color: #86efac; transform: translateY(-1px); }
+        
+        .iconBox { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; }
+        .iconBox.green { background: #f0fdf4; color: #16a34a; }
+        .iconBox.blue { background: #eff6ff; color: #3b82f6; }
+        .iconBox.orange { background: #fff7ed; color: #ea580c; }
+        .iconBox.slate { background: #f8fafc; color: #64748b; }
 
-        .stats-bar { display: grid; grid-template-columns: repeat(2, 280px); gap: 16px; margin-bottom: 32px; }
-        .stat-card { background: white; padding: 18px; border-radius: 18px; display: flex; align-items: center; gap: 16px; border: 1px solid #f1f5f9; cursor: pointer; transition: 0.2s; }
-        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
-        .stat-card.action { background: #1f7a3a; color: white; border: none; }
-        .card-icon { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; }
-        .card-icon.green { background: rgba(255,255,255,0.2); }
-        .card-icon.blue { background: #eff6ff; color: #2563eb; }
-        .card-label { font-size: 10px; font-weight: 800; color: #94a3b8; margin: 0; }
-        .action .card-label { color: rgba(255,255,255,0.7); }
-        .card-val { font-size: 15px; margin: 0; }
+        .statLabel { font-size: 10px; font-weight: 500; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+        .statValue { font-size: 16px; font-weight: 500; color: #1e293b; display: block; }
+        .statValueAction { font-size: 14px; font-weight: 500; color: #16a34a; letter-spacing: -0.01em; }
 
-        .filter-area { display: flex; gap: 12px; margin-bottom: 24px; }
-        .search-pill { flex: 1; display: flex; align-items: center; gap: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 0 18px; height: 50px; }
-        .search-pill input { border: none; outline: none; width: 100%; font-size: 14px; }
-        .sort-pill { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 0 18px; height: 50px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .mainCard { background: white; border-radius: 16px; border: 1px solid #f1f5f9; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); }
+        .toolbar { padding: 16px 24px; display: flex; justify-content: space-between; border-bottom: 1px solid #f8fafc; }
+        
+        .searchModern { position: relative; display: flex; align-items: center; width: 380px; }
+        .searchIcon { position: absolute; left: 14px; color: #94a3b8; pointer-events: none; z-index: 10; }
+        .searchModern input { width: 100%; padding: 10px 16px 10px 40px; border-radius: 12px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 13.5px; outline: none; transition: 0.2s; }
+        .searchModern input:focus { background: white; border-color: #cbd5e1; }
 
-        .list-stack { display: flex; flex-direction: column; gap: 10px; }
-        .s-row { background: white; border: 1px solid #f1f5f9; border-radius: 16px; padding: 18px 24px; display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; align-items: center; cursor: pointer; transition: 0.2s; }
-        .s-row:hover { border-color: #1f7a3a; box-shadow: 0 4px 20px rgba(0,0,0,0.04); }
-        .status-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+        .btnOutline { background: white; border: 1px solid #f1f5f9; padding: 8px 14px; border-radius: 10px; font-size: 12px; font-weight: 500; color: #64748b; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+
+        .listContainer { padding: 8px 0; }
+        .rowWrapper { padding: 0 24px; cursor: pointer; transition: 0.1s; border-bottom: 1px solid #f8fafc; }
+        .rowWrapper:hover { background: #fbfcfe; }
+        .rowGrid { display: grid; grid-template-columns: 240px 1fr 140px 140px; align-items: center; padding: 14px 0; }
+
+        .badgeLine { display: flex; gap: 6px; margin-bottom: 4px; }
+        .idBadge { background: #f8fafc; color: #64748b; font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 5px; }
+        .techBadge { background: #f0fdf4; color: #16a34a; font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 5px; display: flex; align-items: center; gap: 4px; }
+        
+        .clientName { font-size: 13.5px; font-weight: 400; color: #1e293b; }
+        .routeLine { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #475569; }
+        .arrow { color: #cbd5e1; }
+        .colMonto { text-align: right; }
+        .dateText { color: #64748b; font-size: 13px; font-weight: 400; }
+        .colStatus { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+        .status-pill-modern { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
         .pill-green { background: #f0fdf4; color: #166534; }
         .pill-blue { background: #eff6ff; color: #1e40af; }
         .pill-gray { background: #f8fafc; color: #475569; }
 
-        /* MODAL OPTIMIZADO */
-        .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 20px; }
-        .modal-content { background: white; width: 600px; border-radius: 28px; max-height: 95vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
-        .modal-header { padding: 32px 40px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: flex-start; }
-        .header-info h2 { margin: 0; font-size: 22px; font-weight: 900; color: #0f172a; }
-        .id-badge { display: inline-block; background: #f0fdf4; color: #166534; padding: 5px 12px; border-radius: 8px; font-family: monospace; font-size: 11px; font-weight: 800; border: 1px solid #dcfce7; margin-top: 10px; }
-        .modal-form { padding: 40px; background: #fcfcfd; }
-        .form-section { margin-bottom: 35px; }
-        .form-section h3 { font-size: 11px; color: #1f7a3a; letter-spacing: 0.12em; margin-bottom: 22px; font-weight: 900; display: flex; align-items: center; gap: 10px; border-left: 4px solid #1f7a3a; padding-left: 12px; }
-        
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
-        .logistic-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-        
-        .input-group label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; color: #64748b; margin-bottom: 8px; text-transform: uppercase; }
-        
-        /* UNIFICACIÓN DE INPUTS Y SELECTS */
-        input, select, .mode-selector { 
-          width: 100%; 
-          box-sizing: border-box; 
-          height: 46px; /* Altura unificada */
-          border: 1.5px solid #e2e8f0; 
-          border-radius: 12px; 
-          font-size: 14px; 
-          color: #0f172a; 
-          background: white; 
-          padding: 0 14px;
-        }
-        
-        input:focus, select:focus { border-color: #1f7a3a; outline: none; box-shadow: 0 0 0 3px rgba(31,122,58,0.05); }
-        
-        /* MODE SELECTOR CONSISTENCIA */
-        .mode-selector { display: flex; background: #f1f5f9; padding: 4px; border: none; height: 48px; }
-        .mode-selector button { 
-          flex: 1; border: none; border-radius: 10px; font-size: 12px; font-weight: 800; 
-          cursor: pointer; display: flex; align-items: center; justify-content: center; 
-          gap: 8px; color: #64748b; background: transparent; transition: 0.2s; 
-        }
-        .mode-selector button.active { background: white; color: #1f7a3a; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-        
-        .modal-footer { display: flex; gap: 15px; margin-top: 25px; }
-        .btn-submit { flex: 2; background: #1f7a3a; color: white; border: none; padding: 16px; border-radius: 14px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 12px; }
-        .btn-abort { flex: 1; background: #f1f5f9; border: none; border-radius: 14px; color: #64748b; font-weight: 700; cursor: pointer; }
+        .loadingState { padding: 40px; text-align: center; color: #94a3b8; font-size: 13px; }
+        .toast-container { position: fixed; top: 24px; right: 24px; z-index: 3000; }
+        .toast-card { background: white; padding: 12px 24px; border-radius: 14px; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+
+        /* MODAL (Mínimo ajuste estético) */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 20px; }
+        .modal-content { background: white; width: 600px; border-radius: 20px; max-height: 90vh; overflow-y: auto; }
+        .modal-header { padding: 24px 32px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; }
+        .modal-form { padding: 32px; }
+        .form-section { margin-bottom: 24px; }
+        .form-section h3 { font-size: 11px; color: #16a34a; letter-spacing: 0.1em; margin-bottom: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .input-group label { display: block; font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 6px; }
+        input, select { width: 100%; height: 40px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0 12px; font-size: 14px; }
+        .mode-selector { display: flex; background: #f8fafc; padding: 4px; border-radius: 8px; }
+        .mode-selector button { flex: 1; border: none; padding: 8px; border-radius: 6px; font-size: 12px; cursor: pointer; background: transparent; color: #64748b; }
+        .mode-selector button.active { background: white; color: #16a34a; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .modal-footer { display: flex; gap: 12px; margin-top: 24px; }
+        .btn-submit { flex: 2; background: #16a34a; color: white; border: none; height: 48px; border-radius: 10px; font-weight: 600; cursor: pointer; }
+        .btn-abort { flex: 1; background: #f1f5f9; border: none; border-radius: 10px; color: #64748b; cursor: pointer; }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
