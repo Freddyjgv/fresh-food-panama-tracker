@@ -688,8 +688,7 @@ export default function AdminShipmentDetail() {
   .meta { font-size: 12px; color: var(--ff-muted); margin-top: 4px; }
   .sectionTitle { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 13px; text-transform: uppercase; letter-spacing: 0.03em; }
   .lbl { display: block; font-size: 11px; font-weight: 900; color: var(--ff-muted); margin-bottom: 6px; text-transform: uppercase; }
-  .action-btn.delete { background: #fff1f2; color: #e11d48; }
-  .overlay-btn.del { background: #e11d48; }
+
 
   /* --- FORMULARIO E INPUTS --- */
   .in2 {
