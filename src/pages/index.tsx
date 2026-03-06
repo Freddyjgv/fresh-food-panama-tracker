@@ -41,8 +41,11 @@ export default function ShipmentsPage() {
 
   useEffect(() => { fetchShipments(); }, [destination]);
 
-  return (
-    <ClientLayout title="Mis Embarques" subtitle="Panel de control logístico" wide>
+    return (
+    <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh', padding: '40px' }}>
+      {/* QUITAMOS EL CLIENT LAYOUT PARA PROBAR 
+         Si aquí se ve bien, el problema es ClientLayout.tsx
+      */}
       <div className="ff-viewport">
         
         {/* TOOLBAR REFINADA */}
