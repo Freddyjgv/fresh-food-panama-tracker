@@ -256,120 +256,71 @@ export default function AdminQuotesIndex() {
       </div>
 
       <style jsx>{`
-        .rowMainLayout {
-          display: grid;
-          grid-template-columns: 240px 1fr 200px; 
-          align-items: center;
-          width: 100%;
-          padding: 8px 0;
-          gap: 20px;
-        }
+        /* 1. LAYOUT GENERAL Y WRAPPERS */
+.statsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
+.statCard { background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.iconBox { padding: 10px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+.iconBox.blue { background: #eff6ff; color: #3b82f6; }
+.iconBox.green { background: #f0fdf4; color: #16a34a; }
+.iconBox.slate { background: #f8fafc; color: #64748b; }
+.statLabel { font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+.statValue { font-size: 20px; font-weight: 900; color: #1e293b; display: block; margin-top: 2px; }
 
-        .leftBlock {
-          text-align: left;
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
+.mainCard { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); overflow: hidden; }
+.cardHeader { padding: 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; }
+.sectionTitle { font-size: 18px; font-weight: 900; color: #1e293b; margin: 0; }
+.sectionSub { font-size: 13px; color: #64748b; margin-top: 2px; }
 
-        .quoteIdBadge {
-          background-color: #f1f5f9;
-          color: #64748b;
-          font-size: 10px;
-          font-weight: 700;
-          padding: 2px 8px;
-          border-radius: 6px;
-          width: fit-content;
-          text-transform: uppercase;
-        }
+/* 2. TOOLBAR Y BUSCADOR */
+.toolbar { padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; background: #fcfcfd; border-bottom: 1px solid #f1f5f9; }
+.filterSide { display: flex; align-items: center; gap: 12px; flex: 1; }
+.selectModern { padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 13px; font-weight: 700; color: #475569; outline: none; cursor: pointer; background: white; }
+.searchModern { position: relative; flex: 1; max-width: 350px; }
+.searchIcon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+.searchModern input { width: 100%; padding: 9px 12px 9px 38px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 13px; outline: none; }
+.searchModern input:focus { border-color: #16a34a; }
 
-        .clientName { 
-          font-weight: 700; 
-          color: #0f172a; 
-          font-size: 15px; 
-        }
+.btnNewPrimary { background: #16a34a; color: white; padding: 10px 20px; border-radius: 10px; font-weight: 800; font-size: 13px; display: flex; align-items: center; gap: 8px; text-decoration: none; transition: 0.2s; }
+.toggleGroup { display: flex; background: #f1f5f9; padding: 4px; border-radius: 10px; gap: 4px; }
+.toggleGroup button { border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 6px; color: #64748b; background: transparent; }
+.toggleGroup button.active { background: white; color: #1e293b; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 
-        .centerBlock {
-          text-align: center;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
+/* 3. FILAS DEL LISTADO (Las correcciones que pediste) */
+.listContainer { padding: 20px 24px; display: grid; gap: 12px; }
 
-        .routeWithFlag {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 14px;
-          font-weight: 600;
-          color: #334155;
-        }
+.rowMainLayout {
+  display: grid;
+  grid-template-columns: 240px 1fr 200px; 
+  align-items: center;
+  width: 100%;
+}
 
-        .originText { color: #94a3b8; }
-        .routeArrow { color: #cbd5e1; }
+.leftBlock { display: flex; flex-direction: column; text-align: left; }
+.quoteIdBadge { 
+  background-color: #f1f5f9; color: #64748b; 
+  font-size: 10px; font-weight: 700; padding: 2px 8px; 
+  border-radius: 6px; width: fit-content; margin-bottom: 4px; 
+}
+.clientName { font-weight: 700; color: #0f172a; font-size: 15px; }
 
-        .metaInfoGreyed {
-          display: flex;
-          gap: 8px;
-          font-size: 11px;
-          color: #94a3b8; /* El efecto greyed out */
-          font-weight: 400;
-          margin-top: 4px;
-        }
+.centerBlock { text-align: center; display: flex; flex-direction: column; align-items: center; }
+.routeWithFlag { 
+  display: flex; align-items: center; gap: 8px; 
+  font-size: 14px; font-weight: 400; color: #475569; /* SIN NEGRITA */
+}
+.originText { color: #94a3b8; }
+.routeArrow { color: #cbd5e1; }
+.metaInfoGreyed { 
+  display: flex; gap: 8px; font-size: 11px; 
+  color: #94a3b8; font-weight: 400; margin-top: 4px; /* GREYED OUT */
+}
 
-        .rightBlock {
-          display: flex;
-          align-items: center;
-          justify-content: flex-end;
-          gap: 15px;
-        }
+.rightBlock { display: flex; align-items: center; justify-content: flex-end; gap: 15px; }
+.priceContainerVertical { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.totalAmountBig { color: #10b981; font-weight: 800; font-size: 17px; }
+.actionArrow { color: #cbd5e1; }
 
-        .priceContainerVertical {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          gap: 4px;
-        }
-
-        .totalAmountBig {
-          color: #10b981;
-          font-weight: 800;
-          font-size: 16px;
-        }
-
-        .actionArrow { color: #cbd5e1; }
-
-        /* Resto de estilos del Dashboard */
-        .statsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
-        .statCard { background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 15px; }
-        .iconBox { padding: 10px; border-radius: 12px; }
-        .iconBox.blue { background: #eff6ff; color: #3b82f6; }
-        .iconBox.green { background: #f0fdf4; color: #16a34a; }
-        .iconBox.slate { background: #f8fafc; color: #64748b; }
-        .statLabel { font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; }
-        .statValue { font-size: 20px; font-weight: 900; color: #1e293b; }
-
-        .mainCard { background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }
-        .cardHeader { padding: 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; }
-        .sectionTitle { font-size: 18px; font-weight: 900; color: #1e293b; }
-        
-        .btnNewPrimary { background: #16a34a; color: white; padding: 10px 20px; border-radius: 10px; font-weight: 800; text-decoration: none; display: flex; gap: 8px; align-items: center; }
-        
-        .toolbar { padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; background: #fcfcfd; border-bottom: 1px solid #f1f5f9; }
-        .filterSide { display: flex; gap: 12px; flex: 1; }
-        .selectModern { padding: 8px; border-radius: 8px; border: 1px solid #e2e8f0; font-weight: 700; }
-        .searchModern { position: relative; flex: 1; max-width: 350px; }
-        .searchModern input { width: 100%; padding: 8px 8px 8px 35px; border-radius: 8px; border: 1px solid #e2e8f0; }
-        .searchIcon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); }
-
-        .toggleGroup { display: flex; background: #f1f5f9; padding: 4px; border-radius: 10px; }
-        .toggleGroup button { border: none; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 800; color: #64748b; background: transparent; }
-        .toggleGroup button.active { background: white; color: #1e293b; }
-
-        .listContainer { padding: 20px 24px; display: grid; gap: 12px; }
-        .statusPill { font-size: 10px; font-weight: 900; text-transform: uppercase; border-radius: 6px; border: 1px solid; padding: 2px 8px; }
-        .loadingState { padding: 40px; text-align: center; color: #64748b; font-weight: 600; }
-      `}</style>
-    </AdminLayout>
-  );
+.statusPill { 
+  font-size: 10px; font-weight: 900; text-transform: uppercase; 
+  border-radius: 12px; border: 1px solid; padding: 2px 8px; 
 }
