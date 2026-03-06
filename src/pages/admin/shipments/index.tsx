@@ -166,7 +166,7 @@ export default function AdminShipments() {
 
       {/* 1. HEADER: 4 GRIDS (CLON DE QUOTES) */}
       <div className="statsGrid">
-       <div className="statCard action" onClick={() => setShowModal(true)}>
+       <div className="statCard action" onClick={() => setShowModal(true)} style={{ cursor: 'pointer', position: 'relative', zIndex: 999 }}>
         <div className="iconBox green">
         <PlusCircle size={18} strokeWidth={1.5} />
         </div>
@@ -291,7 +291,9 @@ export default function AdminShipments() {
               onChange={e => setFormData({...formData, client_id: e.target.value})}
             >
               <option value="">Selecciona un cliente...</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {clients?.map(c => (
+  <option key={c.id} value={c.id}>{c.name}</option>
+)) || <option disabled>Cargando clientes...</option>}
             </select>
           </div>
         </section>
@@ -308,14 +310,18 @@ export default function AdminShipments() {
               <label>Producto</label>
               <select required value={formData.product_id} onChange={e => setFormData({...formData, product_id: e.target.value, variety_id: ''})}>
                 <option value="">Producto...</option>
-                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+               {products?.map(p => (
+  <option key={p.id} value={p.id}>{p.name}</option>
+)) || <option disabled>Cargando productos...</option>}
               </select>
             </div>
             <div className="input-group">
               <label>Variedad</label>
               <select required disabled={!formData.product_id} value={formData.variety_id} onChange={e => setFormData({...formData, variety_id: e.target.value})}>
                 <option value="">Variedad...</option>
-                {filteredVarieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                {filteredVarieties?.map(v => (
+  <option key={v.id} value={v.id}>{v.name}</option>
+)) || <option disabled>Selecciona un producto primero</option>}
               </select>
             </div>
           </div>
