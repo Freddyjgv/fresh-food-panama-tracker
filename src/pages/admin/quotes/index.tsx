@@ -324,3 +324,7 @@ export default function AdminQuotesIndex() {
   font-size: 10px; font-weight: 900; text-transform: uppercase; 
   border-radius: 12px; border: 1px solid; padding: 2px 8px; 
 }
+      `}</style>
+    </AdminLayout>
+  );
+}
