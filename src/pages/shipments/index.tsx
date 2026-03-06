@@ -241,113 +241,172 @@ export default function ShipmentsPage() {
         </div>
       </div>
 
-      {/* ✅ estilos SOLO para esta página, sin tocar el global */}
+{/* ✅ ADN VISUAL REFINADO: Peso Tipográfico Ajustado para Elegancia */}
       <style jsx>{`
         .ff-client-shell {
           width: 100%;
-          max-width: 100%;
-          margin: 0; /* 🔥 evita “centrado” */
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 0 20px;
         }
 
+        /* 1. Toolbar & Filtros con profundidad */
         .ff-toolbar {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
+          gap: 16px;
           flex-wrap: wrap;
+          padding: 4px 0;
         }
 
         .ff-toolbar__left {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 12px;
           flex: 1 1 auto;
-          min-width: 260px;
-          flex-wrap: wrap;
-        }
-
-        .ff-toolbar__right {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          flex: 0 0 auto;
-          flex-wrap: wrap;
+          min-width: 280px;
         }
 
         .ff-field {
           display: flex;
           align-items: center;
-          gap: 8px;
-          flex: 0 0 auto;
+          gap: 10px;
+          position: relative;
         }
 
-        .ff-field--grow {
-          flex: 1 1 420px;
-          min-width: 260px;
-        }
-
-        /* Inputs de la toolbar más compactos */
         :global(.ff-field .ff-input) {
-          height: 34px;
-        }
-        :global(.ff-field select.ff-input) {
-          min-width: 220px;
-        }
-        :global(.ff-field--grow .ff-input) {
-          width: 100%;
-        }
-        :global(.ff-btn) {
-          height: 34px;
+          height: 40px; /* Un poco más compacto */
+          border: 1px solid #e2e8f0; /* Borde más sutil */
+          border-radius: 10px; /* Bordes más suaves */
+          padding: 0 12px 0 36px;
+          background: #ffffff;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.03); /* Sombra aún más suave */
+          transition: all 0.2s ease;
+          font-size: 0.9rem;
         }
 
+        :global(.ff-field .ff-input:focus) {
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+          outline: none;
+        }
+
+        :global(.ff-field svg) {
+          position: absolute;
+          left: 12px;
+          z-index: 10;
+        }
+
+        /* 2. Listado de Embarques (Cards del ADN Visual) */
         .ff-list {
           display: grid;
-          gap: 8px;
+          gap: 12px; /* Espacio más compacto entre cards */
+          margin-top: 8px;
         }
 
         .ff-listItem {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
-          padding: 10px;
-          border: 1px solid var(--ff-border);
-          border-radius: var(--ff-radius);
-          background: var(--ff-surface);
+          padding: 16px 20px; /* Padding más refinado */
+          border: 1px solid #f1f5f9;
+          border-radius: 14px; /* Un poco menos redondeado */
+          background: #ffffff;
           text-decoration: none;
+          /* Sombra sutil de elevación */
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.03);
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .ff-listItem:hover {
+          transform: translateY(-2px); /* Elevación más sutil */
+          box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.06), 0 3px 6px -3px rgba(0, 0, 0, 0.04);
+          border-color: #bfdbfe; /* Borde azul muy claro */
         }
 
         .ff-listItem__left {
           display: flex;
           align-items: center;
-          gap: 10px;
-          min-width: 0;
+          gap: 16px; /* Espacio más compacto */
         }
 
+        /* Icono de Paquete con Soft Background */
         .ff-ico {
-          width: 30px;
-          height: 30px;
-          border-radius: 8px;
-          background: rgba(39, 118, 50, 0.1);
-          border: 1px solid rgba(39, 118, 50, 0.18);
+          width: 38px; /* Un poco más compacto */
+          height: 38px;
+          border-radius: 10px;
+          background: #f0fdf4;
+          border: 1px solid #dcfce7;
           display: grid;
           place-items: center;
           flex: 0 0 auto;
         }
 
-        .ff-listItem__meta {
-          min-width: 0;
-        }
-
+        /* Título e ID de Embarque (Peso 700 para Elegancia) */
         .ff-listItem__title {
-          font-weight: 850;
-          line-height: 18px;
+          font-size: 1.1rem; /* Ligeramente más pequeña */
+          font-weight: 700; /* Negrita estándar, refinada (ADN Admin) */
+          color: #1e293b; /* Gris slate oscuro */
+          letter-spacing: -0.01em;
+          margin-bottom: 1px;
         }
 
-        @media (max-width: 820px) {
-          .ff-toolbar__right {
-            width: 100%;
-            justify-content: flex-start;
+        .ff-sub {
+          font-size: 0.85rem; /* Un poco más pequeña */
+          color: #64748b;
+          font-weight: 500;
+        }
+
+        /* 3. Badges "Soft Pill" */
+        :global(.status-badge) {
+          padding: 5px 12px;
+          border-radius: 100px;
+          font-size: 0.7rem; /* Un poco más compacta */
+          font-weight: 700; /* Negrita estándar */
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+          border: 1px solid transparent;
+        }
+
+        /* Colores basados en tu shipmentFlow.ts (Mismo esquema visual) */
+        :global(.bg-blue-100) { background: #eff6ff !important; color: #1e40af !important; border-color: #dbeafe !important; }
+        :global(.bg-green-100) { background: #f0fdf4 !important; color: #166534 !important; border-color: #dcfce7 !important; }
+        :global(.bg-yellow-100) { background: #fffbeb !important; color: #92400e !important; border-color: #fef3c7 !important; }
+
+        /* 4. Paginación y Footer */
+        .ff-spread {
+          margin-top: 20px;
+          padding: 14px;
+          border-radius: 10px;
+          background: #f8fafc;
+        }
+
+        :global(.ff-btn) {
+          height: 36px; /* Botones más compactos */
+          border-radius: 9px;
+          font-weight: 600;
+        }
+
+        :global(.ff-btn-primary) {
+          background: #1e293b; /* Gris slate muy oscuro (ADN Admin) */
+          color: white;
+          padding: 0 18px;
+        }
+
+        :global(.ff-btn-ghost) {
+          color: #475569;
+          padding: 0 10px;
+        }
+
+        @media (max-width: 768px) {
+          .ff-listItem {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 10px;
+          }
+          :global(.status-badge) {
+            align-self: flex-start;
           }
         }
       `}</style>
