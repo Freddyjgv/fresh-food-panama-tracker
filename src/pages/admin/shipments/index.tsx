@@ -313,57 +313,94 @@ export default function AdminShipments() {
 
       {/* 4. CSS MAESTRO - Dashboard + Modal */}
       <style jsx>{`
-        .statsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
-        .statCard { background: white; padding: 16px; border-radius: 12px; border: 1px solid #f1f5f9; display: flex; align-items: center; gap: 12px; }
-        .statCard.action { border: 1px solid #dcfce7; cursor: pointer; transition: 0.2s; }
-        .statCard.action:hover { background: #f0fdf4; border-color: #86efac; transform: translateY(-1px); }
-        .iconBox { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; }
-        .iconBox.green { background: #f0fdf4; color: #16a34a; }
-        .iconBox.blue { background: #eff6ff; color: #3b82f6; }
-        .iconBox.orange { background: #fff7ed; color: #ea580c; }
-        .iconBox.slate { background: #f8fafc; color: #64748b; }
-        .statLabel { font-size: 10px; font-weight: 500; color: #94a3b8; text-transform: uppercase; }
-        .statValue { font-size: 16px; font-weight: 600; color: #1e293b; }
-        .statValueAction { font-size: 14px; font-weight: 500; color: #16a34a; }
+  /* --- DASHBOARD & LAYOUT --- */
+  .statsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 28px; }
+  .statCard { 
+    background: white; padding: 20px; border-radius: 20px; 
+    border: 1px solid #f1f5f9; display: flex; align-items: center; gap: 16px; 
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+  }
+  .statCard.action { 
+    background: #16a34a; border: none; color: white; cursor: pointer; 
+    box-shadow: 0 10px 20px -5px rgba(22, 163, 74, 0.3); 
+  }
+  .statCard.action:hover { transform: translateY(-4px); background: #15803d; }
+  
+  .iconBox { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; }
+  .iconBox.green { background: rgba(255,255,255,0.2); color: white; }
+  .iconBox.blue { background: #eff6ff; color: #3b82f6; }
+  .iconBox.orange { background: #fff7ed; color: #f97316; }
+  .iconBox.slate { background: #f8fafc; color: #64748b; }
 
-        .mainCard { background: white; border-radius: 16px; border: 1px solid #f1f5f9; }
-        .toolbar { padding: 16px 24px; display: flex; justify-content: space-between; border-bottom: 1px solid #f8fafc; }
-        .searchModern { position: relative; width: 380px; display: flex; align-items: center; }
-        .searchIcon { position: absolute; left: 14px; color: #94a3b8; }
-        .searchModern input { width: 100%; padding: 10px 40px; border-radius: 12px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 13.5px; }
-        .btnOutline { background: white; border: 1px solid #f1f5f9; padding: 8px 14px; border-radius: 10px; font-size: 12px; color: #64748b; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-        
-        .rowWrapper { padding: 0 24px; cursor: pointer; border-bottom: 1px solid #f8fafc; }
-        .rowWrapper:hover { background: #fbfcfe; }
-        .rowGrid { display: grid; grid-template-columns: 240px 1fr 140px 140px; align-items: center; padding: 14px 0; }
-        .idBadge { background: #f8fafc; color: #64748b; font-size: 10px; padding: 2px 8px; border-radius: 5px; }
-        .techBadge { background: #f0fdf4; color: #16a34a; font-size: 10px; padding: 2px 8px; border-radius: 5px; display: flex; align-items: center; gap: 4px; }
-        .clientName { font-size: 13.5px; color: #1e293b; margin-top: 4px; display: block; }
-        .routeLine { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #475569; }
-        .status-pill-modern { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 600; }
-        .pill-green { background: #f0fdf4; color: #166534; }
-        .pill-blue { background: #eff6ff; color: #1e40af; }
+  /* --- TABLA / LISTADO PREMIUM --- */
+  .mainCard { background: white; border-radius: 24px; border: 1px solid #f1f5f9; box-shadow: 0 4px 20px rgba(0,0,0,0.03); overflow: hidden; }
+  .toolbar { padding: 20px 32px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f8fafc; }
+  
+  .searchModern { position: relative; width: 400px; }
+  .searchModern input { 
+    width: 100%; height: 44px; padding: 0 44px; 
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; 
+    font-size: 14px; transition: 0.2s;
+  }
+  .searchModern input:focus { background: white; border-color: #16a34a; box-shadow: 0 0 0 4px rgba(22,163,74,0.05); outline: none; }
+  .searchIcon { position: absolute; left: 16px; top: 14px; color: #94a3b8; }
 
-        .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-        .modal-content { background: white; width: 95%; max-width: 540px; max-height: 90vh; overflow-y: auto; border-radius: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.1); }
-        .modal-header { padding: 24px 32px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
-        .modal-title { font-size: 18px; font-weight: 600; color: #1e293b; margin: 0; }
-        .modal-form { padding: 32px; display: flex; flex-direction: column; gap: 24px; }
-        .form-section { display: flex; flex-direction: column; gap: 16px; }
-        .section-header { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: #16a34a; text-transform: uppercase; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-        .input-group label { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; display: block; }
-        input, select { width: 100%; height: 46px; padding: 0 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 14px; }
-        .mode-selector-clean { display: flex; background: #f1f5f9; padding: 4px; border-radius: 12px; gap: 4px; }
-        .mode-selector-clean button { flex: 1; height: 36px; border-radius: 8px; border: none; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; background: transparent; color: #64748b; transition: 0.2s; }
-        .mode-selector-clean button.active { background: white; color: #1e293b; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .btn-save { background: #16a34a; color: white; height: 48px; border-radius: 12px; font-weight: 600; border: none; cursor: pointer; flex: 2; }
-        .btn-cancel { background: #f8fafc; color: #64748b; height: 48px; border-radius: 12px; border: 1px solid #e2e8f0; cursor: pointer; flex: 1; }
-        .modal-footer-clean { display: flex; gap: 12px; padding-top: 16px; }
-        .spin { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
+  .rowWrapper { padding: 0 32px; cursor: pointer; transition: all 0.2s; }
+  .rowWrapper:hover { background: #fbfcfe; }
+  .rowGrid { display: grid; grid-template-columns: 260px 1fr 140px 160px; align-items: center; padding: 18px 0; border-bottom: 1px solid #f8fafc; }
+  .rowWrapper:last-child .rowGrid { border-bottom: none; }
+
+  .idBadge { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.02em; }
+  .techBadge { 
+    display: inline-flex; align-items: center; gap: 6px; 
+    padding: 3px 8px; border-radius: 8px; background: #f0fdf4; 
+    color: #16a34a; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  }
+  .clientName { display: block; font-size: 15px; font-weight: 600; color: #0f172a; margin-top: 6px; }
+  .routeLine { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: #475569; }
+  .arrow { color: #cbd5e1; font-weight: 300; }
+  .dateText { font-size: 13px; color: #94a3b8; font-weight: 500; }
+
+  /* --- STATUS PILLS MODERNIZADOS --- */
+  .status-pill-modern { 
+    display: inline-flex; align-items: center; gap: 6px; 
+    padding: 6px 12px; border-radius: 10px; font-size: 11px; font-weight: 700; 
+  }
+  .pill-green { background: #dcfce7; color: #166534; }
+  .pill-blue { background: #dbeafe; color: #1e40af; }
+  .pill-gray { background: #f1f5f9; color: #475569; }
+
+  /* --- EL MODAL (DISEÑO GLASSMORPHISM) --- */
+  .modal-overlay { 
+    position: fixed; inset: 0; background: rgba(15, 23, 42, 0.3); 
+    backdrop-filter: blur(12px); display: flex; align-items: center; justify-content: center; z-index: 9999;
+  }
+  .modal-content { 
+    background: white; width: 95%; max-width: 560px; max-height: 85vh; overflow-y: auto;
+    border-radius: 30px; box-shadow: 0 40px 80px -20px rgba(0,0,0,0.2); 
+    border: 1px solid rgba(255,255,255,0.7); animation: slideUp 0.4s ease;
+  }
+  .modal-header { padding: 40px 40px 20px; display: flex; justify-content: space-between; }
+  .modal-title { font-size: 24px; font-weight: 800; color: #0f172a; letter-spacing: -0.03em; }
+  .modal-form { padding: 0 40px 40px; display: flex; flex-direction: column; gap: 28px; }
+  .section-header { font-size: 11px; font-weight: 800; color: #16a34a; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  
+  input, select { 
+    width: 100%; height: 50px; padding: 0 18px; 
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; 
+    font-size: 14px; color: #1e293b; transition: all 0.2s;
+  }
+  input:focus, select:focus { background: white; border-color: #16a34a; box-shadow: 0 0 0 4px rgba(22,163,74,0.1); outline: none; }
+  
+  .btn-save { 
+    flex: 2; background: #16a34a; color: white; height: 56px; 
+    border-radius: 18px; font-weight: 700; border: none; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-save:hover { background: #15803d; transform: scale(1.02); }
+
+  @keyframes slideUp { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
+`}</style>
     </AdminLayout>
   );
 }
