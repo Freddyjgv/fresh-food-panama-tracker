@@ -205,42 +205,30 @@ export default function ShipmentDetailPage() {
 
           {/* DOCUMENTACIÓN Y FOTOS */}
           <div className="grid2">
-            {/* DOCUMENTOS */}
             <div className="ff-card ff-card-pad">
               <div className="sectionTitle"><FileText size={16} /> Documentos Oficiales</div>
               <div className="doc-list">
-                {data.documents && data.documents.length > 0 ? (
-                  data.documents.map((d) => (
-                    <div key={d.id} className="itemRow">
-                      <div className="itemTitle">{d.filename}</div>
-                      <button className="ff-btn ff-btn-ghost" onClick={() => download(d.id)}>
-                        <Download size={14}/> PDF
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <p className="ff-sub">No hay documentos disponibles aún.</p>
-                )}
+                {data.documents?.length ? data.documents.map(d => (
+                  <div key={d.id} className="itemRow">
+                    <div className="itemTitle">{d.filename}</div>
+                    <button className="ff-btn ff-btn-ghost" onClick={() => download(d.id)}><Download size={14}/> PDF</button>
+                  </div>
+                )) : <p className="ff-sub">No hay documentos disponibles aún.</p>}
               </div>
             </div>
 
-            {/* FOTOS */}
             <div className="ff-card ff-card-pad">
               <div className="sectionTitle"><ImageIcon size={16} /> Evidencia Fotográfica</div>
               <div className="photoGrid">
-                {data.photos && data.photos.length > 0 ? (
-                  data.photos.map((p) => (
-                    <div key={p.id} className="photoCard" onClick={() => download(p.id)}>
-                      <img src={p.url || ''} alt="evidencia" className="photoImg" />
-                      <div className="photoBody">
-                         <div className="photoTitle">{p.filename}</div>
-                         <div className="photoMeta">{fmtDate(p.created_at)}</div>
-                      </div>
+                {data.photos?.length ? data.photos.map(p => (
+                  <div key={p.id} className="photoCard" onClick={() => download(p.id)}>
+                    <img src={p.url || ''} alt="evidencia" className="photoImg" />
+                    <div className="photoBody">
+                       <div className="photoTitle">{p.filename}</div>
+                       <div className="photoMeta">{fmtDate(p.created_at)}</div>
                     </div>
-                  ))
-                ) : (
-                  <p className="ff-sub">Sin fotos de inspección registradas.</p>
-                )}
+                  </div>
+                )) : <p className="ff-sub">Sin fotos de inspección registradas.</p>}
               </div>
             </div>
           </div>
@@ -275,6 +263,11 @@ export default function ShipmentDetailPage() {
         .photoBody { padding: 8px; }
         .photoTitle { font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .photoMeta { font-size: 10px; color: #94a3b8; }
+        @media (max-width: 768px) {
+          .hero { flex-direction: column; align-items: flex-start; gap: 16px; }
+          .heroRight { justify-content: flex-start; }
+          .kpiRow { grid-template-columns: 1fr; }
+        }
       `}</style>
     </ClientLayout>
   );
