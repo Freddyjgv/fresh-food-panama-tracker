@@ -19,6 +19,9 @@ import {
   ArrowLeft,
   Info,
   Package,
+  PlusCircle,
+  CheckCircle,
+  Loader2
 } from "lucide-react";
 
 type ShipmentMilestone = {
@@ -397,268 +400,700 @@ export default function AdminShipmentDetail() {
     "—";
 
   return (
-    <AdminLayout title="Detalle Logístico" subtitle="Gestión de hitos y expedición documental">
-      
-      {/* 1. TOP BAR REFINADA */}
-      <div className="top-nav">
-        <Link href="/admin/shipments" className="back-link">
-          <ArrowLeft size={18} />
-          <span>Volver al listado</span>
+    <AdminLayout title="Detalle de embarque" subtitle="Acciones, hitos, documentos y fotos.">
+      {/* Top bar */}
+      <div className="ff-spread2" style={{ marginBottom: 12 }}>
+        <Link href="/admin/shipments" className="btnSmall">
+          <ArrowLeft size={16} />
+          Volver
         </Link>
-        <div className="top-badges">
-          {data?.flight_number && <span className="badge-modern blue">Vuelo: {data.flight_number}</span>}
-          {data?.awb && <span className="badge-modern blue">AWB: {data.awb}</span>}
-          {data && <span className="badge-status-master">{labelStatus(data.status)}</span>}
+
+        <div className="ff-row2" style={{ gap: 8 }}>
+          {data?.flight_number ? <span className="chip">Vuelo: {data.flight_number}</span> : null}
+          {data?.awb ? <span className="chip">AWB: {data.awb}</span> : null}
+          {data ? <span className="statusPill">{labelStatus(data.status)}</span> : null}
         </div>
       </div>
 
-      {toast && <div className="toast-floating">{toast}</div>}
-
-      {!authReady ? (
-        <div className="loading-state">Verificando seguridad...</div>
-      ) : loading ? (
-        <div className="loading-state">Sincronizando datos del embarque...</div>
-      ) : data ? (
-        <div className="detail-container">
-          
-          {/* 2. HEADER RESUMEN (HERO SECTION) */}
-          <header className="hero-header">
-            <div className="hero-content">
-              <div className="hero-icon"><Package size={24} /></div>
-              <div className="hero-text">
-                <h1 className="shipment-id">{data.code}</h1>
-                <p className="shipment-client">Cliente: <span>{clientName}</span> · {data.destination}</p>
-              </div>
-            </div>
-            <div className="hero-meta">
-              <div className="meta-item">
-                <span className="meta-label">CREADO EL</span>
-                <span className="meta-value">{fmtDT(data.created_at)}</span>
-              </div>
-            </div>
-          </header>
-
-          {/* 3. PANEL DE ACCIONES (CONTROL DE HITOS) */}
-          <section className="action-panel">
-            <div className="panel-header">
-              <div className="panel-info">
-                <h3>Panel de Expedición</h3>
-                <p>Actualiza el progreso del flujo logístico en tiempo real.</p>
-              </div>
-            </div>
-
-            <div className="action-inputs">
-              <div className="input-field">
-                <label>Notas del hito</label>
-                <input value={note} onChange={e => setNote(e.target.value)} placeholder="Observaciones de inspección..." />
-              </div>
-              <div className="input-field">
-                <label>Vuelo (Requerido para Tránsito)</label>
-                <input value={flight} onChange={e => setFlight(e.target.value)} placeholder="Ej: AA923" />
-              </div>
-              <div className="input-field">
-                <label>AWB</label>
-                <input value={awb} onChange={e => setAwb(e.target.value)} placeholder="000-00000000" />
-              </div>
-            </div>
-
-            <div className="milestone-buttons">
-              <button disabled={busy || !canMark("PACKED").ok} onClick={() => mark("PACKED")} className="btn-milestone">
-                <PackageCheck size={16} /> En Empaque
-              </button>
-              <button disabled={busy || !canMark("DOCS_READY").ok} onClick={() => mark("DOCS_READY")} className="btn-milestone">
-                <ClipboardCheck size={16} /> Docs Listos
-              </button>
-              <button disabled={busy || !canMark("AT_ORIGIN").ok} onClick={() => mark("AT_ORIGIN")} className="btn-milestone">
-                <MapPin size={16} /> En Origen
-              </button>
-              <button disabled={busy || !canMark("IN_TRANSIT").ok} onClick={() => mark("IN_TRANSIT")} className="btn-milestone">
-                <Plane size={16} /> En Tránsito
-              </button>
-              <button disabled={busy || !canMark("AT_DESTINATION").ok} onClick={() => mark("AT_DESTINATION")} className="btn-milestone primary">
-                <PackageCheck size={16} /> En Destino
-              </button>
-            </div>
-          </section>
-
-          {/* 4. GRID DE INFORMACIÓN Y TIMELINE */}
-          <div className="main-grid">
-            <aside className="info-sidebar">
-              <div className="glass-card">
-                <h4 className="card-title"><Info size={16} /> Detalles Técnicos</h4>
-                <div className="data-list">
-                  <div className="data-row"><span>Producto</span> <strong>{productShort(data)}</strong></div>
-                  <div className="data-row"><span>Cajas</span> <strong>{data.boxes || "-"}</strong></div>
-                  <div className="data-row"><span>Pallets</span> <strong>{data.pallets || "-"}</strong></div>
-                  <div className="data-row"><span>Peso</span> <strong>{data.weight_kg ? `${data.weight_kg}kg` : "-"}</strong></div>
-                </div>
-                
-                <div className="packing-inputs">
-                  <div className="field">
-                    <label>Calibre *</label>
-                    <input value={caliber} onChange={e => setCaliber(e.target.value)} placeholder="5-7" />
-                  </div>
-                  <div className="field">
-                    <label>Color *</label>
-                    <input value={color} onChange={e => setColor(e.target.value)} placeholder="2.5" />
-                  </div>
-                </div>
-              </div>
-            </aside>
-
-            <main className="timeline-main">
-              <div className="glass-card">
-                <h4 className="card-title">Línea de Tiempo</h4>
-                <ModernTimeline milestones={timelineItems as any} />
-              </div>
-            </main>
-          </div>
-
-          {/* 5. DOCUMENTOS Y FOTOS */}
-          <section className="files-section">
-            <div className="glass-card docs-card">
-              <h4 className="card-title"><FileText size={16} /> Documentación Oficial</h4>
-              <div className="doc-pill-grid">
-                {DOC_TYPES.map((t) => (
-                  <button 
-                    key={t.v} 
-                    className={`pill-btn ${docType === t.v ? 'active' : ''}`}
-                    onClick={() => setDocType(t.v)}
-                  >
-                    {t.l}
-                  </button>
-                ))}
-              </div>
-              <div className="upload-zone">
-                <input type="file" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload("doc", f); e.currentTarget.value = ""; }} />
-              </div>
-              
-              <div className="file-list">
-                {data.documents?.map(d => (
-                  <div key={d.id} className="file-item">
-                    <FileText size={18} className="file-icon" />
-                    <div className="file-info">
-                      <span className="file-name">{d.filename}</span>
-                      <span className="file-meta">{d.doc_type} · {fmtDT(d.created_at)}</span>
-                    </div>
-                    <button onClick={() => download(d.id)} className="download-btn"><Download size={16} /></button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="glass-card photos-card">
-              <h4 className="card-title"><ImageIcon size={16} /> Archivo Fotográfico</h4>
-              <div className="upload-zone">
-                <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload("photo", f); e.currentTarget.value = ""; }} />
-              </div>
-              <div className="photo-gallery">
-                {data.photos?.map(p => (
-                  <div key={p.id} className="photo-thumb">
-                    {p.url ? <img src={p.url} alt="Inspección" /> : <div className="no-img" />}
-                    <div className="photo-overlay">
-                      <button onClick={() => download(p.id)}><Download size={14} /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
+      {toast ? (
+        <div className="msgOk" style={{ marginBottom: 12 }}>
+          {toast}
         </div>
       ) : null}
 
+      <div className="ff-card2" style={{ padding: 12 }}>
+        {!authReady ? (
+          <div className="muted">Verificando permisos…</div>
+        ) : loading ? (
+          <div className="muted">Cargando…</div>
+        ) : error ? (
+          <div className="msgWarn">
+            <b>Error</b>
+            <div>{error}</div>
+          </div>
+        ) : data ? (
+          <>
+            {/* Header resumen */}
+            <div className="cardHead">
+              <div className="ff-spread2" style={{ alignItems: "flex-start" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="codeRow">
+                    <span className="codeIcon" aria-hidden="true">
+                      <Package size={16} color="var(--ff-green-dark)" />
+                    </span>
+
+                    <div style={{ minWidth: 0 }}>
+                      {/* 1) Numero de embarque */}
+                      <div className="code">{data.code}</div>
+
+                      {/* 2) Cliente debajo */}
+                      <div className="meta" style={{ marginTop: 2 }}>
+                        Cliente: <b>{clientName}</b>
+                      </div>
+
+                      {/* 3) Producto+Variedad - Modalidad */}
+                      <div className="meta" style={{ marginTop: 2 }}>
+                        <b>{productLine(data)}</b>
+                      </div>
+
+                      {/* 4) fecha creado */}
+                      <div className="meta" style={{ marginTop: 2 }}>
+                        Destino: <b>{data.destination}</b> · Creado: {fmtDT(data.created_at)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="ff-row2" style={{ gap: 8, justifyContent: "flex-end" }}>
+                  <span className="chipSoft">Estado: {labelStatus(data.status)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="ff-divider" />
+
+            {/* Acciones rápidas */}
+            <div className="ff-card2" style={{ padding: 12, background: "rgba(15,23,42,.02)" }}>
+              <div className="sectionTitle">Acciones rápidas</div>
+              <div className="muted" style={{ marginTop: 2 }}>
+                Los hitos avanzan en cadena. Para <b>En tránsito</b> el <b>Vuelo</b> es obligatorio. Para <b>En empaque</b>, <b>Calibre</b> y <b>Color</b> son obligatorios.
+              </div>
+
+              <div className="ff-divider" style={{ margin: "12px 0" }} />
+
+              <div className="row3" style={{ gridTemplateColumns: "1.2fr .9fr .9fr" }}>
+                <div>
+                  <label className="lbl">Nota (opcional)</label>
+                  <input
+                    className="in2"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Ej: Inspector aprobó packing / incidencia, etc."
+                  />
+                </div>
+
+                <div>
+                  <label className="lbl">Vuelo *</label>
+                  <input
+                    className="in2"
+                    value={flight}
+                    onChange={(e) => setFlight(e.target.value)}
+                    placeholder="Ej: IB1234"
+                  />
+                </div>
+
+                <div>
+                  <label className="lbl">AWB (opcional)</label>
+                  <input
+                    className="in2"
+                    value={awb}
+                    onChange={(e) => setAwb(e.target.value)}
+                    placeholder="Ej: 123-45678901"
+                  />
+                </div>
+              </div>
+
+              <div className="ff-divider" style={{ margin: "12px 0" }} />
+
+              <div className="actionsGrid">
+                <button
+                  className="ff-primary"
+                  type="button"
+                  disabled={busy || !canMark("PACKED").ok}
+                  onClick={() => mark("PACKED")}
+                  title={!canMark("PACKED").ok ? canMark("PACKED").reason : ""}
+                >
+                  <PackageCheck size={16} />
+                  En Empaque
+                </button>
+
+                <button
+                  className="ff-primary"
+                  type="button"
+                  disabled={busy || !canMark("DOCS_READY").ok}
+                  onClick={() => mark("DOCS_READY")}
+                  title={!canMark("DOCS_READY").ok ? canMark("DOCS_READY").reason : ""}
+                >
+                  <ClipboardCheck size={16} />
+                  Documentación lista
+                </button>
+
+                <button
+                  className="ff-primary"
+                  type="button"
+                  disabled={busy || !canMark("AT_ORIGIN").ok}
+                  onClick={() => mark("AT_ORIGIN")}
+                  title={!canMark("AT_ORIGIN").ok ? canMark("AT_ORIGIN").reason : ""}
+                >
+                  <MapPin size={16} />
+                  En Origen
+                </button>
+
+                <button
+                  className="ff-primary"
+                  type="button"
+                  disabled={busy || !canMark("IN_TRANSIT").ok}
+                  onClick={() => mark("IN_TRANSIT")}
+                  title={!canMark("IN_TRANSIT").ok ? canMark("IN_TRANSIT").reason : ""}
+                >
+                  <Plane size={16} />
+                  En tránsito
+                </button>
+
+                <button
+                  className="ff-primary"
+                  type="button"
+                  disabled={busy || !canMark("AT_DESTINATION").ok}
+                  onClick={() => mark("AT_DESTINATION")}
+                  title={!canMark("AT_DESTINATION").ok ? canMark("AT_DESTINATION").reason : ""}
+                >
+                  <PackageCheck size={16} />
+                  En Destino
+                </button>
+              </div>
+
+              {busy ? <div className="muted" style={{ marginTop: 10 }}>Procesando…</div> : null}
+            </div>
+
+            <div className="ff-divider" />
+
+            {/* Datos + Timeline */}
+            <div className="grid2">
+              <div className="ff-card2 soft">
+                <div className="sectionTitle">
+                  <Info size={16} /> Datos
+                </div>
+
+                <div className="kv"><span>Producto + Variedad</span><b>{productShort(data)}</b></div>
+                <div className="kv"><span>Cajas</span><b>{data.boxes ?? "-"}</b></div>
+                <div className="kv"><span>Pallets</span><b>{data.pallets ?? "-"}</b></div>
+                <div className="kv"><span>Peso total estimado</span><b>{data.weight_kg ? `${data.weight_kg} kg` : "-"}</b></div>
+
+                <div className="ff-divider" style={{ margin: "10px 0" }} />
+
+                <div className="row2">
+                  <div>
+                    <label className="lbl">Calibre * (obligatorio para En Empaque)</label>
+                    <input
+                      className="in2"
+                      value={caliber}
+                      onChange={(e) => setCaliber(e.target.value)}
+                      placeholder="Ej: 5-7"
+                    />
+                  </div>
+                  <div>
+                    <label className="lbl">Color * (obligatorio para En Empaque)</label>
+                    <input
+                      className="in2"
+                      value={color}
+                      onChange={(e) => setColor(e.target.value)}
+                      placeholder="Ej: 2.75 - 3"
+                    />
+                  </div>
+                </div>
+
+                <div className="muted" style={{ marginTop: 10 }}>
+                  * Se valida en UI para evitar errores operativos.
+                </div>
+              </div>
+
+              <div className="ff-card2">
+                <div className="sectionTitle">Hitos</div>
+                <ModernTimeline milestones={timelineItems as any} />
+              </div>
+            </div>
+
+            <div className="ff-divider" />
+
+            {/* Documentos */}
+            <section className="glass-card docs-section">
+  <div className="section-header-compact">
+    <div className="title-group">
+      <FileText size={18} className="text-green-600" />
+      <h4>Expediente Digital</h4>
+    </div>
+    <span className="doc-counter">{data.documents?.length || 0} / {DOC_TYPES.length} Archivos</span>
+  </div>
+
+  <div className="docs-grid-modern">
+    {DOC_TYPES.map((type) => {
+      // Buscar si este documento ya fue subido
+      const uploadedDoc = data.documents?.find(d => d.doc_type === type.v);
+      
+      return (
+        <div key={type.v} className={`doc-slot ${uploadedDoc ? 'is-filled' : 'is-empty'}`}>
+          <div className="slot-body">
+            <div className="slot-icon">
+              {uploadedDoc ? <CheckCircle size={14} /> : <FileText size={14} />}
+            </div>
+            <div className="slot-info">
+              <span className="slot-label">{type.l}</span>
+              {uploadedDoc && <span className="slot-date">{fmtDT(uploadedDoc.created_at)}</span>}
+            </div>
+          </div>
+          
+          <div className="slot-actions">
+            {uploadedDoc ? (
+              <button onClick={() => download(uploadedDoc.id)} className="action-btn download" title="Descargar">
+                <Download size={14} />
+              </button>
+            ) : (
+              <label className="action-btn upload" title="Subir archivo">
+                <PlusCircle size={14} />
+                <input 
+                  type="file" 
+                  hidden 
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      setDocType(type.v); // Seteamos el tipo automáticamente
+                      upload("doc", f);
+                    }
+                    e.currentTarget.value = "";
+                  }} 
+                />
+              </label>
+            )}
+          </div>
+        </div>
+      );
+    })}
+  </div>
+</section>
+
+            {/* Fotos */}
+            <div className="ff-card2">
+              <div className="sectionTitle">
+                <ImageIcon size={16} /> Fotos
+              </div>
+
+              <div className="ff-divider" style={{ margin: "10px 0" }} />
+
+              <input
+                className="in2"
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) upload("photo", f);
+                  e.currentTarget.value = "";
+                }}
+                style={{ maxWidth: 420 }}
+              />
+
+              <div style={{ marginTop: 10 }}>
+                {data.photos?.length ? (
+                  <div className="photoGrid">
+                    {data.photos.map((p) => (
+                      <div key={p.id} className="photoCard">
+                        {p.url ? <img src={p.url} className="photoImg" alt={p.filename} /> : <div className="photoPlaceholder" />}
+                        <div className="photoBody">
+                          <div className="photoTitle" title={p.filename}>{p.filename}</div>
+                          <div className="photoMeta">{fmtDT(p.created_at)}</div>
+                          <button className="btnSmall full" type="button" onClick={() => download(p.id)}>
+                            <Download size={16} />
+                            Ver / Descargar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="muted">Aún no hay fotos.</div>
+                )}
+              </div>
+            </div>
+          </>
+        ) : null}
+      </div>
+
       <style jsx>{`
-        /* VARIABLES DE DISEÑO PREMIUM */
-        :global(:root) {
-          --ff-bg: #f8fafc;
-          --ff-card: #ffffff;
-          --ff-accent: #16a34a;
-          --ff-text-main: #0f172a;
-          --ff-text-muted: #64748b;
-          --ff-border-soft: #f1f5f9;
+        .ff-card2 {
+          background: var(--ff-surface);
+          border: 1px solid var(--ff-border);
+          border-radius: var(--ff-radius);
+          box-shadow: var(--ff-shadow);
+          padding: 12px;
+        }
+        .soft {
+          background: rgba(15, 23, 42, 0.02);
         }
 
-        .detail-container { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; padding-bottom: 60px; animation: fadeIn 0.5s ease; }
+        .ff-row2 {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+          min-width: 0;
+        }
+        .ff-spread2 {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+          min-width: 0;
+        }
 
-        .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .back-link { display: flex; align-items: center; gap: 8px; color: var(--ff-text-muted); text-decoration: none; font-size: 14px; font-weight: 600; transition: 0.2s; }
-        .back-link:hover { color: var(--ff-accent); }
+        .cardHead {
+          border: 1px solid var(--ff-border);
+          background: var(--ff-surface);
+          border-radius: var(--ff-radius);
+          padding: 12px;
+        }
 
-        .badge-modern { padding: 4px 12px; border-radius: 99px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-        .badge-modern.blue { background: #eff6ff; color: #2563eb; }
-        .badge-status-master { background: #f0fdf4; color: #166534; padding: 6px 16px; border-radius: 99px; font-size: 12px; font-weight: 800; border: 1px solid #dcfce7; }
+        .codeRow {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          min-width: 0;
+        }
+        .codeIcon {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          border: 1px solid rgba(31, 122, 58, 0.18);
+          background: rgba(31, 122, 58, 0.08);
+          display: grid;
+          place-items: center;
+          flex: 0 0 auto;
+        }
 
-        .hero-header { display: flex; justify-content: space-between; align-items: flex-end; padding: 20px 0; border-bottom: 1px solid var(--ff-border-soft); }
-        .hero-content { display: flex; align-items: center; gap: 20px; }
-        .hero-icon { width: 56px; height: 56px; background: #16a34a; color: white; border-radius: 16px; display: grid; place-items: center; box-shadow: 0 10px 15px -3px rgba(22, 163, 74, 0.2); }
-        .shipment-id { font-size: 32px; font-weight: 900; letter-spacing: -0.04em; color: var(--ff-text-main); margin: 0; }
-        .shipment-client { font-size: 16px; color: var(--ff-text-muted); margin: 4px 0 0; }
-        .shipment-client span { color: var(--ff-text-main); font-weight: 700; }
+        .code {
+          font-weight: 950;
+          font-size: 16px;
+          letter-spacing: -0.2px;
+          line-height: 20px;
+        }
+        .meta {
+          font-size: 12px;
+          color: var(--ff-muted);
+          margin-top: 4px;
+          line-height: 16px;
+          word-break: break-word;
+        }
 
-        .hero-meta { text-align: right; }
-        .meta-label { font-size: 10px; font-weight: 800; color: #94a3b8; display: block; }
-        .meta-value { font-size: 14px; font-weight: 600; color: var(--ff-text-main); }
+        .sectionTitle {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 900;
+          font-size: 13px;
+        }
+        .lbl {
+          display: block;
+          font-size: 12px;
+          font-weight: 900;
+          color: var(--ff-muted);
+          margin-bottom: 6px;
+        }
 
-        .action-panel { background: white; border-radius: 24px; padding: 32px; border: 1px solid var(--ff-border-soft); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); }
-        .panel-header h3 { font-size: 18px; font-weight: 800; margin: 0; }
-        .panel-header p { font-size: 13px; color: var(--ff-text-muted); margin: 4px 0 20px; }
+        .row3 {
+          display: grid;
+          gap: 10px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 980px) {
+          .row3 {
+            grid-template-columns: 1.2fr 0.9fr 0.9fr;
+          }
+        }
 
-        .action-inputs { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-        .input-field label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 6px; }
-        .input-field input { width: 100%; height: 44px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0 14px; font-size: 14px; background: #f8fafc; transition: 0.2s; }
-        .input-field input:focus { border-color: #16a34a; background: white; box-shadow: 0 0 0 4px rgba(22,163,74,0.1); outline: none; }
+        .row2 {
+          display: grid;
+          gap: 10px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 980px) {
+          .row2 {
+            grid-template-columns: 1fr 1fr;
+          }
+        }
 
-        .milestone-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
-        .btn-milestone { flex: 1; min-width: 140px; height: 44px; border-radius: 12px; border: 1px solid #e2e8f0; background: white; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
-        .btn-milestone:hover:not(:disabled) { border-color: #16a34a; color: #16a34a; background: #f0fdf4; }
-        .btn-milestone:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); }
-        .btn-milestone.primary { background: #16a34a; color: white; border: none; }
-        .btn-milestone.primary:hover:not(:disabled) { background: #15803d; }
+        .actionsGrid {
+          display: grid;
+          gap: 10px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 980px) {
+          .actionsGrid {
+            grid-template-columns: repeat(5, 1fr);
+          }
+        }
 
-        .main-grid { display: grid; grid-template-columns: 350px 1fr; gap: 24px; }
-        .glass-card { background: white; border: 1px solid var(--ff-border-soft); border-radius: 20px; padding: 24px; }
-        .card-title { font-size: 14px; font-weight: 800; color: var(--ff-text-main); display: flex; align-items: center; gap: 8px; margin: 0 0 20px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .in2 {
+          width: 100%;
+          height: 38px;
+          border: 1px solid var(--ff-border);
+          border-radius: var(--ff-radius);
+          padding: 0 10px;
+          font-size: 13px;
+          outline: none;
+          background: #fff;
+          min-width: 0;
+        }
+        .in2:focus {
+          border-color: rgba(31, 122, 58, 0.4);
+          box-shadow: 0 0 0 4px rgba(31, 122, 58, 0.1);
+        }
 
-        .data-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
-        .data-row { display: flex; justify-content: space-between; font-size: 14px; padding-bottom: 8px; border-bottom: 1px solid #f8fafc; }
-        .data-row span { color: var(--ff-text-muted); }
-        .data-row strong { color: var(--ff-text-main); }
+        .btnSmall {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          height: 34px;
+          padding: 0 10px;
+          border-radius: var(--ff-radius);
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          font-size: 12px;
+          font-weight: 900;
+          cursor: pointer;
+          color: var(--ff-text);
+          text-decoration: none;
+          white-space: nowrap;
+        }
+        .btnSmall:hover {
+          background: rgba(15, 23, 42, 0.03);
+        }
 
-        .packing-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-top: 16px; border-top: 1px dotted #e2e8f0; }
-        .packing-inputs label { font-size: 11px; font-weight: 700; color: #94a3b8; display: block; margin-bottom: 4px; }
-        .packing-inputs input { width: 100%; height: 38px; border-radius: 8px; border: 1px solid #e2e8f0; padding: 0 10px; font-size: 13px; font-weight: 600; }
+        .ff-primary {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          border: 1px solid rgba(31, 122, 58, 0.35);
+          background: var(--ff-green);
+          color: #fff;
+          border-radius: var(--ff-radius);
+          height: 36px;
+          padding: 0 12px;
+          font-weight: 900;
+          font-size: 12px;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .ff-primary:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+        }
 
-        .files-section { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-        .doc-pill-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
-        .pill-btn { padding: 6px 12px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 11px; font-weight: 700; cursor: pointer; transition: 0.2s; }
-        .pill-btn.active { background: #16a34a; color: white; border-color: #16a34a; box-shadow: 0 4px 10px rgba(22,163,74,0.2); }
+        .chip {
+          border-radius: 999px;
+          padding: 6px 10px;
+          font-size: 12px;
+          font-weight: 900;
+          background: rgba(15, 23, 42, 0.04);
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          white-space: nowrap;
+        }
+        .chipSoft {
+          border-radius: 999px;
+          padding: 6px 10px;
+          font-size: 12px;
+          font-weight: 900;
+          background: rgba(31, 122, 58, 0.08);
+          border: 1px solid rgba(31, 122, 58, 0.22);
+          color: var(--ff-green-dark);
+          white-space: nowrap;
+        }
+        .statusPill {
+          border-radius: 999px;
+          padding: 6px 10px;
+          font-size: 12px;
+          font-weight: 950;
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          background: #fff;
+          white-space: nowrap;
+        }
 
-        .file-list { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
-        .file-item { display: flex; align-items: center; gap: 14px; padding: 12px; border: 1px solid #f1f5f9; border-radius: 14px; transition: 0.2s; }
-        .file-item:hover { background: #fbfcfe; border-color: #e2e8f0; }
-        .file-icon { color: #94a3b8; }
-        .file-info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-        .file-name { font-size: 13px; font-weight: 700; color: var(--ff-text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .file-meta { font-size: 11px; color: var(--ff-text-muted); }
-        .download-btn { width: 32px; height: 32px; border-radius: 8px; border: none; background: #f1f5f9; color: #64748b; cursor: pointer; display: grid; place-items: center; }
+        .grid2 {
+          display: grid;
+          gap: 12px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 1100px) {
+          .grid2 {
+            grid-template-columns: 0.95fr 1.05fr;
+          }
+        }
 
-        .photo-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; margin-top: 20px; }
-        .photo-thumb { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: #f1f5f9; border: 1px solid #e2e8f0; }
-        .photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
-        .photo-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.4); opacity: 0; display: grid; place-items: center; transition: 0.2s; }
-        .photo-thumb:hover .photo-overlay { opacity: 1; }
-        .photo-overlay button { width: 30px; height: 30px; border-radius: 50%; border: none; background: white; cursor: pointer; }
+        .kv {
+          display: flex;
+          justify-content: space-between;
+          padding: 8px 0;
+          border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+          gap: 10px;
+        }
 
-        .upload-zone { margin-top: 10px; }
-        .upload-zone input[type="file"] { font-size: 12px; color: #94a3b8; }
+        .docGrid {
+          display: grid;
+          gap: 8px;
+          grid-template-columns: 1fr;
+        }
+        @media (min-width: 980px) {
+          .docGrid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+        @media (min-width: 1200px) {
+          .docGrid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+        }
 
-        .loading-state { padding: 100px; text-align: center; color: #94a3b8; font-weight: 600; }
-        .toast-floating { position: fixed; bottom: 32px; right: 32px; background: #0f172a; color: white; padding: 12px 24px; border-radius: 12px; font-weight: 700; font-size: 14px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); z-index: 99999; animation: slideUp 0.3s ease; }
+        .docPill {
+          height: 36px;
+          border-radius: 12px;
+          border: 1px solid var(--ff-border);
+          background: #fff;
+          font-size: 12px;
+          font-weight: 900;
+          padding: 0 10px;
+          cursor: pointer;
+          text-align: left;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .docPill:hover {
+          background: rgba(15, 23, 42, 0.03);
+        }
+        .docPillOn {
+          border-color: rgba(31, 122, 58, 0.35);
+          background: rgba(31, 122, 58, 0.08);
+          color: var(--ff-green-dark);
+        }
+        .docPill:disabled {
+          opacity: 0.65;
+          cursor: not-allowed;
+        }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .list {
+          display: grid;
+          gap: 10px;
+        }
+        .itemRow {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 10px;
+          border: 1px solid var(--ff-border);
+          border-radius: var(--ff-radius);
+          background: var(--ff-surface);
+          align-items: center;
+        }
+        @media (max-width: 720px) {
+          .itemRow {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .itemTitle {
+            max-width: 100%;
+          }
+        }
+
+        .itemTitle {
+          font-weight: 900;
+          font-size: 13px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 520px;
+        }
+        .itemMeta {
+          margin-top: 2px;
+          font-size: 12px;
+          color: var(--ff-muted);
+        }
+
+        .photoGrid {
+          display: grid;
+          gap: 10px;
+          grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+        }
+        .photoCard {
+          border: 1px solid var(--ff-border);
+          border-radius: var(--ff-radius);
+          overflow: hidden;
+          background: var(--ff-surface);
+        }
+        .photoImg {
+          width: 100%;
+          height: 150px;
+          object-fit: cover;
+          display: block;
+        }
+        .photoPlaceholder {
+          width: 100%;
+          height: 150px;
+          background: rgba(15, 23, 42, 0.04);
+        }
+        .photoBody {
+          padding: 10px;
+        }
+        .photoTitle {
+          font-weight: 900;
+          font-size: 13px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .photoMeta {
+          font-size: 12px;
+          color: var(--ff-muted);
+          margin-top: 2px;
+        }
+        .full {
+          width: 100%;
+          justify-content: center;
+          margin-top: 10px;
+        }
+
+        .muted {
+          font-size: 12px;
+          color: var(--ff-muted);
+        }
+
+        .msgWarn {
+          border: 1px solid rgba(209, 119, 17, 0.35);
+          background: rgba(209, 119, 17, 0.08);
+          padding: 10px;
+          border-radius: var(--ff-radius);
+          font-size: 12px;
+        }
+
+        .msgOk {
+          border: 1px solid rgba(31, 122, 58, 0.3);
+          background: rgba(31, 122, 58, 0.08);
+          border-radius: var(--ff-radius);
+          padding: 10px;
+          font-weight: 900;
+          font-size: 12px;
+        }
       `}</style>
     </AdminLayout>
   );
+  
 }
+
