@@ -1,4 +1,3 @@
-// src/pages/shipments/[id].tsx
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -9,9 +8,7 @@ import { ProgressStepper } from "../../components/ProgressStepper";
 import { Timeline as ModernTimeline } from "../../components/Timeline";
 import { labelStatus, statusBadgeClass } from "../../lib/shipmentFlow";
 
-import { FileText, Image as ImageIcon, Download, Info, ArrowLeft, Package, MapPin, Shield, ThermometerSun } from "lucide-react";
-
-
+import { FileText, Image as ImageIcon, Download, Info, ArrowLeft, Package, MapPin, Shield } from "lucide-react";
 
 /* =======================
    Types
@@ -30,7 +27,6 @@ type ShipmentDetail = {
   id: string;
   code: string;
   destination: string;
-  destination_port?: string | null; // Soporte para ambos nombres de columna
   incoterm?: string | null;
   status: string;
   created_at: string;
@@ -43,13 +39,12 @@ type ShipmentDetail = {
   product_variety?: string | null;
   product_mode?: string | null;
 
-  calibre?: string | null; // ✅ Unificado con el Drawer
+  caliber?: string | null;
   color?: string | null;
-  brix_grade?: string | null; // ✅ Nuevo campo añadido
 
   boxes?: number | null;
   pallets?: number | null;
-  weight?: number | null; // ✅ Unificado (antes weight_kg)
+  weight_kg?: number | null;
   flight_number?: string | null;
   awb?: string | null;
 
@@ -81,7 +76,18 @@ function clientNameLine(d: ShipmentDetail) {
 function productLine(d: ShipmentDetail) {
   const name = String(d.product_name || "").trim();
   const variety = String(d.product_variety || "").trim();
-  return [name, variety].filter(Boolean).join(" · ") || "—";
+  const modeRaw = String(d.product_mode || "").trim();
+
+  const mode = (() => {
+    const s = modeRaw.toLowerCase();
+    if (!s) return "";
+    if (s.includes("aere") || s === "air") return "Aérea";
+    if (s.includes("marit") || s === "sea") return "Marítima";
+    return modeRaw;
+  })();
+
+  const left = [name, variety].filter(Boolean).join(" ");
+  return [left, mode].filter(Boolean).join(" · ") || "—";
 }
 
 export default function ShipmentDetailPage() {
@@ -99,7 +105,6 @@ export default function ShipmentDetailPage() {
       const token = sessionData.session?.access_token;
       if (!token) { window.location.href = "/login"; return; }
 
-      // Nota: Asegúrate que tu función Netlify 'getShipment' devuelva brix_grade, calibre y weight
       const res = await fetch(`/.netlify/functions/getShipment?id=${encodeURIComponent(shipmentId)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -148,7 +153,7 @@ export default function ShipmentDetailPage() {
 
       {data && (
         <div className="page">
-          {/* HERO HEADER - Mantiene tu estilo original */}
+          {/* HERO HEADER */}
           <div className="hero">
             <div className="heroLeft">
               <div className="codeRow">
@@ -161,14 +166,14 @@ export default function ShipmentDetailPage() {
               </div>
             </div>
             <div className="heroRight">
-              <span className="pill green"><MapPin size={14}/> {data.destination_port || data.destination}</span>
+              <span className="pill green"><MapPin size={14}/> {data.destination}</span>
               <span className="pill blue"><Shield size={14}/> {data.incoterm || 'FOB'}</span>
               <span className={statusBadgeClass(data.status)}>{labelStatus(data.status)}</span>
             </div>
           </div>
 
-          {/* PROGRESS - Tu componente linkado a los hitos */}
-          <div className="block" style={{ marginBottom: 24 }}>
+          {/* PROGRESS */}
+          <div className="block">
             <ProgressStepper milestones={data.milestones ?? []} flightNumber={data.flight_number ?? null} />
           </div>
 
@@ -177,14 +182,14 @@ export default function ShipmentDetailPage() {
             <div className="ff-card ff-card-pad soft">
               <div className="sectionTitle"><Info size={16} /> Especificaciones de Carga</div>
               <div className="kpiRow">
-                <div className="kpi"><div className="kpiLabel">Incoterm</div><div className="kpiValue text-blue">{data.incoterm || '—'}</div></div>
+                <div className="kpi"><div className="kpiLabel">Incoterm</div><div className="kpiValue text-blue">{data.incoterm || 'FOB'}</div></div>
                 <div className="kpi"><div className="kpiLabel">Cajas</div><div className="kpiValue">{data.boxes || '—'}</div></div>
                 <div className="kpi"><div className="kpiLabel">Pallets</div><div className="kpiValue">{data.pallets || '—'}</div></div>
               </div>
               <div className="kpiRow" style={{ marginTop: 12 }}>
-                <div className="kpi"><div className="kpiLabel">Peso Neto</div><div className="kpiValue">{data.weight ? `${data.weight} kg` : '—'}</div></div>
-                <div className="kpi"><div className="kpiLabel">Calibre</div><div className="kpiValue">{data.calibre || '—'}</div></div>
-                <div className="kpi"><div className="kpiLabel">Brix</div><div className="kpiValue text-green">{data.brix_grade || '—'}</div></div>
+                <div className="kpi"><div className="kpiLabel">Peso Neto</div><div className="kpiValue">{data.weight_kg ? `${data.weight_kg} kg` : '—'}</div></div>
+                <div className="kpi"><div className="kpiLabel">Calibre</div><div className="kpiValue">{data.caliber || '—'}</div></div>
+                <div className="kpi"><div className="kpiLabel">Color</div><div className="kpiValue">{data.color || '—'}</div></div>
               </div>
               <div className="meta-footer">
                 Embarque creado el {fmtDate(data.created_at)} para <strong>{clientNameLine(data)}</strong>
@@ -198,84 +203,78 @@ export default function ShipmentDetailPage() {
             </div>
           </div>
 
-          {/* NUEVA SECCIÓN: DOCUMENTOS Y FOTOS */}
-          <div className="grid2" style={{ marginTop: 24 }}>
-            
-            {/* COLUMNA: FOTOS DE CARGA */}
+          {/* DOCUMENTACIÓN Y FOTOS */}
+          <div className="grid2">
+            {/* DOCUMENTOS */}
             <div className="ff-card ff-card-pad">
-              <div className="sectionTitle"><ImageIcon size={16} /> Evidencia de Carga</div>
-              {data.photos && data.photos.length > 0 ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '12px', marginTop: '16px' }}>
-                  {data.photos.map((img) => (
-                    <div key={img.id} className="photo-thumb" onClick={() => download(img.id)}>
-                      <img 
-                        src={img.url || ""} 
-                        alt={img.filename} 
-                        style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '6px', cursor: 'pointer', border: '1px solid #eee' }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="empty-state">No se han cargado fotos aún.</div>
-              )}
-            </div>
-
-            {/* COLUMNA: DOCUMENTACIÓN */}
-            <div className="ff-card ff-card-pad">
-              <div className="sectionTitle"><FileText size={16} /> Documentación Digital</div>
-              <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div className="sectionTitle"><FileText size={16} /> Documentos Oficiales</div>
+              <div className="doc-list">
                 {data.documents && data.documents.length > 0 ? (
-                  data.documents.map((doc) => (
-                    <div key={doc.id} className="doc-row ff-spread" style={{ padding: '10px', background: '#f9f9f9', borderRadius: '8px', border: '1px solid #eee' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                        <FileText size={18} color="#666" />
-                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '14px', fontWeight: 500 }}>
-                          {doc.filename}
-                        </div>
-                      </div>
-                      <button 
-                        onClick={() => download(doc.id)}
-                        className="ff-btn ff-btn-ghost" 
-                        style={{ padding: '4px 8px', height: 'auto' }}
-                      >
-                        <Download size={14} />
+                  data.documents.map((d) => (
+                    <div key={d.id} className="itemRow">
+                      <div className="itemTitle">{d.filename}</div>
+                      <button className="ff-btn ff-btn-ghost" onClick={() => download(d.id)}>
+                        <Download size={14}/> PDF
                       </button>
                     </div>
                   ))
                 ) : (
-                  <div className="empty-state">No hay documentos disponibles.</div>
+                  <p className="ff-sub">No hay documentos disponibles aún.</p>
                 )}
               </div>
             </div>
-          </div> 
-        </div> // <-- Cierre de "page"
-      )} 
+
+            {/* FOTOS */}
+            <div className="ff-card ff-card-pad">
+              <div className="sectionTitle"><ImageIcon size={16} /> Evidencia Fotográfica</div>
+              <div className="photoGrid">
+                {data.photos && data.photos.length > 0 ? (
+                  data.photos.map((p) => (
+                    <div key={p.id} className="photoCard" onClick={() => download(p.id)}>
+                      <img src={p.url || ''} alt="evidencia" className="photoImg" />
+                      <div className="photoBody">
+                         <div className="photoTitle">{p.filename}</div>
+                         <div className="photoMeta">{fmtDate(p.created_at)}</div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="ff-sub">Sin fotos de inspección registradas.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
-        .page { display: flex; flex-direction: column; gap: 16px; }
-        .hero { display: flex; justify-content: space-between; align-items: center; background: white; padding: 20px; border-radius: 12px; border: 1px solid #eaeaea; }
-        .codeIcon { background: #e8f5e9; padding: 10px; border-radius: 10px; margin-right: 12px; }
-        .codeRow { display: flex; align-items: center; }
-        .code { font-size: 20px; font-weight: 800; color: #1a1a1a; }
-        .heroLabel { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; }
-        .productLine { font-size: 14px; color: #666; }
-        .heroRight { display: flex; gap: 8px; }
-        .pill { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-        .pill.green { background: #e8f5e9; color: #2e7d32; }
-        .pill.blue { background: #e3f2fd; color: #1565c0; }
-        .sectionTitle { display: flex; align-items: center; gap: 8px; font-weight: 700; color: #333; margin-bottom: 12px; font-size: 15px; }
-        .kpiRow { display: flex; gap: 16px; }
-        .kpi { flex: 1; }
-        .kpiLabel { font-size: 11px; color: #888; text-transform: uppercase; }
-        .kpiValue { font-size: 16px; font-weight: 700; color: #333; }
-        .text-blue { color: #0070f3; }
-        .text-green { color: #22c55e; }
-        .meta-footer { margin-top: 16px; padding-top: 12px; border-top: 1px dashed #eee; font-size: 12px; color: #999; }
-        .empty-state { padding: 20px; text-align: center; color: #aaa; font-size: 13px; border: 1px dashed #ddd; border-radius: 8px; margin-top: 10px; }
-        .photo-thumb:hover { transform: scale(1.02); transition: 0.2s; }
-        .doc-row:hover { border-color: #2e7d32 !important; }
-        @media (max-width: 768px) { .hero { flex-direction: column; gap: 16px; align-items: flex-start; } .grid2 { grid-template-columns: 1fr; } }
+        .page { display: grid; gap: 16px; padding-bottom: 40px; }
+        .hero { display: flex; justify-content: space-between; align-items: center; padding: 24px; background: white; border: 1px solid var(--ff-border); border-radius: 16px; }
+        .heroLeft { flex: 1; }
+        .heroRight { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+        .codeIcon { background: #f0fdf4; padding: 10px; border-radius: 12px; border: 1px solid #dcfce7; }
+        .codeRow { display: flex; gap: 16px; align-items: center; }
+        .code { font-size: 24px; font-weight: 900; letter-spacing: -0.5px; color: #0f172a; }
+        .productLine { color: var(--ff-green-dark); font-weight: 700; font-size: 14px; }
+        .pill { padding: 6px 12px; border-radius: 99px; font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+        .pill.green { background: #f0fdf4; color: #166534; border: 1px solid #dcfce7; }
+        .pill.blue { background: #eff6ff; color: #1e40af; border: 1px solid #dbeafe; }
+        .kpiRow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .kpi { background: white; padding: 12px; border-radius: 12px; border: 1px solid #f1f5f9; }
+        .kpiLabel { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; }
+        .kpiValue { font-size: 16px; font-weight: 900; color: #1e293b; margin-top: 4px; }
+        .text-blue { color: #2563eb; }
+        .meta-footer { margin-top: 20px; font-size: 12px; color: #94a3b8; padding-top: 15px; border-top: 1px dashed #e2e8f0; }
+        .doc-list { display: flex; flex-direction: column; gap: 8px; }
+        .itemRow { display: flex; justify-content: space-between; align-items: center; padding: 12px; border: 1px solid #f1f5f9; border-radius: 10px; }
+        .itemTitle { font-size: 13px; font-weight: 600; color: #334155; }
+        .photoGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+        .photoCard { cursor: pointer; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; transition: 0.2s; }
+        .photoCard:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .photoImg { width: 100%; height: 100px; object-fit: cover; }
+        .photoBody { padding: 8px; }
+        .photoTitle { font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .photoMeta { font-size: 10px; color: #94a3b8; }
       `}</style>
     </ClientLayout>
   );
