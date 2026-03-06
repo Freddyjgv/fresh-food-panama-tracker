@@ -166,10 +166,11 @@ export default function AdminShipments() {
 
       {/* 1. HEADER: 4 GRIDS (CLON DE QUOTES) */}
       <div className="statsGrid">
-  {/* CAMBIA ESTA LÍNEA: Asegúrate que diga setShowModal(true) */}
-  <div className="statCard action" onClick={() => setShowModal(true)}>
-    <div className="iconBox green"><PlusCircle size={18} strokeWidth={1.5} /></div>
-    <div className="statInfo">
+       <div className="statCard action" onClick={() => setShowModal(true)}>
+        <div className="iconBox green">
+        <PlusCircle size={18} strokeWidth={1.5} />
+        </div>
+        <div className="statInfo">
       <span className="statValueAction">Nuevo Embarque</span>
     </div>
   </div>
@@ -262,123 +263,126 @@ export default function AdminShipments() {
 
       {/* POPUP MODAL COMPLETO, UNIFICADO Y CLEAN */}
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <header className="modal-header">
-              <div className="header-info">
-                <h2 className="modal-title">Nuevo Embarque</h2>
-                <span className="modal-subtitle">Registra la carga en el sistema logístico</span>
-              </div>
-              <button onClick={() => setShowModal(false)} className="close-btn"><X size={20} strokeWidth={1.5} /></button>
-            </header>
-
-            <form onSubmit={handleCreate} className="modal-form">
-              
-              {/* 1. SECCIÓN CLIENTE */}
-              <section className="form-section">
-                <div className="section-header">
-                  <Users size={15} strokeWidth={1.5} />
-                  <span>Información del Cliente</span>
-                </div>
-                <div className="input-group">
-                  <label>Cliente Final</label>
-                  <select required value={formData.client_id} onChange={e => setFormData({...formData, client_id: e.target.value})}>
-                    <option value="">Selecciona un cliente...</option>
-                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-              </section>
-
-              {/* 2. SECCIÓN ESPECIFICACIONES (PRODUCTO + CALIDAD + CANTIDAD) */}
-              <section className="form-section">
-                <div className="section-header">
-                  <Package size={15} strokeWidth={1.5} />
-                  <span>Detalles de Mercancía</span>
-                </div>
-                
-                <div className="grid-2">
-                  <div className="input-group">
-                    <label>Producto</label>
-                    <select required value={formData.product_id} onChange={e => setFormData({...formData, product_id: e.target.value, variety_id: ''})}>
-                      <option value="">Producto...</option>
-                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="input-group">
-                    <label>Variedad</label>
-                    <select required disabled={!formData.product_id} value={formData.variety_id} onChange={e => setFormData({...formData, variety_id: e.target.value})}>
-                      <option value="">Variedad...</option>
-                      {filteredVarieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Calidad: Calibre, Color y Brix */}
-                <div className="grid-3" style={{ marginBottom: '16px' }}>
-                  <div className="input-group">
-                    <label><Hash size={11} style={{marginRight: '4px'}}/> Calibre</label>
-                    <input type="text" placeholder="Ej: 6" value={formData.calibre} onChange={e => setFormData({...formData, calibre: e.target.value})} />
-                  </div>
-                  <div className="input-group">
-                    <label><Palette size={11} style={{marginRight: '4px'}}/> Color</label>
-                    <input type="text" placeholder="Ej: 2.5" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} />
-                  </div>
-                  <div className="input-group">
-                    <label><ThermometerSun size={11} style={{marginRight: '4px'}}/> Brix</label>
-                    <input type="text" placeholder=">13" value={formData.brix_grade} onChange={e => setFormData({...formData, brix_grade: e.target.value})} />
-                  </div>
-                </div>
-
-                {/* Cantidades: Cajas, Pallets y Peso */}
-                <div className="grid-3">
-                  <div className="input-group"><label>Cajas</label><input type="number" placeholder="0" value={formData.boxes} onChange={e => setFormData({...formData, boxes: e.target.value})} /></div>
-                  <div className="input-group"><label>Pallets</label><input type="number" placeholder="0" value={formData.pallets} onChange={e => setFormData({...formData, pallets: e.target.value})} /></div>
-                  <div className="input-group"><label>Peso (Kg)</label><input type="number" step="0.01" placeholder="0.00" value={formData.estimated_weight} onChange={e => setFormData({...formData, estimated_weight: e.target.value})} /></div>
-                </div>
-              </section>
-
-              {/* 3. SECCIÓN LOGÍSTICA (RUTA UNIFICADA) */}
-              <section className="form-section">
-                <div className="section-header">
-                  <Globe size={15} strokeWidth={1.5} />
-                  <span>Ruta y Destino</span>
-                </div>
-                <div className="grid-2">
-                  <div className="input-group">
-                    <label>Modalidad</label>
-                    <div className="mode-selector-clean">
-                      <button type="button" className={mode === 'Marítima' ? 'active' : ''} onClick={() => setMode('Marítima')}><Anchor size={14} /> Marítimo</button>
-                      <button type="button" className={mode === 'Aérea' ? 'active' : ''} onClick={() => setMode('Aérea')}><Plane size={14} /> Aéreo</button>
-                    </div>
-                  </div>
-                  <div className="input-group">
-                    <label>Incoterm</label>
-                    <select value={formData.incoterm} onChange={e => setFormData({...formData, incoterm: e.target.value})}>
-                      {['FOB', 'CIF', 'CIP', 'FCA', 'CFR', 'DDP'].map(i => <option key={i} value={i}>{i}</option>)}
-                    </select>
-                  </div>
-                </div>
-                
-                <div className="input-group">
-                  <label>Destino Final (Aeropuerto/Puerto)</label>
-                  <input list="places-list-admin" required placeholder="Ej: 🇪🇸 MAD Madrid-Barajas" value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} />
-                  <datalist id="places-list-admin">
-                    {MASTER_PLACES.map(p => <option key={p.code} value={`${getFlag(p.country)} ${p.name}`} />)}
-                  </datalist>
-                </div>
-              </section>
-
-              <footer className="modal-footer-clean">
-                <button type="button" onClick={() => setShowModal(false)} className="btn-cancel">Cancelar</button>
-                <button type="submit" disabled={submitting || success} className="btn-save">
-                  {submitting ? <Loader2 className="spin" size={18} /> : <span>Confirmar Embarque</span>}
-                </button>
-              </footer>
-            </form>
-          </div>
+  <div className="modal-overlay" onClick={() => setShowModal(false)}>
+    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <header className="modal-header">
+        <div className="header-info">
+          <h2 className="modal-title">Nuevo Embarque</h2>
+          <span className="modal-subtitle">Registra la carga en el sistema logístico</span>
         </div>
-      )}
+        <button type="button" onClick={() => setShowModal(false)} className="close-btn">
+          <X size={20} strokeWidth={1.5} />
+        </button>
+      </header>
 
+      <form onSubmit={handleCreate} className="modal-form">
+        
+        {/* SECCIÓN CLIENTE */}
+        <section className="form-section">
+          <div className="section-header">
+            <Users size={15} strokeWidth={1.5} />
+            <span>Información del Cliente</span>
+          </div>
+          <div className="input-group">
+            <label>Cliente Final</label>
+            <select 
+              required 
+              value={formData.client_id} 
+              onChange={e => setFormData({...formData, client_id: e.target.value})}
+            >
+              <option value="">Selecciona un cliente...</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        </section>
+
+        {/* SECCIÓN ESPECIFICACIONES */}
+        <section className="form-section">
+          <div className="section-header">
+            <Package size={15} strokeWidth={1.5} />
+            <span>Detalles de Mercancía</span>
+          </div>
+          
+          <div className="grid-2">
+            <div className="input-group">
+              <label>Producto</label>
+              <select required value={formData.product_id} onChange={e => setFormData({...formData, product_id: e.target.value, variety_id: ''})}>
+                <option value="">Producto...</option>
+                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div className="input-group">
+              <label>Variedad</label>
+              <select required disabled={!formData.product_id} value={formData.variety_id} onChange={e => setFormData({...formData, variety_id: e.target.value})}>
+                <option value="">Variedad...</option>
+                {filteredVarieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid-3" style={{ marginBottom: '16px' }}>
+            <div className="input-group">
+              <label><Hash size={11} style={{marginRight: '4px'}}/> Calibre</label>
+              <input type="text" placeholder="Ej: 6" value={formData.calibre} onChange={e => setFormData({...formData, calibre: e.target.value})} />
+            </div>
+            <div className="input-group">
+              <label><Palette size={11} style={{marginRight: '4px'}}/> Color</label>
+              <input type="text" placeholder="Ej: 2.5" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} />
+            </div>
+            <div className="input-group">
+              <label><ThermometerSun size={11} style={{marginRight: '4px'}}/> Brix</label>
+              <input type="text" placeholder=">13" value={formData.brix_grade} onChange={e => setFormData({...formData, brix_grade: e.target.value})} />
+            </div>
+          </div>
+
+          <div className="grid-3">
+            <div className="input-group"><label>Cajas</label><input type="number" placeholder="0" value={formData.boxes} onChange={e => setFormData({...formData, boxes: e.target.value})} /></div>
+            <div className="input-group"><label>Pallets</label><input type="number" placeholder="0" value={formData.pallets} onChange={e => setFormData({...formData, pallets: e.target.value})} /></div>
+            <div className="input-group"><label>Peso (Kg)</label><input type="number" step="0.01" placeholder="0.00" value={formData.estimated_weight} onChange={e => setFormData({...formData, estimated_weight: e.target.value})} /></div>
+          </div>
+        </section>
+
+        {/* SECCIÓN LOGÍSTICA */}
+        <section className="form-section">
+          <div className="section-header">
+            <Globe size={15} strokeWidth={1.5} />
+            <span>Ruta y Destino</span>
+          </div>
+          <div className="grid-2">
+            <div className="input-group">
+              <label>Modalidad</label>
+              <div className="mode-selector-clean">
+                <button type="button" className={mode === 'Marítima' ? 'active' : ''} onClick={() => setMode('Marítima')}><Anchor size={14} /> Marítimo</button>
+                <button type="button" className={mode === 'Aérea' ? 'active' : ''} onClick={() => setMode('Aérea')}><Plane size={14} /> Aéreo</button>
+              </div>
+            </div>
+            <div className="input-group">
+              <label>Incoterm</label>
+              <select value={formData.incoterm} onChange={e => setFormData({...formData, incoterm: e.target.value})}>
+                {['FOB', 'CIF', 'CIP', 'FCA', 'CFR', 'DDP'].map(i => <option key={i} value={i}>{i}</option>)}
+              </select>
+            </div>
+          </div>
+          
+          <div className="input-group">
+            <label>Destino Final (Aeropuerto/Puerto)</label>
+            <input list="places-list-admin" required placeholder="Ej: 🇪🇸 MAD Madrid-Barajas" value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} />
+            <datalist id="places-list-admin">
+              {MASTER_PLACES.map(p => <option key={p.code} value={`${getFlag(p.country)} ${p.name}`} />)}
+            </datalist>
+          </div>
+        </section>
+
+        <footer className="modal-footer-clean">
+          <button type="button" onClick={() => setShowModal(false)} className="btn-cancel">Cancelar</button>
+          <button type="submit" disabled={submitting || success} className="btn-save">
+            {submitting ? <Loader2 className="spin" size={18} /> : <span>Confirmar Embarque</span>}
+          </button>
+        </footer>
+      </form>
+    </div>
+  </div>
+)}
       <style jsx>{`
         /* --- ESTILOS MAESTROS (Fieles a Quotes) --- */
         .statsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
