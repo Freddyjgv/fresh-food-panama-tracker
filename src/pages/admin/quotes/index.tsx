@@ -268,23 +268,23 @@ export default function AdminQuotesIndex() {
   position: relative; 
   display: flex;
   align-items: center;
-  width: 320px; 
+  width: 350px; 
 }
 
 .searchIcon { 
   position: absolute; 
-  left: 12px; /* Espacio desde el borde izquierdo */
+  left: 14px; /* Espacio desde el borde izquierdo */
   color: #94a3b8; /* Un gris más suave y moderno */
   pointer-events: none; /* Para que al hacer clic en la lupa se active el input */
 }
 
 .searchModern input { 
   width: 100%; 
-  padding: 8px 12px 8px 36px; /* El 36px de la izquierda es vital para que el texto no empiece encima de la lupa */
-  border-radius: 10px; 
+  padding: 10px 16px 10px 44px; /* El 36px de la izquierda es vital para que el texto no empiece encima de la lupa */
+  border-radius: 12px; 
   border: 1px solid #f1f5f9; 
-  background: #fcfcfd; 
-  font-size: 13px; 
+  background: #f8fafc; 
+  font-size: 13.5px; 
   font-weight: 400;
   outline: none; 
   transition: all 0.2s ease;
