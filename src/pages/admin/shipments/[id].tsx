@@ -728,6 +728,145 @@ export default function AdminShipmentDetail() {
       </div>
 
       <style jsx>{`
+      /* --- ESTILO DE DOCUMENTOS COMPACTO --- */
+.docs-section {
+  padding: 24px !important;
+}
+
+.section-header-compact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.title-group h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #1e293b;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.doc-counter {
+  font-size: 11px;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #64748b;
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.docs-grid-modern {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.doc-slot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid #f1f5f9;
+  transition: all 0.2s ease;
+  background: #ffffff;
+}
+
+.doc-slot.is-empty {
+  border: 1px dashed #e2e8f0;
+  background: #fbfcfe;
+}
+
+.doc-slot.is-filled {
+  border: 1px solid #dcfce7;
+  background: #f0fdf450; /* Un toque verde muy suave */
+}
+
+.doc-slot:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+}
+
+.slot-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.slot-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.is-empty .slot-icon { background: #f1f5f9; color: #94a3b8; }
+.is-filled .slot-icon { background: #16a34a; color: white; }
+
+.slot-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.slot-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.slot-date {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 1px;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.action-btn.upload {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.action-btn.upload:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.action-btn.download {
+  background: white;
+  color: #16a34a;
+  border: 1px solid #dcfce7;
+}
+
+.action-btn.download:hover {
+  background: #16a34a;
+  color: white;
+}
         .ff-card2 {
           background: var(--ff-surface);
           border: 1px solid var(--ff-border);
