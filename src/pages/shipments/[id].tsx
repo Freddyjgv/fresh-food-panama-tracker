@@ -61,16 +61,16 @@ type ShipmentDetail = {
 };
 
 const DOC_LABELS: Record<string, string> = {
-  factura: "Factura",
+  invoice: "Factura",
   packing_list: "Packing list",
-  guia_aerea: "AWB (guía aérea)",
-  fitosanitario: "Certificado fitosanitario",
+  awb: "AWB (guía aérea)",
+  phytosanitary: "Certificado fitosanitario",
   eur1: "EUR1",
-  decl_exportacion: "Declaración de exp...",
-  decl_plastico: "Declaración de plást...",
-  decl_info: "Declaración de la Inf...",
-  decl_aditivos: "Declaración de aditi...",
-  informe_calidad: "Informe de calidad"
+  export_declaration: "Declaración de exportación",
+  non_recyclable_plastics: "Declaración de plásticos",
+  sanitary_general_info: "Info. General Sanitaria",
+  additives_declaration: "Declaración de aditivos",
+  quality_report: "Informe de calidad"
 };
 
 /* =======================
@@ -163,9 +163,18 @@ export default function ShipmentDetailPage() {
   }, [data?.milestones]);
 
   const docCount = useMemo(() => {
-    if (!data?.documents) return 0;
-    return Object.keys(DOC_LABELS).filter(key => data.documents.some(d => d.doc_type === key)).length;
-  }, [data?.documents]);
+  if (!data?.documents) return 0;
+
+  // 1. Creamos un Set para guardar solo los tipos ÚNICOS que existen en la data
+  const uniqueUploadedTypes = new Set(
+    data.documents
+      .filter(d => d.doc_type && Object.keys(DOC_LABELS).includes(d.doc_type))
+      .map(d => d.doc_type)
+  );
+
+  // 2. El tamaño del Set es el número real de documentos diferentes cargados
+  return uniqueUploadedTypes.size;
+}, [data?.documents]);
 
   if (loading) return <ClientLayout title="Cargando..."><div className="ff-sub">Sincronizando datos...</div></ClientLayout>;
 
@@ -246,7 +255,9 @@ export default function ShipmentDetailPage() {
 
             <div className="doc-grid-modern">
               {Object.entries(DOC_LABELS).map(([key, label]) => {
-                const doc = data.documents?.find(d => d.doc_type === key);
+                const doc = data.documents
+  ?.filter(d => d.doc_type === key)
+  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
                 const isUploaded = !!doc;
                 return (
                   <div key={key} className={`doc-item-card ${isUploaded ? 'status-uploaded' : 'status-pending'}`}>
@@ -376,6 +387,30 @@ export default function ShipmentDetailPage() {
           .grid2 { grid-template-columns: 1fr; }
           .kpiRow { grid-template-columns: repeat(2, 1fr); }
         }
+          .doc-item-card.status-uploaded {
+  border-left: 4px solid #16a34a; /* Verde */
+  background: #f0fdf4;
+}
+
+.doc-item-card.status-pending {
+  border-left: 4px solid #e2e8f0; /* Gris */
+  background: #f8fafc;
+  opacity: 0.7;
+}
+
+.doc-download-pill {
+  background: #16a34a;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.doc-download-pill:hover {
+  transform: scale(1.1);
+}
       `}</style>
     </ClientLayout>
   );
