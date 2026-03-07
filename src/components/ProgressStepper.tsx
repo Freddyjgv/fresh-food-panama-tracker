@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 
-// Estructura de tipos (Sin cambios)
+// 1. Tipos y Constantes con nombres actualizados según tu solicitud
 type StepType = "CREATED" | "PACKED" | "DOCS_READY" | "AT_ORIGIN" | "IN_TRANSIT" | "AT_DESTINATION" | string;
 type Milestone = { type: StepType; at?: string | null; created_at?: string | null; note?: string | null; };
 
 const STEPS: { type: StepType; label: string }[] = [
-  { type: "CREATED", label: "Reserva" },
+  { type: "CREATED", label: "Embarque creado" }, //
   { type: "PACKED", label: "Empaque" },
   { type: "DOCS_READY", label: "Documentos" },
-  { type: "AT_ORIGIN", label: "Origen" },
-  { type: "IN_TRANSIT", label: "En Vuelo" },
+  { type: "AT_ORIGIN", label: "En terminal de carga" }, //
+  { type: "IN_TRANSIT", label: "En vuelo" },
   { type: "AT_DESTINATION", label: "Destino" },
 ];
 
@@ -47,7 +47,7 @@ export function ProgressStepper({
 
   return (
     <div className="ff-apple-container">
-      {/* HEADER: Limpio y Jerarquizado */}
+      {/* Header unchanged for branding consistency */}
       <div className="ff-glass-header">
         <div className="ff-brand-section">
           <div className="ff-live-indicator">
@@ -64,15 +64,14 @@ export function ProgressStepper({
             <span className="ff-data-label">WAYBILL</span>
             <span className="ff-data-value mono">{awb || "— — —"}</span>
           </div>
-          <a href={`https://www.google.com/search?q=flight+status+${flightNumber}`} target="_blank" className="ff-data-card ff-link">
+          <div className="ff-data-card">
             <span className="ff-data-label">VUELO</span>
             <span className="ff-data-value">✈ {flightNumber || "N/A"}</span>
-            <div className="ff-hover-arrow">→</div>
-          </a>
+          </div>
         </div>
       </div>
 
-      {/* TRACK: El "Liquid Rail" */}
+      {/* TRACK: Puntos centrados milimétricamente con el texto inferior */}
       <div className="ff-track-wrapper">
         <div className="ff-main-rail">
           <div className="ff-progress-fill" style={{ width: `${pct}%` }}>
@@ -80,17 +79,16 @@ export function ProgressStepper({
           </div>
         </div>
         
-        {/* Marcadores de Hitos en la vía */}
-        <div className="ff-dots-overlay">
+        {/* Los puntos ahora usan flex-justify: space-between para alinearse con los labels */}
+        <div className="ff-dots-container">
           {STEPS.map((_, i) => (
-            <div key={i} className={`ff-track-dot ${i <= currentIndex ? 'filled' : ''}`} style={{ left: `${(i / (STEPS.length - 1)) * 100}%` }} />
+            <div key={i} className={`ff-track-dot ${i <= currentIndex ? 'filled' : ''} ${i === currentIndex ? 'active-pulse' : ''}`} />
           ))}
         </div>
 
-        {/* El Icono Flotante */}
         <div className="ff-floating-asset" style={{ left: `${pct}%` }}>
           <div className="ff-box-wrapper">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#d17711" strokeWidth="1.5">
               <path d="M12 2L3 7L12 12L21 7L12 2Z" fill="rgba(209, 119, 17, 0.1)"/>
               <path d="M3 7V17L12 22V12L3 7Z" />
               <path d="M21 7V17L12 22V12L21 7Z" />
@@ -99,7 +97,7 @@ export function ProgressStepper({
         </div>
       </div>
 
-      {/* FOOTER: Flujo sin bordes (Minimalismo puro) */}
+      {/* FOOTER: Labels alineados con los puntos superiores */}
       <div className="ff-minimal-flow">
         {STEPS.map((s, i) => {
           const isDone = i <= currentIndex;
@@ -111,7 +109,7 @@ export function ProgressStepper({
             <div key={s.type} className={`ff-flow-node ${isDone ? 'done' : ''} ${isActive ? 'active' : ''}`}>
               <span className="ff-node-label">{s.label}</span>
               <span className="ff-node-time">{time || "—:—"}</span>
-              {isActive && <div className="ff-active-bar" />}
+              {isActive && <div className="ff-active-indicator-glow" />}
             </div>
           );
         })}
@@ -121,98 +119,70 @@ export function ProgressStepper({
         .ff-apple-container {
           background: #ffffff;
           padding: 40px;
-          border-radius: 32px;
+          border-radius: 24px;
           border: 1px solid #f1f5f9;
-          box-shadow: 0 20px 50px rgba(0,0,0,0.04);
-          font-family: 'Inter', -apple-system, sans-serif;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.03);
         }
 
-        /* Header & Labels */
         .ff-glass-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 60px; }
-        .ff-live-indicator { 
-          display: inline-flex; align-items: center; gap: 8px; 
-          background: rgba(31, 122, 58, 0.08); padding: 6px 12px; 
-          border-radius: 100px; color: #1f7a3a; font-size: 10px; font-weight: 700; letter-spacing: 1px;
-          margin-bottom: 12px; position: relative;
+        .ff-live-indicator { display: inline-flex; align-items: center; gap: 8px; background: #f0fdf4; padding: 6px 12px; border-radius: 100px; color: #166534; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 12px; }
+        .ff-pulse-core { width: 6px; height: 6px; background: #166534; border-radius: 50%; }
+        .ff-main-title { font-size: 24px; font-weight: 700; color: #0f172a; margin: 0; }
+        .ff-subtitle { color: #64748b; font-size: 14px; margin-top: 4px; }
+        .ff-highlight { color: #166534; font-weight: 700; }
+
+        .ff-data-group { display: flex; gap: 12px; }
+        .ff-data-card { background: #f8fafc; padding: 12px 20px; border-radius: 14px; border: 1px solid #f1f5f9; min-width: 130px; }
+        .ff-data-label { font-size: 9px; font-weight: 700; color: #94a3b8; display: block; margin-bottom: 2px; }
+        .ff-data-value { font-size: 14px; font-weight: 700; color: #1e293b; }
+        .ff-data-value.mono { font-family: monospace; }
+
+        /* Track con alineación perfecta */
+        .ff-track-wrapper { position: relative; margin: 40px 0 30px; height: 10px; }
+        .ff-main-rail { position: absolute; top: 50%; left: 0; right: 0; height: 4px; background: #f1f5f9; transform: translateY(-50%); border-radius: 10px; overflow: hidden; }
+        .ff-progress-fill { height: 100%; background: #166534; transition: width ${introMs}ms cubic-bezier(0.16, 1, 0.3, 1); }
+        
+        .ff-dots-container { 
+          position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 0; /* Asegura que el primer y último punto toquen los extremos */
         }
-        .ff-pulse-core { width: 6px; height: 6px; background: #1f7a3a; border-radius: 50%; }
-        .ff-pulse-ring { 
-          position: absolute; left: 12px; width: 6px; height: 6px; 
-          border: 2px solid #1f7a3a; border-radius: 50%; 
-          animation: apple-pulse 2s infinite; 
+        .ff-track-dot { width: 10px; height: 10px; background: #fff; border: 2px solid #e2e8f0; border-radius: 50%; z-index: 5; transition: 0.3s; }
+        .ff-track-dot.filled { border-color: #166534; background: #166534; }
+        
+        /* Highlight del hito activo más llamativo */
+        .ff-track-dot.active-pulse { 
+          background: #166534; 
+          border-color: #166534; 
+          transform: scale(1.4);
+          box-shadow: 0 0 0 4px rgba(22, 101, 52, 0.2);
         }
 
-        .ff-main-title { font-size: 28px; font-weight: 600; color: #0f172a; margin: 0; letter-spacing: -0.02em; }
-        .ff-subtitle { color: #64748b; font-size: 15px; margin-top: 6px; }
-        .ff-highlight { color: #1f7a3a; font-weight: 600; }
+        .ff-floating-asset { position: absolute; top: -35px; transform: translateX(-50%); transition: left ${introMs}ms cubic-bezier(0.16, 1, 0.3, 1); z-index: 10; }
+        .ff-box-wrapper { filter: drop-shadow(0 5px 10px rgba(209,119,17,0.2)); }
 
-        /* Data Cards */
-        .ff-data-group { display: flex; gap: 16px; }
-        .ff-data-card { 
-          background: #f8fafc; padding: 16px 24px; border-radius: 20px; 
-          display: flex; flex-direction: column; min-width: 150px;
-          border: 1px solid transparent; transition: all 0.3s ease;
-        }
-        .ff-data-card.ff-link { text-decoration: none; cursor: pointer; position: relative; overflow: hidden; }
-        .ff-data-card.ff-link:hover { background: #fff; border-color: #d17711; transform: translateY(-4px); box-shadow: 0 10px 20px rgba(209,119,17,0.08); }
-        .ff-data-label { font-size: 9px; font-weight: 700; color: #94a3b8; letter-spacing: 0.1em; margin-bottom: 4px; }
-        .ff-data-value { font-size: 15px; font-weight: 600; color: #1e293b; }
-        .ff-data-value.mono { font-family: 'SF Mono', monospace; }
-        .ff-hover-arrow { position: absolute; right: 12px; bottom: 12px; color: #d17711; opacity: 0; transform: translateX(-10px); transition: 0.3s; }
-        .ff-data-card:hover .ff-hover-arrow { opacity: 1; transform: translateX(0); }
-
-        /* Track Section */
-        .ff-track-wrapper { position: relative; margin: 40px 0 60px; height: 12px; display: flex; align-items: center; }
-        .ff-main-rail { width: 100%; height: 6px; background: #f1f5f9; border-radius: 100px; overflow: hidden; }
-        .ff-progress-fill { 
-          height: 100%; background: #1f7a3a; border-radius: 100px; 
-          transition: width ${introMs}ms cubic-bezier(0.16, 1, 0.3, 1); 
+        /* Labels alineados por el centro */
+        .ff-minimal-flow { display: flex; justify-content: space-between; margin-top: 20px; }
+        .ff-flow-node { 
+          display: flex; flex-direction: column; align-items: center; 
+          width: 80px; /* Ancho fijo para centrado perfecto */
+          text-align: center;
+          opacity: 0.4;
           position: relative;
         }
-        .ff-liquid-glow {
-          position: absolute; top: 0; right: 0; height: 100%; width: 50px;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3));
-        }
-
-        .ff-track-dot { 
-          position: absolute; width: 10px; height: 10px; background: #fff; 
-          border: 2px solid #e2e8f0; border-radius: 50%; transform: translateX(-50%);
-          z-index: 2; transition: 0.3s;
-        }
-        .ff-track-dot.filled { border-color: #1f7a3a; background: #1f7a3a; }
-
-        .ff-floating-asset { 
-          position: absolute; transform: translate(-50%, -32px); 
-          transition: left ${introMs}ms cubic-bezier(0.16, 1, 0.3, 1);
-          z-index: 10;
-        }
-        .ff-box-wrapper { 
-          color: #d17711; filter: drop-shadow(0 10px 15px rgba(209,119,17,0.2)); 
-          animation: float-box 3s ease-in-out infinite;
-        }
-
-        /* Minimal Flow Footer */
-        .ff-minimal-flow { display: flex; justify-content: space-between; border-top: 1px solid #f1f5f9; padding-top: 30px; }
-        .ff-flow-node { display: flex; flex-direction: column; align-items: center; flex: 1; position: relative; opacity: 0.3; transition: 0.4s; }
-        .ff-flow-node.done { opacity: 0.7; }
-        .ff-flow-node.active { opacity: 1; transform: translateY(-2px); }
-        .ff-node-label { font-size: 13px; font-weight: 600; color: #1e293b; margin-bottom: 4px; }
-        .ff-node-time { font-size: 11px; color: #94a3b8; font-weight: 500; }
-        .ff-active-bar { 
-          position: absolute; bottom: -31px; width: 40px; height: 3px; 
-          background: #1f7a3a; border-radius: 10px 10px 0 0; 
+        .ff-flow-node.done { opacity: 0.8; }
+        .ff-flow-node.active { opacity: 1; }
+        .ff-node-label { font-size: 11px; font-weight: 700; color: #1e293b; margin-bottom: 2px; line-height: 1.2; }
+        .ff-node-time { font-size: 10px; color: #94a3b8; font-weight: 500; }
+        
+        /* Highlight inferior del hito en curso */
+        .ff-active-indicator-glow {
+          position: absolute; bottom: -12px; width: 30px; height: 3px;
+          background: #166534; border-radius: 10px;
+          box-shadow: 0 2px 8px rgba(22, 101, 52, 0.4);
         }
 
         @keyframes apple-pulse { 0% { transform: scale(1); opacity: 0.6; } 100% { transform: scale(3); opacity: 0; } }
-        @keyframes float-box { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-
-        @media (max-width: 800px) {
-          .ff-glass-header { flex-direction: column; align-items: flex-start; gap: 30px; }
-          .ff-data-group { width: 100%; }
-          .ff-data-card { flex: 1; }
-          .ff-minimal-flow { flex-wrap: wrap; gap: 20px; }
-          .ff-flow-node { flex: 1 1 30%; }
-        }
       `}</style>
     </div>
   );
