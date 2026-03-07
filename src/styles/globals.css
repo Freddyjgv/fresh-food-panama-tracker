@@ -475,3 +475,18 @@ a {
     padding: 14px;
   }
 }
+/* En tu archivo de estilos globales */
+:root {
+  /* Reducimos la base de 16px (estándar) a 14.5px */
+  /* Esto encoge todo el proyecto un ~10% de forma armónica */
+  font-size: 14.5px; 
+}
+
+body {
+  /* Para navegadores modernos (Chrome, Edge, Safari) */
+  zoom: 0.95; 
+  
+  /* Optativo: Mejorar el renderizado de fuentes al ser más pequeñas */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
