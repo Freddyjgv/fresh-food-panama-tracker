@@ -186,11 +186,11 @@ export default function ShipmentDetailPage() {
 
       {data && (
         <div className="page">
-         {/* NEW PREMIUM HEADER */}
+         {/* REFINED PREMIUM HEADER - VERSION 2.0 */}
 <div className="ff-header-premium">
   <div className="ff-header-main-info">
     <div className="ff-id-badge">
-      <Package size={18} className="ff-icon-green" />
+      <Package size={16} className="ff-icon-green" />
       <span>{data.code}</span>
     </div>
     <h1 className="ff-product-name">{productLine(data)}</h1>
@@ -198,6 +198,23 @@ export default function ShipmentDetailPage() {
   </div>
 
   <div className="ff-header-specs-bar">
+    {/* 1. Ubicación y Términos */}
+    <div className="ff-spec-item">
+      <span className="ff-spec-label">DESTINO</span>
+      <div className="ff-spec-value-group">
+        <MapPin size={12} className="ff-text-slate" />
+        <span className="ff-spec-value">{data.destination}</span>
+      </div>
+    </div>
+    <div className="ff-spec-divider"></div>
+    <div className="ff-spec-item">
+      <span className="ff-spec-label">INCOTERM</span>
+      <span className="ff-spec-value ff-text-blue">{data.incoterm || 'FOB'}</span>
+    </div>
+    
+    <div className="ff-spec-divider-heavy"></div>
+
+    {/* 2. Datos Físicos */}
     <div className="ff-spec-item">
       <span className="ff-spec-label">PESO NETO</span>
       <span className="ff-spec-value">{data.weight_kg ? `${data.weight_kg} kg` : '—'}</span>
@@ -211,21 +228,6 @@ export default function ShipmentDetailPage() {
     <div className="ff-spec-item">
       <span className="ff-spec-label">CALIBRE / COL</span>
       <span className="ff-spec-value">{data.caliber || '—'} / {data.color || '—'}</span>
-    </div>
-    <div className="ff-spec-divider"></div>
-    <div className="ff-spec-item">
-      <span className="ff-spec-label">INCOTERM</span>
-      <span className="ff-spec-value ff-text-blue">{data.incoterm || 'FOB'}</span>
-    </div>
-  </div>
-
-  <div className="ff-header-actions">
-    <div className="ff-destination-pill">
-      <MapPin size={14} />
-      <span>{data.destination}</span>
-    </div>
-    <div className={statusBadgeClass(data.status)}>
-      {labelStatus(data.status)}
     </div>
   </div>
 </div>
@@ -381,6 +383,49 @@ export default function ShipmentDetailPage() {
 .ff-product-name { font-size: 22px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.5px; }
 .ff-client-tag { font-size: 13px; color: #64748b; margin-top: 4px; }
 .ff-client-tag strong { color: #1e293b; }
+
+/* Reemplaza o añade estas reglas en tu <style jsx> */
+
+.ff-header-premium {
+  background: #ffffff;
+  padding: 28px 36px;
+  border-radius: 24px;
+  border: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+}
+
+.ff-header-main-info { flex: 0 1 auto; }
+
+.ff-header-specs-bar { 
+  display: flex; 
+  align-items: center; 
+  gap: 20px; 
+  background: #f8fafc; 
+  padding: 14px 28px; 
+  border-radius: 20px;
+  border: 1px solid #f1f5f9;
+}
+
+.ff-spec-item { display: flex; flex-direction: column; }
+.ff-spec-label { font-size: 9px; font-weight: 800; color: #94a3b8; letter-spacing: 0.08em; margin-bottom: 4px; text-transform: uppercase; }
+.ff-spec-value { font-size: 14px; font-weight: 700; color: #1e293b; white-space: nowrap; }
+.ff-spec-value-group { display: flex; align-items: center; gap: 6px; }
+
+.ff-spec-divider { width: 1px; height: 20px; background: #e2e8f0; }
+.ff-spec-divider-heavy { width: 2px; height: 30px; background: #e2e8f0; margin: 0 10px; opacity: 0.6; }
+
+.ff-text-blue { color: #2563eb; }
+.ff-text-slate { color: #64748b; }
+
+@media (max-width: 1200px) {
+  .ff-header-premium { flex-direction: column; align-items: flex-start; }
+  .ff-header-specs-bar { width: 100%; overflow-x: auto; padding: 18px; }
+}
 
 /* Barra de Especificaciones (El reemplazo del card) */
 .ff-header-specs-bar { 
