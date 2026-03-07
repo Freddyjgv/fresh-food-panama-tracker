@@ -266,404 +266,175 @@ export default function ShipmentDetailPage() {
   />
 </div>
 
-       {/* MAIN CONTENT GRID: GALLERY + DOCUMENTS */}
-          <div className="ff-main-grid-modern">
-            
-            {/* COLUMNA IZQUIERDA: AMAZON-STYLE GALLERY */}
-            <div className="ff-photo-showcase">
-              <div className="modern-section-header">
-                <div className="header-icon orange"><ImageIcon size={18} /></div>
-                <h3>Inspección Visual de Carga</h3>
-              </div>
-              
-              {data.photos?.length ? (
-                <div className="ff-amazon-gallery">
-                  {/* Foto Principal */}
-                  <div className="ff-main-photo" onClick={() => download(data.photos[activePhotoIdx].id)}>
-                    <img src={data.photos[activePhotoIdx].url || ''} alt="Inspección principal" />
-                    <div className="ff-photo-overlay">
-                      <Download size={24} />
-                      <span>Click para descargar original</span>
-                    </div>
-                  </div>
-                  
-                  {/* Tiras de Miniaturas */}
-                  <div className="ff-thumbs-strip">
-                    {data.photos.map((p, idx) => (
-                      <div 
-                        key={p.id} 
-                        className={`ff-thumb ${idx === activePhotoIdx ? 'active' : ''}`}
-                        onClick={() => setActivePhotoIdx(idx)}
-                      >
-                        <img src={p.url || ''} alt={`Miniatura ${idx}`} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="ff-empty-gallery">
-                  <ImageIcon size={40} strokeWidth={1} />
-                  <p>No hay registro fotográfico disponible</p>
-                </div>
-              )}
-            </div>
-
-            {/* COLUMNA DERECHA: DOCUMENTACIÓN DISCRETA */}
-            <div className="ff-docs-aside">
-              <div className="modern-section-header spread">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div className="header-icon dark"><FileText size={16} /></div>
-                  <h3>Documentación</h3>
-                </div>
-                <div className="doc-counter-mini">{docCount} / 10</div>
-              </div>
-
-              <div className="ff-docs-list-compact">
-                {Object.entries(DOC_LABELS).map(([key, label]) => {
-                  const doc = data.documents?.find(d => d.doc_type === key);
-                  const isUploaded = !!doc;
-                  return (
-                    <div key={key} className={`ff-doc-row ${isUploaded ? 'uploaded' : 'pending'}`}>
-                      <div className="ff-doc-info">
-                        <div className="ff-doc-status-dot"></div>
-                        <span className="ff-doc-name">{label}</span>
-                      </div>
-                      {isUploaded ? (
-                        <button className="ff-doc-download-btn" onClick={() => download(doc.id)} title="Descargar">
-                          <Download size={14} />
-                        </button>
-                      ) : (
-                        <span className="ff-doc-pending-tag">Pendiente</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+      <div className="ff-balanced-grid">
+  {/* COLUMNA FOTOS (40%) */}
+  <div className="ff-col-photos">
+    <div className="modern-section-header">
+      <div className="header-icon orange"><ImageIcon size={18} /></div>
+      <h3>Inspección</h3>
+    </div>
+    
+    <div className="ff-amazon-gallery">
+      <div className="ff-main-photo-wrapper">
+         <div className="ff-main-photo" onClick={() => download(data.photos[activePhotoIdx].id)}>
+            <img src={data.photos[activePhotoIdx].url || ''} alt="Inspección" />
+            <div className="ff-photo-counter">{activePhotoIdx + 1} / {data.photos.length}</div>
+         </div>
+      </div>
+      <div className="ff-thumbs-strip">
+        {data.photos.map((p, idx) => (
+          <div key={p.id} className={`ff-thumb ${idx === activePhotoIdx ? 'active' : ''}`} onClick={() => setActivePhotoIdx(idx)}>
+            <img src={p.url || ''} alt="thumb" />
           </div>
+        ))}
+      </div>
+    </div>
+  </div>
+
+  {/* COLUMNA DOCUMENTOS (60%) */}
+  <div className="ff-col-docs">
+    <div className="modern-section-header spread">
+      <div className="ff-header-group">
+        <div className="header-icon dark"><FileText size={18} /></div>
+        <h3>Documentación Digital</h3>
+      </div>
+      <div className="doc-counter-premium">{docCount} / 10</div>
+    </div>
+
+    <div className="ff-docs-list-refined">
+      {Object.entries(DOC_LABELS).map(([key, label]) => {
+        const doc = data.documents?.find(d => d.doc_type === key);
+        const isUploaded = !!doc;
+        return (
+          <div key={key} className={`ff-doc-flat-row ${isUploaded ? 'is-up' : 'is-off'}`}>
+            <div className="ff-doc-left">
+              <div className="ff-status-indicator"></div>
+              <span className="ff-doc-label">{label}</span>
+            </div>
+            {isUploaded && (
+              <button className="ff-download-minimal" onClick={() => download(doc.id)}>
+                <Download size={14} /> <span>Descargar</span>
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+</div>
         </div>
       )}
 
       <style jsx>{`
-        .page { display: grid; gap: 20px; padding-bottom: 60px; }
-        
-        /* Estética Premium de Cabeceras */
-        .modern-section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
-        .modern-section-header.spread { justify-content: space-between; }
-        .modern-section-header h3 { font-size: 16px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.2px; }
-        
-        .header-icon { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; }
-        .header-icon.blue { background: #eff6ff; color: #2563eb; }
-        .header-icon.green { background: #f0fdf4; color: #16a34a; }
-        .header-icon.dark { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
-        .header-icon.orange { background: #fff7ed; color: #ea580c; }
+  /* 1. LAYOUT BASE */
+  .page { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 24px; 
+    padding-bottom: 60px;
+  }
 
-        /* 1. Layout Principal */
-        .ff-main-grid-modern {
-          display: grid;
-          grid-template-columns: 1.6fr 1fr;
-          gap: 24px;
-          margin-top: 10px;
-        }
+  .modern-section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .modern-section-header.spread { justify-content: space-between; }
+  .modern-section-header h3 { font-size: 16px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.2px; }
+  
+  .header-icon { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; }
+  .header-icon.dark { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
+  .header-icon.orange { background: #fff7ed; color: #ea580c; }
 
-        /* 2. Amazon Gallery */
-        .ff-photo-showcase { background: white; padding: 24px; border-radius: 24px; border: 1px solid #f1f5f9; }
-        .ff-amazon-gallery { display: flex; flex-direction: column; gap: 16px; }
-        
-        .ff-main-photo { 
-          width: 100%; height: 480px; background: #f8fafc; border-radius: 16px; 
-          overflow: hidden; position: relative; cursor: zoom-in; border: 1px solid #f1f5f9;
-        }
-        .ff-main-photo img { width: 100%; height: 100%; object-fit: contain; background: #fbfcfd; }
-        .ff-photo-overlay { 
-          position: absolute; inset: 0; background: rgba(0,0,0,0.4); color: white;
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          gap: 10px; opacity: 0; transition: 0.3s; font-size: 13px; font-weight: 600;
-        }
-        .ff-main-photo:hover .ff-photo-overlay { opacity: 1; }
+  /* 2. PREMIUM HEADER */
+  .ff-header-premium {
+    background: #ffffff;
+    padding: 28px 36px;
+    border-radius: 24px;
+    border: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 30px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+  }
 
-        .ff-thumbs-strip { display: flex; gap: 12px; overflow-x: auto; padding: 4px; scrollbar-width: none; }
-        .ff-thumb { 
-          width: 80px; height: 80px; border-radius: 12px; overflow: hidden; 
-          cursor: pointer; border: 2px solid transparent; flex-shrink: 0; transition: 0.2s;
-          background: #f8fafc;
-        }
-        .ff-thumb.active { border-color: #ea580c; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(234, 88, 12, 0.2); }
-        .ff-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .ff-id-badge { 
+    display: inline-flex; align-items: center; gap: 8px; 
+    background: #f0fdf4; color: #166534; 
+    padding: 4px 10px; border-radius: 8px; 
+    font-family: monospace; font-weight: 700; font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .ff-product-name { font-size: 22px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.5px; }
+  .ff-client-tag { font-size: 13px; color: #64748b; margin-top: 4px; }
+  .ff-client-tag strong { color: #1e293b; }
 
-        /* 3. Sidebar de Documentos Discreto */
-        .ff-docs-aside { background: #fff; border: 1px solid #f1f5f9; border-radius: 24px; padding: 24px; height: fit-content; }
-        .ff-docs-list-compact { display: flex; flex-direction: column; gap: 6px; }
-        
-        .ff-doc-row { 
-          display: flex; align-items: center; justify-content: space-between; 
-          padding: 10px 14px; border-radius: 12px; transition: 0.2s; border: 1px solid transparent;
-        }
-        .ff-doc-row.uploaded { background: #f8fafc; }
-        .ff-doc-row.uploaded:hover { background: #f0fdf4; border-color: #dcfce7; }
-        .ff-doc-row.pending { opacity: 0.5; }
+  .ff-header-specs-bar { 
+    display: flex; align-items: center; gap: 20px; 
+    background: #f8fafc; padding: 14px 28px; border-radius: 20px; border: 1px solid #f1f5f9;
+  }
+  .ff-spec-item { display: flex; flex-direction: column; }
+  .ff-spec-label { font-size: 9px; font-weight: 800; color: #94a3b8; letter-spacing: 0.08em; margin-bottom: 4px; text-transform: uppercase; }
+  .ff-spec-value { font-size: 14px; font-weight: 700; color: #1e293b; white-space: nowrap; }
+  .ff-spec-value-group { display: flex; align-items: center; gap: 6px; }
+  .ff-spec-divider { width: 1px; height: 20px; background: #e2e8f0; }
+  .ff-spec-divider-heavy { width: 2px; height: 30px; background: #e2e8f0; margin: 0 10px; opacity: 0.6; }
+  .ff-text-blue { color: #2563eb; }
 
-        .ff-doc-info { display: flex; align-items: center; gap: 12px; }
-        .ff-doc-status-dot { width: 6px; height: 6px; border-radius: 50%; background: #cbd5e1; }
-        .uploaded .ff-doc-status-dot { background: #16a34a; box-shadow: 0 0 8px rgba(22, 163, 74, 0.5); }
-        
-        .ff-doc-name { font-size: 13px; font-weight: 600; color: #334155; }
-        .ff-doc-pending-tag { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; }
+  /* 3. GRID BALANCEADO */
+  .ff-balanced-grid {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    gap: 24px;
+    align-items: stretch;
+  }
 
-        .ff-doc-download-btn { 
-          background: white; border: 1px solid #e2e8f0; color: #475569; 
-          width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; 
-          cursor: pointer; transition: 0.2s;
-        }
-        .ff-doc-download-btn:hover { background: #16a34a; color: white; border-color: #16a34a; transform: scale(1.1); }
-        .doc-counter-mini { font-size: 11px; font-weight: 800; color: #fff; background: #1e293b; padding: 3px 10px; border-radius: 8px; }
+  .ff-col-photos { background: white; padding: 24px; border-radius: 24px; border: 1px solid #f1f5f9; }
+  .ff-main-photo-wrapper {
+    width: 100%; aspect-ratio: 1/1; background: #f8fafc; border-radius: 16px; 
+    overflow: hidden; margin-bottom: 16px; position: relative; border: 1px solid #f1f5f9;
+  }
+  .ff-main-photo img { width: 100%; height: 100%; object-fit: contain; }
+  .ff-photo-counter {
+    position: absolute; bottom: 12px; right: 12px;
+    background: rgba(0,0,0,0.7); color: white; padding: 4px 12px;
+    border-radius: 20px; font-size: 11px; font-weight: 700;
+  }
+  .ff-thumbs-strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 5px; }
+  .ff-thumb { 
+    width: 65px; height: 65px; border-radius: 10px; cursor: pointer; 
+    border: 2px solid transparent; flex-shrink: 0; transition: 0.2s;
+  }
+  .ff-thumb.active { border-color: #ea580c; transform: translateY(-2px); }
+  .ff-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
 
-        .ff-empty-gallery { 
-          height: 300px; display: flex; flex-direction: column; align-items: center; 
-          justify-content: center; color: #94a3b8; gap: 12px; background: #f8fafc; border-radius: 16px;
-        }
+  .ff-col-docs { background: white; padding: 24px; border-radius: 24px; border: 1px solid #f1f5f9; }
+  .ff-docs-list-refined { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ff-doc-flat-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; border-radius: 12px; background: #fbfcfd; border: 1px solid #f1f5f9;
+  }
+  .ff-doc-flat-row.is-up { background: #fff; border-color: #f0fdf4; }
+  .ff-doc-flat-row.is-off { opacity: 0.4; filter: grayscale(1); }
+  
+  .ff-doc-left { display: flex; align-items: center; gap: 12px; }
+  .ff-status-indicator { width: 6px; height: 6px; border-radius: 50%; background: #cbd5e1; }
+  .is-up .ff-status-indicator { background: #16a34a; box-shadow: 0 0 8px rgba(22,163,74,0.4); }
+  .ff-doc-label { font-size: 13px; font-weight: 600; color: #334155; }
+  
+  .ff-download-minimal {
+    display: flex; align-items: center; gap: 6px; background: #f1f5f9; border: none;
+    padding: 6px 12px; border-radius: 8px; color: #475569; font-size: 11px; font-weight: 700;
+    cursor: pointer; transition: 0.2s;
+  }
+  .ff-download-minimal:hover { background: #1e293b; color: white; }
+  .doc-counter-premium { background: #1e293b; color: white; padding: 4px 12px; border-radius: 10px; font-size: 12px; font-weight: 800; }
 
-        @media (max-width: 1000px) {
-          .ff-main-grid-modern { grid-template-columns: 1fr; }
-          .ff-main-photo { height: 350px; }
-        }
-
-        .ff-header-premium {
-  background: #ffffff;
-  padding: 24px 32px;
-  border-radius: 24px;
-  border: 1px solid #f1f5f9;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 40px;
-  margin-bottom: 24px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.02);
-}
-
-/* Identificador y Producto */
-.ff-header-main-info { flex: 1; min-width: 250px; }
-.ff-id-badge { 
-  display: inline-flex; align-items: center; gap: 8px; 
-  background: #f0fdf4; color: #166534; 
-  padding: 4px 10px; border-radius: 8px; 
-  font-family: monospace; font-weight: 700; font-size: 13px;
-  margin-bottom: 8px;
-}
-.ff-product-name { font-size: 22px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.5px; }
-.ff-client-tag { font-size: 13px; color: #64748b; margin-top: 4px; }
-.ff-client-tag strong { color: #1e293b; }
-
-/* Reemplaza o añade estas reglas en tu <style jsx> */
-
-.ff-header-premium {
-  background: #ffffff;
-  padding: 28px 36px;
-  border-radius: 24px;
-  border: 1px solid #f1f5f9;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 30px;
-  margin-bottom: 24px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.02);
-}
-
-.ff-header-main-info { flex: 0 1 auto; }
-
-.ff-header-specs-bar { 
-  display: flex; 
-  align-items: center; 
-  gap: 20px; 
-  background: #f8fafc; 
-  padding: 14px 28px; 
-  border-radius: 20px;
-  border: 1px solid #f1f5f9;
-}
-
-.ff-spec-item { display: flex; flex-direction: column; }
-.ff-spec-label { font-size: 9px; font-weight: 800; color: #94a3b8; letter-spacing: 0.08em; margin-bottom: 4px; text-transform: uppercase; }
-.ff-spec-value { font-size: 14px; font-weight: 700; color: #1e293b; white-space: nowrap; }
-.ff-spec-value-group { display: flex; align-items: center; gap: 6px; }
-
-.ff-spec-divider { width: 1px; height: 20px; background: #e2e8f0; }
-.ff-spec-divider-heavy { width: 2px; height: 30px; background: #e2e8f0; margin: 0 10px; opacity: 0.6; }
-
-.ff-text-blue { color: #2563eb; }
-.ff-text-slate { color: #64748b; }
-
-@media (max-width: 1200px) {
-  .ff-header-premium { flex-direction: column; align-items: flex-start; }
-  .ff-header-specs-bar { width: 100%; overflow-x: auto; padding: 18px; }
-}
-
-/* Barra de Especificaciones (El reemplazo del card) */
-.ff-header-specs-bar { 
-  display: flex; align-items: center; gap: 24px; 
-  background: #f8fafc; padding: 12px 24px; border-radius: 16px;
-}
-.ff-spec-item { display: flex; flex-direction: column; }
-.ff-spec-label { font-size: 9px; font-weight: 800; color: #94a3b8; letter-spacing: 0.05em; margin-bottom: 2px; }
-.ff-spec-value { font-size: 14px; font-weight: 700; color: #1e293b; white-space: nowrap; }
-.ff-spec-divider { width: 1px; height: 24px; background: #e2e8f0; }
-.ff-text-blue { color: #2563eb; }
-
-/* Acciones y Status */
-.ff-header-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
-.ff-destination-pill { 
-  display: flex; align-items: center; gap: 6px; 
-  background: #fff; border: 1px solid #e2e8f0; 
-  padding: 6px 14px; border-radius: 100px;
-  font-size: 12px; font-weight: 700; color: #475569;
-}
-
-@media (max-width: 1100px) {
-  .ff-header-premium { flex-direction: column; align-items: flex-start; gap: 24px; padding: 24px; }
-  .ff-header-specs-bar { width: 100%; justify-content: space-between; overflow-x: auto; }
-  .ff-header-actions { width: 100%; flex-direction: row; justify-content: space-between; align-items: center; }
-}
-        
-        .doc-counter { background: #0f172a; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 800; }
-
-        /* Hero */
-        .hero { display: flex; justify-content: space-between; align-items: center; padding: 30px; background: white; border: 1px solid #e2e8f0; border-radius: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); }
-        .codeRow { display: flex; gap: 18px; align-items: center; }
-        .codeIcon { background: #f0fdf4; padding: 12px; border-radius: 14px; border: 1px solid #dcfce7; }
-        .code { font-size: 28px; font-weight: 900; letter-spacing: -1px; color: #0f172a; line-height: 1; }
-        .heroLabel { font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px; }
-        .productLine { color: var(--ff-green-dark); font-weight: 700; font-size: 14px; margin-top: 4px; }
-        .pill { padding: 8px 16px; border-radius: 99px; font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
-        .pill.green { background: #f0fdf4; color: #166534; border: 1px solid #dcfce7; }
-        .pill.blue { background: #eff6ff; color: #1e40af; border: 1px solid #dbeafe; }
-        .heroRight { display: flex; gap: 10px; }
-
-        /* Grid */
-        .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .kpiRow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-        .kpi { background: #f8fafc; padding: 14px; border-radius: 16px; border: 1px solid #f1f5f9; }
-        .kpiLabel { font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 4px; }
-        .kpiValue { font-size: 17px; font-weight: 900; color: #0f172a; }
-        .meta-footer { margin-top: 24px; font-size: 13px; color: #64748b; padding-top: 18px; border-top: 1px dashed #e2e8f0; }
-
-        /* Modern Document Pills */
-        .doc-grid-modern { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-        .doc-item-card { display: flex; align-items: center; justify-content: space-between; padding: 14px; border-radius: 16px; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); border: 1px solid #f1f5f9; }
-        .status-pending { background: #f8fafc; opacity: 0.7; }
-        .status-uploaded { background: white; border-color: #dcfce7; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-        .status-uploaded:hover { border-color: #16a34a; transform: translateY(-2px); }
-        
-        .doc-item-main { display: flex; align-items: center; gap: 12px; }
-        .doc-item-status-icon { color: #cbd5e1; }
-        .status-uploaded .doc-item-status-icon { color: #16a34a; }
-        .doc-item-label { display: block; font-size: 13px; font-weight: 800; color: #1e293b; }
-        .doc-item-status-text { font-size: 10px; font-weight: 800; color: #94a3b8; }
-        .status-uploaded .doc-item-status-text { color: #16a34a; }
-        
-        .doc-download-pill { width: 32px; height: 32px; border-radius: 10px; background: #f0fdf4; border: none; color: #16a34a; display: grid; place-items: center; cursor: pointer; transition: 0.2s; }
-        .doc-download-pill:hover { background: #16a34a; color: white; }
-
-        /* Reequilibrio del Grid: Los documentos toman un poco más de presencia y las fotos se reducen */
-.ff-main-grid-modern {
-  display: grid;
-  grid-template-columns: 1fr 1.1fr; /* Proporción más equilibrada */
-  gap: 30px;
-  margin-top: 10px;
-  align-items: start;
-}
-
-/* Reducción del tamaño de la galería */
-.ff-photo-showcase { 
-  background: white; 
-  padding: 20px; 
-  border-radius: 24px; 
-  border: 1px solid #f1f5f9;
-  max-width: 500px; /* Limitamos el ancho máximo de la columna de fotos */
-}
-
-.ff-main-photo { 
-  width: 100%; 
-  height: 320px; /* Reducido de 480px a 320px para que no sea gigante */
-  background: #f8fafc; 
-  border-radius: 16px; 
-  overflow: hidden; 
-  position: relative; 
-  cursor: zoom-in; 
-  border: 1px solid #f1f5f9;
-}
-
-.ff-main-photo img { 
-  width: 100%; 
-  height: 100%; 
-  object-fit: contain; /* Mantiene la proporción de la fruta sin deformar */
-  background: #fbfcfd; 
-}
-
-/* Ajuste de las miniaturas para que se vean más finas */
-.ff-thumb { 
-  width: 60px; /* Reducido de 80px */
-  height: 60px; 
-  border-radius: 10px; 
-  overflow: hidden; 
-  cursor: pointer; 
-  border: 2px solid transparent; 
-  flex-shrink: 0; 
-  transition: 0.2s;
-  background: #f8fafc;
-}
-
-/* Sidebar de Documentos: Ahora tiene espacio para dos columnas si lo deseas, 
-   o simplemente se ve más holgado y elegante */
-.ff-docs-aside { 
-  background: #fff; 
-  border: 1px solid #f1f5f9; 
-  border-radius: 24px; 
-  padding: 24px; 
-  height: auto;
-}
-
-/* Opcional: Si quieres que los documentos se vean en dos columnas 
-   dentro de su propio bloque ahora que hay espacio */
-.ff-docs-list-compact { 
-  display: grid;
-  grid-template-columns: 1fr 1fr; /* Dos columnas de documentos */
-  gap: 8px; 
-}
-
-@media (max-width: 1100px) {
-  .ff-main-grid-modern { grid-template-columns: 1fr; }
-  .ff-photo-showcase { max-width: 100%; }
-  .ff-docs-list-compact { grid-template-columns: 1fr; }
-}
-          .hero { flex-direction: column; align-items: flex-start; gap: 20px; padding: 20px; }
-          .heroRight { width: 100%; justify-content: flex-start; }
-          .grid2 { grid-template-columns: 1fr; }
-          .kpiRow { grid-template-columns: repeat(2, 1fr); }
-        }
-          .doc-item-card.status-uploaded {
-  border-left: 4px solid #16a34a; /* Verde */
-  background: #f0fdf4;
-}
-
-.doc-item-card.status-pending {
-  border-left: 4px solid #e2e8f0; /* Gris */
-  background: #f8fafc;
-  opacity: 0.7;
-}
-
-.doc-download-pill {
-  background: #16a34a;
-  color: white;
-  border: none;
-  border-radius: 20px;
-  padding: 6px 12px;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.doc-download-pill:hover {
-  transform: scale(1.1);
-}
-      `}</style>
+  /* 4. RESPONSIVE */
+  @media (max-width: 1200px) {
+    .ff-header-premium { flex-direction: column; align-items: flex-start; }
+    .ff-header-specs-bar { width: 100%; overflow-x: auto; }
+    .ff-balanced-grid { grid-template-columns: 1fr; }
+    .ff-docs-list-refined { grid-template-columns: 1fr; }
+  }
+`}</style>
     </ClientLayout>
   );
 }

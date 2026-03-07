@@ -61,7 +61,7 @@ export function ProgressStepper({
 
         <div className="ff-data-group">
           <div className="ff-data-card">
-            <span className="ff-data-label">WAYBILL</span>
+            <span className="ff-data-label">AWB #</span>
             <span className="ff-data-value mono">{awb || "— — —"}</span>
           </div>
           {/* Restaurada opción de tracking interactivo */}
