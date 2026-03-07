@@ -186,24 +186,49 @@ export default function ShipmentDetailPage() {
 
       {data && (
         <div className="page">
-          {/* HERO HEADER */}
-          <div className="hero">
-            <div className="heroLeft">
-              <div className="codeRow">
-                <div className="codeIcon"><Package size={20} color="var(--ff-green-dark)" /></div>
-                <div style={{minWidth: 0}}>
-                  <div className="heroLabel">Identificador de Carga</div>
-                  <div className="code">{data.code}</div>
-                  <div className="productLine">{productLine(data)}</div>
-                </div>
-              </div>
-            </div>
-            <div className="heroRight">
-              <span className="pill green"><MapPin size={14}/> {data.destination}</span>
-              <span className="pill blue"><Shield size={14}/> {data.incoterm || 'FOB'}</span>
-              <span className={statusBadgeClass(data.status)}>{labelStatus(data.status)}</span>
-            </div>
-          </div>
+         {/* NEW PREMIUM HEADER */}
+<div className="ff-header-premium">
+  <div className="ff-header-main-info">
+    <div className="ff-id-badge">
+      <Package size={18} className="ff-icon-green" />
+      <span>{data.code}</span>
+    </div>
+    <h1 className="ff-product-name">{productLine(data)}</h1>
+    <div className="ff-client-tag">Consignatario: <strong>{clientNameLine(data)}</strong></div>
+  </div>
+
+  <div className="ff-header-specs-bar">
+    <div className="ff-spec-item">
+      <span className="ff-spec-label">PESO NETO</span>
+      <span className="ff-spec-value">{data.weight_kg ? `${data.weight_kg} kg` : '—'}</span>
+    </div>
+    <div className="ff-spec-divider"></div>
+    <div className="ff-spec-item">
+      <span className="ff-spec-label">CAJAS / PLTS</span>
+      <span className="ff-spec-value">{data.boxes || '0'} / {data.pallets || '0'}</span>
+    </div>
+    <div className="ff-spec-divider"></div>
+    <div className="ff-spec-item">
+      <span className="ff-spec-label">CALIBRE / COL</span>
+      <span className="ff-spec-value">{data.caliber || '—'} / {data.color || '—'}</span>
+    </div>
+    <div className="ff-spec-divider"></div>
+    <div className="ff-spec-item">
+      <span className="ff-spec-label">INCOTERM</span>
+      <span className="ff-spec-value ff-text-blue">{data.incoterm || 'FOB'}</span>
+    </div>
+  </div>
+
+  <div className="ff-header-actions">
+    <div className="ff-destination-pill">
+      <MapPin size={14} />
+      <span>{data.destination}</span>
+    </div>
+    <div className={statusBadgeClass(data.status)}>
+      {labelStatus(data.status)}
+    </div>
+  </div>
+</div>
 
           {/* PROGRESS */}
           <div className="block">
@@ -330,6 +355,58 @@ export default function ShipmentDetailPage() {
         .header-icon.green { background: #f0fdf4; color: #16a34a; }
         .header-icon.dark { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
         .header-icon.orange { background: #fff7ed; color: #ea580c; }
+
+        .ff-header-premium {
+  background: #ffffff;
+  padding: 24px 32px;
+  border-radius: 24px;
+  border: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+}
+
+/* Identificador y Producto */
+.ff-header-main-info { flex: 1; min-width: 250px; }
+.ff-id-badge { 
+  display: inline-flex; align-items: center; gap: 8px; 
+  background: #f0fdf4; color: #166534; 
+  padding: 4px 10px; border-radius: 8px; 
+  font-family: monospace; font-weight: 700; font-size: 13px;
+  margin-bottom: 8px;
+}
+.ff-product-name { font-size: 22px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.5px; }
+.ff-client-tag { font-size: 13px; color: #64748b; margin-top: 4px; }
+.ff-client-tag strong { color: #1e293b; }
+
+/* Barra de Especificaciones (El reemplazo del card) */
+.ff-header-specs-bar { 
+  display: flex; align-items: center; gap: 24px; 
+  background: #f8fafc; padding: 12px 24px; border-radius: 16px;
+}
+.ff-spec-item { display: flex; flex-direction: column; }
+.ff-spec-label { font-size: 9px; font-weight: 800; color: #94a3b8; letter-spacing: 0.05em; margin-bottom: 2px; }
+.ff-spec-value { font-size: 14px; font-weight: 700; color: #1e293b; white-space: nowrap; }
+.ff-spec-divider { width: 1px; height: 24px; background: #e2e8f0; }
+.ff-text-blue { color: #2563eb; }
+
+/* Acciones y Status */
+.ff-header-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.ff-destination-pill { 
+  display: flex; align-items: center; gap: 6px; 
+  background: #fff; border: 1px solid #e2e8f0; 
+  padding: 6px 14px; border-radius: 100px;
+  font-size: 12px; font-weight: 700; color: #475569;
+}
+
+@media (max-width: 1100px) {
+  .ff-header-premium { flex-direction: column; align-items: flex-start; gap: 24px; padding: 24px; }
+  .ff-header-specs-bar { width: 100%; justify-content: space-between; overflow-x: auto; }
+  .ff-header-actions { width: 100%; flex-direction: row; justify-content: space-between; align-items: center; }
+}
         
         .doc-counter { background: #0f172a; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 800; }
 
