@@ -334,6 +334,76 @@ export default function ShipmentDetailPage() {
         .header-icon.dark { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
         .header-icon.orange { background: #fff7ed; color: #ea580c; }
 
+        /* 1. Layout Principal */
+        .ff-main-grid-modern {
+          display: grid;
+          grid-template-columns: 1.6fr 1fr;
+          gap: 24px;
+          margin-top: 10px;
+        }
+
+        /* 2. Amazon Gallery */
+        .ff-photo-showcase { background: white; padding: 24px; border-radius: 24px; border: 1px solid #f1f5f9; }
+        .ff-amazon-gallery { display: flex; flex-direction: column; gap: 16px; }
+        
+        .ff-main-photo { 
+          width: 100%; height: 480px; background: #f8fafc; border-radius: 16px; 
+          overflow: hidden; position: relative; cursor: zoom-in; border: 1px solid #f1f5f9;
+        }
+        .ff-main-photo img { width: 100%; height: 100%; object-fit: contain; background: #fbfcfd; }
+        .ff-photo-overlay { 
+          position: absolute; inset: 0; background: rgba(0,0,0,0.4); color: white;
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          gap: 10px; opacity: 0; transition: 0.3s; font-size: 13px; font-weight: 600;
+        }
+        .ff-main-photo:hover .ff-photo-overlay { opacity: 1; }
+
+        .ff-thumbs-strip { display: flex; gap: 12px; overflow-x: auto; padding: 4px; scrollbar-width: none; }
+        .ff-thumb { 
+          width: 80px; height: 80px; border-radius: 12px; overflow: hidden; 
+          cursor: pointer; border: 2px solid transparent; flex-shrink: 0; transition: 0.2s;
+          background: #f8fafc;
+        }
+        .ff-thumb.active { border-color: #ea580c; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(234, 88, 12, 0.2); }
+        .ff-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+        /* 3. Sidebar de Documentos Discreto */
+        .ff-docs-aside { background: #fff; border: 1px solid #f1f5f9; border-radius: 24px; padding: 24px; height: fit-content; }
+        .ff-docs-list-compact { display: flex; flex-direction: column; gap: 6px; }
+        
+        .ff-doc-row { 
+          display: flex; align-items: center; justify-content: space-between; 
+          padding: 10px 14px; border-radius: 12px; transition: 0.2s; border: 1px solid transparent;
+        }
+        .ff-doc-row.uploaded { background: #f8fafc; }
+        .ff-doc-row.uploaded:hover { background: #f0fdf4; border-color: #dcfce7; }
+        .ff-doc-row.pending { opacity: 0.5; }
+
+        .ff-doc-info { display: flex; align-items: center; gap: 12px; }
+        .ff-doc-status-dot { width: 6px; height: 6px; border-radius: 50%; background: #cbd5e1; }
+        .uploaded .ff-doc-status-dot { background: #16a34a; box-shadow: 0 0 8px rgba(22, 163, 74, 0.5); }
+        
+        .ff-doc-name { font-size: 13px; font-weight: 600; color: #334155; }
+        .ff-doc-pending-tag { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; }
+
+        .ff-doc-download-btn { 
+          background: white; border: 1px solid #e2e8f0; color: #475569; 
+          width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; 
+          cursor: pointer; transition: 0.2s;
+        }
+        .ff-doc-download-btn:hover { background: #16a34a; color: white; border-color: #16a34a; transform: scale(1.1); }
+        .doc-counter-mini { font-size: 11px; font-weight: 800; color: #fff; background: #1e293b; padding: 3px 10px; border-radius: 8px; }
+
+        .ff-empty-gallery { 
+          height: 300px; display: flex; flex-direction: column; align-items: center; 
+          justify-content: center; color: #94a3b8; gap: 12px; background: #f8fafc; border-radius: 16px;
+        }
+
+        @media (max-width: 1000px) {
+          .ff-main-grid-modern { grid-template-columns: 1fr; }
+          .ff-main-photo { height: 350px; }
+        }
+
         .ff-header-premium {
   background: #ffffff;
   padding: 24px 32px;
