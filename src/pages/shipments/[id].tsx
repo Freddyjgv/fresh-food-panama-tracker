@@ -111,6 +111,7 @@ function productLine(d: ShipmentDetail) {
 }
 
 export default function ShipmentDetailPage() {
+  const [activePhotoIdx, setActivePhotoIdx] = useState(0);
   const router = useRouter();
   const { id } = router.query;
 
@@ -241,104 +242,79 @@ export default function ShipmentDetailPage() {
   />
 </div>
 
-          <div className="grid2">
-            {/* KPI PANEL */}
-            <div className="ff-card ff-card-pad soft">
+       {/* MAIN CONTENT GRID: GALLERY + DOCUMENTS */}
+          <div className="ff-main-grid-modern">
+            
+            {/* COLUMNA IZQUIERDA: AMAZON-STYLE GALLERY */}
+            <div className="ff-photo-showcase">
               <div className="modern-section-header">
-                <div className="header-icon blue"><Info size={18} /></div>
-                <h3>Especificaciones Técnicas</h3>
+                <div className="header-icon orange"><ImageIcon size={18} /></div>
+                <h3>Inspección Visual de Carga</h3>
               </div>
               
-              <div className="kpiRow">
-                <div className="kpi"><div className="kpiLabel">Incoterm</div><div className="kpiValue text-blue">{data.incoterm || 'FOB'}</div></div>
-                <div className="kpi"><div className="kpiLabel">Cajas</div><div className="kpiValue">{data.boxes || '—'}</div></div>
-                <div className="kpi"><div className="kpiLabel">Pallets</div><div className="kpiValue">{data.pallets || '—'}</div></div>
-              </div>
-              <div className="kpiRow" style={{ marginTop: 12 }}>
-                <div className="kpi"><div className="kpiLabel">Peso Neto</div><div className="kpiValue">{data.weight_kg ? `${data.weight_kg} kg` : '—'}</div></div>
-                <div className="kpi"><div className="kpiLabel">Calibre</div><div className="kpiValue">{data.caliber || '—'}</div></div>
-                <div className="kpi"><div className="kpiLabel">Color</div><div className="kpiValue">{data.color || '—'}</div></div>
-              </div>
-              <div className="meta-footer">
-                Consignatario: <strong>{clientNameLine(data)}</strong> • Origen: {fmtDate(data.created_at)}
-              </div>
-            </div>
-
-            {/* TIMELINE */}
-            <div className="ff-card ff-card-pad">
-              <div className="modern-section-header">
-                <div className="header-icon green"><Clock size={18} /></div>
-                <h3>Historial de Eventos</h3>
-              </div>
-              <ModernTimeline milestones={normalizedMilestonesForTimeline as any} />
-            </div>
-          </div>
-
-          {/* DOCUMENTACIÓN DIGITAL */}
-          <div className="ff-card ff-card-pad">
-            <div className="modern-section-header spread">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div className="header-icon dark"><FileText size={18} /></div>
-                <h3>Expediente Digital de Embarque</h3>
-              </div>
-              <div className="doc-counter">{docCount} / 10</div>
-            </div>
-
-            <div className="doc-grid-modern">
-              {Object.entries(DOC_LABELS).map(([key, label]) => {
-                const doc = data.documents
-  ?.filter(d => d.doc_type === key)
-  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-                const isUploaded = !!doc;
-                return (
-                  <div key={key} className={`doc-item-card ${isUploaded ? 'status-uploaded' : 'status-pending'}`}>
-                    <div className="doc-item-main">
-                      <div className="doc-item-status-icon">
-                        {isUploaded ? <CheckCircle2 size={16} /> : <PlusCircle size={16} />}
-                      </div>
-                      <div className="doc-item-info">
-                        <span className="doc-item-label">{label}</span>
-                        <span className="doc-item-status-text">
-                          {isUploaded ? 'CARGADO' : 'PENDIENTE'}
-                        </span>
-                      </div>
+              {data.photos?.length ? (
+                <div className="ff-amazon-gallery">
+                  {/* Foto Principal */}
+                  <div className="ff-main-photo" onClick={() => download(data.photos[activePhotoIdx].id)}>
+                    <img src={data.photos[activePhotoIdx].url || ''} alt="Inspección principal" />
+                    <div className="ff-photo-overlay">
+                      <Download size={24} />
+                      <span>Click para descargar original</span>
                     </div>
-                    {isUploaded && (
-                      <button className="doc-download-pill" onClick={() => download(doc.id)}>
-                        <Download size={14} />
-                      </button>
-                    )}
                   </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* REGISTRO FOTOGRÁFICO */}
-          <div className="ff-card ff-card-pad">
-            <div className="modern-section-header">
-              <div className="header-icon orange"><ImageIcon size={18} /></div>
-              <h3>Registro Fotográfico de Inspección</h3>
-            </div>
-            
-            <div className="photoGrid">
-              {data.photos?.length ? data.photos.map(p => (
-                <div key={p.id} className="photoCard" onClick={() => download(p.id)}>
-                  <div className="photo-container">
-                    <img src={p.url || ''} alt="evidencia" className="photoImg" />
-                    <div className="photo-overlay"><Download size={20} color="white" /></div>
-                  </div>
-                  <div className="photoBody">
-                     <div className="photoTitle">{p.filename}</div>
-                     <div className="photoMeta">{fmtDate(p.created_at)}</div>
+                  
+                  {/* Tiras de Miniaturas */}
+                  <div className="ff-thumbs-strip">
+                    {data.photos.map((p, idx) => (
+                      <div 
+                        key={p.id} 
+                        className={`ff-thumb ${idx === activePhotoIdx ? 'active' : ''}`}
+                        onClick={() => setActivePhotoIdx(idx)}
+                      >
+                        <img src={p.url || ''} alt={`Miniatura ${idx}`} />
+                      </div>
+                    ))}
                   </div>
                 </div>
-              )) : (
-                <div className="empty-state">
-                  <ImageIcon size={32} color="#cbd5e1" />
-                  <p>No se han registrado fotografías de inspección para este embarque.</p>
+              ) : (
+                <div className="ff-empty-gallery">
+                  <ImageIcon size={40} strokeWidth={1} />
+                  <p>No hay registro fotográfico disponible</p>
                 </div>
               )}
+            </div>
+
+            {/* COLUMNA DERECHA: DOCUMENTACIÓN DISCRETA */}
+            <div className="ff-docs-aside">
+              <div className="modern-section-header spread">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div className="header-icon dark"><FileText size={16} /></div>
+                  <h3>Documentación</h3>
+                </div>
+                <div className="doc-counter-mini">{docCount} / 10</div>
+              </div>
+
+              <div className="ff-docs-list-compact">
+                {Object.entries(DOC_LABELS).map(([key, label]) => {
+                  const doc = data.documents?.find(d => d.doc_type === key);
+                  const isUploaded = !!doc;
+                  return (
+                    <div key={key} className={`ff-doc-row ${isUploaded ? 'uploaded' : 'pending'}`}>
+                      <div className="ff-doc-info">
+                        <div className="ff-doc-status-dot"></div>
+                        <span className="ff-doc-name">{label}</span>
+                      </div>
+                      {isUploaded ? (
+                        <button className="ff-doc-download-btn" onClick={() => download(doc.id)} title="Descargar">
+                          <Download size={14} />
+                        </button>
+                      ) : (
+                        <span className="ff-doc-pending-tag">Pendiente</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
