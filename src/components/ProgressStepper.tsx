@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-// Lógica de tipos y utilidades (Sin cambios para no romper nada)
+// Lógica de tipos y utilidades (Mantenida intacta)
 type StepType = | "CREATED" | "PACKED" | "DOCS_READY" | "AT_ORIGIN" | "IN_TRANSIT" | "AT_DESTINATION" | string;
 type Milestone = { type: StepType; at?: string | null; created_at?: string | null; note?: string | null; };
 
@@ -15,13 +15,18 @@ const STEPS: { type: StepType; label: string }[] = [
 
 const IN_TRANSIT_INDEX = STEPS.findIndex((s) => String(s.type).toUpperCase() === "IN_TRANSIT");
 
-// Icono de Piña con colores del Brandbook
-function BrandPineappleIcon({ size = 44 }: { size?: number }) {
+// Nuevo Icono de Caja Isométrica Técnica (Grande y líneas finas)
+function TechnicalBoxIcon({ size = 42 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M12 2L10 7L12 6L14 7L12 2Z" fill="var(--ff-green)" />
-      <path d="M12 21C15.3137 21 18 18.3137 18 15C18 11.6863 15.3137 9 12 9C8.68629 9 6 11.6863 6 15C6 18.3137 8.68629 21 12 21Z" fill="var(--ff-orange)" />
-      <path d="M9 13L15 17M9 17L15 13" stroke="white" strokeWidth="0.5" strokeOpacity="0.4" />
+      {/* Cara Superior */}
+      <path d="M12 2L3 7L12 12L21 7L12 2Z" stroke="var(--ff-orange)" strokeWidth="1" fill="rgba(209, 119, 17, 0.05)"/>
+      {/* Cara Izquierda */}
+      <path d="M3 7V17L12 22V12L3 7Z" stroke="var(--ff-orange)" strokeWidth="1" />
+      {/* Cara Derecha */}
+      <path d="M21 7V17L12 22V12L21 7Z" stroke="var(--ff-orange)" strokeWidth="1" />
+      {/* Detalle interno (cinta/cierre) */}
+      <path d="M12 12V22" stroke="var(--ff-orange)" strokeWidth="0.5" strokeDasharray="2 2" />
     </svg>
   );
 }
@@ -38,7 +43,7 @@ function computeCurrentIndex(milestones: Milestone[]) {
   return idx;
 }
 
-export function ProgressStepper({ milestones, flightNumber, introMs = 1400 }: { milestones: Milestone[]; flightNumber?: string | null; introMs?: number; }) {
+export function ProgressStepper({ milestones, flightNumber, introMs = 1600 }: { milestones: Milestone[]; flightNumber?: string | null; introMs?: number; }) {
   const currentIndex = useMemo(() => computeCurrentIndex(milestones ?? []), [milestones]);
   const targetPct = useMemo(() => (STEPS.length <= 1 ? 0 : (currentIndex / (STEPS.length - 1)) * 100), [currentIndex]);
   
@@ -62,70 +67,73 @@ export function ProgressStepper({ milestones, flightNumber, introMs = 1400 }: { 
 
   return (
     <div className="ff-stepper-card">
-      {/* Header Alineado a Brandbook */}
       <div className="ff-stepper-header">
-        <div>
-          <span className="ff-live-tag">TRACKING EN VIVO</span>
-          <h3 className="ff-title">Estatus del Embarque CIP/AIR</h3>
+        <div className="ff-brand-group">
+          <div className="ff-live-pill">
+            <span className="ff-ping"></span>
+            SISTEMA DE MONITOREO EN VIVO
+          </div>
+          <h3 className="ff-title">Logística Internacional CIP/AIR</h3>
         </div>
-        <div className="ff-status-pill">
-          {STEPS[currentIndex]?.label}
+        <div className="ff-current-status">
+          <span className="ff-label">ESTADO ACTUAL</span>
+          <span className="ff-value">{STEPS[currentIndex]?.label}</span>
         </div>
       </div>
 
-      {/* Track de Progreso con variables Brand */}
-      <div className="ff-track-container">
+      <div className="ff-track-area">
+        {/* Riel de progreso técnico */}
         <div className="ff-rail">
           <div 
             className="ff-fill" 
-            style={{ 
-                width: `${pct}%`, 
-                transition: `width ${introMs}ms cubic-bezier(0.34, 1.56, 0.64, 1)` 
-            }} 
+            style={{ width: `${pct}%`, transition: `width ${introMs}ms cubic-bezier(0.22, 1, 0.36, 1)` }} 
           >
-            <div className="ff-glow" />
+            {/* Efecto de escaneo láser */}
+            <div className="ff-scan-line" />
           </div>
         </div>
 
-        {/* Radar de Vuelo */}
+        {/* Hotspot de Vuelo */}
         {transitReached && (
           <div className="ff-vuelo-radar" style={{ left: `${transitPct}%` }}>
-            <div className="radar-pulse" />
-            <div className="radar-dot" />
-            <span className="radar-txt">Vuelo</span>
+            <div className="radar-waves" />
+            <div className="radar-point" />
+            <span className="radar-tag">VUELO</span>
           </div>
         )}
 
-        {/* Piña Flotante */}
+        {/* Icono de Caja Flotante (Grande y Técnico) */}
         <div 
-          className="ff-pineapple-float" 
-          style={{ 
-            left: `${pct}%`, 
-            transition: `left ${introMs}ms cubic-bezier(0.34, 1.56, 0.64, 1)` 
-          }}
+          className="ff-box-float" 
+          style={{ left: `${pct}%`, transition: `left ${introMs}ms cubic-bezier(0.22, 1, 0.36, 1)` }}
         >
-          <BrandPineappleIcon size={46} />
+          <div className="ff-box-bounce">
+            <TechnicalBoxIcon size={42} />
+          </div>
+          <div className="ff-box-shadow" />
         </div>
       </div>
 
-      {/* Grid de Pasos */}
+      {/* Grid de Pasos con Tipografía Limpia */}
       <div className="ff-steps-grid">
         {STEPS.map((s, i) => {
           const isDone = i <= currentIndex;
-          const isCurrent = i === currentIndex;
+          const isActive = i === currentIndex;
           const hit = hitMap.get(String(s.type).toUpperCase());
           const time = hit ? (hit.at || hit.created_at) : null;
 
           return (
-            <div key={s.type} className={`ff-step-box ${isDone ? 'done' : ''} ${isCurrent ? 'active' : ''}`}>
-              <div className="ff-step-head">
-                <div className="ff-step-dot" />
-                <span className="ff-step-label">{s.label}</span>
+            <div key={s.type} className={`ff-step-item ${isDone ? 'done' : ''} ${isActive ? 'active' : ''}`}>
+              <div className="ff-marker-wrapper">
+                <div className="ff-marker-dot" />
               </div>
-              <div className="ff-step-time">{time ? fmtStepTime(time) : "---"}</div>
-              {i === IN_TRANSIT_INDEX && flightNumber && isDone && (
-                <div className="ff-step-flight">✈ {flightNumber}</div>
-              )}
+              <div className="ff-step-content">
+                <span className="ff-step-name">{s.label}</span>
+                <span className="ff-step-time">{time ? fmtStepTime(time) : "PENDIENTE"}</span>
+                {i === IN_TRANSIT_INDEX && flightNumber && isDone && (
+                  <div className="ff-flight-tag">✈ {flightNumber}</div>
+                )}
+              </div>
             </div>
           );
         })}
@@ -134,141 +142,163 @@ export function ProgressStepper({ milestones, flightNumber, introMs = 1400 }: { 
       <style jsx>{`
         .ff-stepper-card {
           background: var(--ff-surface);
-          padding: 24px;
-          border-radius: 16px;
+          padding: 32px;
+          border-radius: 20px;
           border: 1px solid var(--ff-border);
           box-shadow: var(--ff-shadow);
-          margin-bottom: 20px;
         }
 
         .ff-stepper-header {
           display: flex;
           justify-content: space-between;
-          align-items: center;
-          margin-bottom: 32px;
+          align-items: flex-end;
+          margin-bottom: 40px;
         }
 
-        .ff-live-tag {
-          font-size: 9px;
-          font-weight: 950;
+        .ff-live-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
           color: var(--ff-green);
-          letter-spacing: 1px;
-          display: block;
-          margin-bottom: 4px;
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 1.5px;
+          margin-bottom: 8px;
+        }
+
+        .ff-ping {
+          width: 8px;
+          height: 8px;
+          background: var(--ff-green);
+          border-radius: 50%;
+          position: relative;
+        }
+        .ff-ping::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          background: var(--ff-green);
+          animation: pro-ping 2s infinite;
         }
 
         .ff-title {
           margin: 0;
-          font-size: 16px;
-          font-weight: 950;
+          font-size: 20px;
+          font-weight: 500; /* Peso medio para look Pro */
           color: var(--ff-text);
           letter-spacing: -0.5px;
         }
 
-        .ff-status-pill {
-          background: var(--ff-green);
-          color: white;
-          padding: 6px 14px;
-          border-radius: 99px;
-          font-size: 11px;
-          font-weight: 800;
-          box-shadow: 0 4px 10px rgba(31, 122, 58, 0.2);
-        }
+        .ff-current-status { text-align: right; }
+        .ff-label { font-size: 10px; color: var(--ff-muted); display: block; }
+        .ff-value { font-size: 16px; font-weight: 600; color: var(--ff-green); }
 
-        .ff-track-container {
+        .ff-track-area {
           position: relative;
-          height: 60px;
+          height: 70px;
           display: flex;
           align-items: center;
-          margin-bottom: 20px;
+          margin-bottom: 24px;
         }
 
         .ff-rail {
           width: 100%;
-          height: 8px;
+          height: 6px;
           background: var(--ff-bg);
           border-radius: 10px;
-          border: 1px solid var(--ff-border);
           overflow: hidden;
         }
 
         .ff-fill {
           height: 100%;
-          background: linear-gradient(90deg, var(--ff-green-dark), var(--ff-green));
+          background: var(--ff-green);
           position: relative;
+          box-shadow: 0 0 15px rgba(31, 122, 58, 0.2);
         }
 
-        .ff-glow {
+        .ff-scan-line {
           position: absolute;
-          right: 0;
-          height: 100%;
-          width: 20px;
-          background: white;
-          filter: blur(8px);
-          opacity: 0.4;
+          top: 0; right: 0; bottom: 0;
+          width: 60px;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+          animation: scan 3s infinite linear;
         }
 
-        .ff-pineapple-float {
+        .ff-box-float {
           position: absolute;
-          transform: translate(-50%, -18px);
-          z-index: 10;
-          filter: drop-shadow(0 6px 12px rgba(0,0,0,0.1));
-          animation: floaty 3s ease-in-out infinite;
-        }
-
-        .ff-vuelo-radar {
-          position: absolute;
-          transform: translateX(-50%);
-          top: 40px;
+          transform: translate(-50%, -20px);
+          z-index: 20;
           display: flex;
           flex-direction: column;
           align-items: center;
         }
 
-        .radar-dot { width: 6px; height: 6px; background: var(--ff-orange); border-radius: 50%; }
-        .radar-pulse {
-          position: absolute; width: 16px; height: 16px; border: 1px solid var(--ff-orange);
-          border-radius: 50%; animation: pulse 2s infinite; top: -5px;
+        .ff-box-bounce { animation: pro-float 3s ease-in-out infinite; }
+        .ff-box-shadow {
+          width: 20px; height: 4px;
+          background: rgba(0,0,0,0.1);
+          border-radius: 50%;
+          filter: blur(4px);
+          margin-top: 4px;
         }
-        .radar-txt { font-size: 9px; font-weight: 900; color: var(--ff-muted); margin-top: 4px; }
+
+        .ff-vuelo-radar {
+          position: absolute;
+          transform: translateX(-50%);
+          top: 45px;
+          text-align: center;
+        }
+        .radar-point { width: 6px; height: 6px; background: var(--ff-orange); border-radius: 50%; }
+        .radar-waves {
+          position: absolute; width: 20px; height: 20px;
+          border: 1px solid var(--ff-orange); border-radius: 50%;
+          animation: pro-radar 2s infinite; top: -7px; left: -7px;
+        }
+        .radar-tag { font-size: 9px; color: var(--ff-muted); margin-top: 4px; display: block; }
 
         .ff-steps-grid {
           display: grid;
           grid-template-columns: repeat(6, 1fr);
-          gap: 10px;
+          gap: 16px;
         }
 
-        .ff-step-box {
-          padding: 12px;
-          border-radius: 12px;
-          border: 1px solid transparent;
-          background: var(--ff-bg);
-          opacity: 0.6;
-          transition: 0.3s;
-        }
-
-        .ff-step-box.done { opacity: 1; background: var(--ff-surface); border-color: var(--ff-border); }
-        .ff-step-box.active {
+        .ff-step-item { opacity: 0.35; transition: 0.5s; }
+        .ff-step-item.done { opacity: 0.8; }
+        .ff-step-item.active {
           opacity: 1;
-          background: var(--ff-surface);
-          border-color: var(--ff-green);
-          box-shadow: 0 4px 12px rgba(31, 122, 58, 0.08);
-          transform: translateY(-2px);
+          transform: translateY(-4px);
         }
 
-        .ff-step-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-        .ff-step-dot { width: 7px; height: 7px; background: #cbd5e1; border-radius: 50%; }
-        .done .ff-step-dot { background: var(--ff-green); }
-        .active .ff-step-dot { background: var(--ff-green); box-shadow: 0 0 6px var(--ff-green); }
+        .ff-marker-wrapper { margin-bottom: 12px; }
+        .ff-marker-dot {
+          width: 10px; height: 10px;
+          background: #cbd5e1;
+          border-radius: 50%;
+          border: 2px solid var(--ff-surface);
+          box-shadow: 0 0 0 1px #cbd5e1;
+        }
+        .done .ff-marker-dot { background: var(--ff-green); box-shadow: 0 0 0 1px var(--ff-green); }
+        .active .ff-marker-dot {
+          background: var(--ff-green);
+          box-shadow: 0 0 0 2px var(--ff-green), 0 0 12px var(--ff-green);
+        }
 
-        .ff-step-label { font-size: 11px; font-weight: 900; color: var(--ff-text); }
-        .ff-step-time { font-size: 10px; font-weight: 700; color: var(--ff-muted); }
-        .ff-step-flight { margin-top: 6px; font-size: 10px; font-weight: 950; color: var(--ff-orange); }
+        .ff-step-name { font-size: 13px; font-weight: 500; color: var(--ff-text); display: block; }
+        .ff-step-time { font-size: 11px; color: var(--ff-muted); }
+        .ff-flight-tag {
+          margin-top: 6px;
+          font-size: 10px;
+          color: var(--ff-orange);
+          font-weight: 600;
+        }
 
-        @keyframes floaty { 0%, 100% { transform: translate(-50%, -18px); } 50% { transform: translate(-50%, -24px); } }
-        @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
+        @keyframes pro-ping { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(3); opacity: 0; } }
+        @keyframes pro-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+        @keyframes pro-radar { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
+        @keyframes scan { 0% { right: 100%; } 100% { right: -20%; } }
 
-        @media (max-width: 900px) { .ff-steps-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 1024px) { .ff-steps-grid { grid-template-columns: repeat(3, 1fr); } }
       `}</style>
     </div>
   );
