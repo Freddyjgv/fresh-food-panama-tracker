@@ -207,8 +207,12 @@ export default function ShipmentDetailPage() {
 
           {/* PROGRESS */}
           <div className="block">
-            <ProgressStepper milestones={data.milestones ?? []} flightNumber={data.flight_number ?? null} />
-          </div>
+            <ProgressStepper 
+    milestones={data.milestones ?? []} 
+    flightNumber={data.flight_number ?? null} 
+    awb={data.awb ?? null}  // <--- ¡AÑADE ESTA LÍNEA AQUÍ!
+  />
+</div>
 
           <div className="grid2">
             {/* KPI PANEL */}
