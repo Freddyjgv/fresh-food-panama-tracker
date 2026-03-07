@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, ArrowUpDown, Calendar, Package, MapPin, RefreshCcw } from "lucide-react";
+import { Search, Calendar, Package, MapPin, RefreshCcw, Plane, ArrowRight, Layers } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import { labelStatus, statusBadgeClass } from "../../lib/shipmentFlow";
 import { ClientLayout } from "../../components/ClientLayout";
@@ -8,152 +8,151 @@ import { ClientLayout } from "../../components/ClientLayout";
 type Shipment = {
   id: string;
   code: string;
-  destination?: string | null;
   status: string;
-  created_at?: string;
+  created_at: string;
+  destination: string;
+  product_name: string;
+  product_variety: string;
+  pallets: number;
+  boxes: number;
+  awb: string;
+  flight_number: string;
+  client_name?: string; // Vendrá del JOIN o del objeto anidado
+  clients?: { name: string }; 
 };
 
-function formatDate(iso?: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("es-PA", { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
 export default function ShipmentsPage() {
-  const pageSize = 20;
-  const [page, setPage] = useState(1);
-  const [dir, setDir] = useState<"asc" | "desc">("desc");
-  const [destination, setDestination] = useState("");
-  const [search, setSearch] = useState("");
   const [items, setItems] = useState<Shipment[]>([]);
-  const [total, setTotal] = useState<number>(0);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string>("");
+  const [search, setSearch] = useState("");
+  const [destFilter, setDestFilter] = useState("");
 
-  const totalPages = useMemo(() => Math.max(1, Math.ceil((total || 0) / pageSize)), [total]);
-
-  async function fetchShipments(next?: { page?: number; dir?: "asc" | "desc"; destination?: string; search?: string; }) {
+  async function fetchShipments() {
     setLoading(true);
-    setErrorMsg("");
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token;
+    if (!token) return;
 
-    if (!token) {
-      setLoading(false);
-      setErrorMsg("Sesión inválida.");
-      return;
-    }
-
-    const params = new URLSearchParams();
-    params.set("page", String(next?.page ?? page));
-    params.set("pageSize", String(pageSize));
-    params.set("dir", next?.dir ?? dir);
-    
-    const d = next?.destination ?? destination;
-    const q = next?.search ?? search;
-    if (d) params.set("destination", d);
-    if (q) params.set("q", q);
-
-    const res = await fetch(`/.netlify/functions/listShipments?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const params = new URLSearchParams({
+      page: "1",
+      pageSize: "40",
+      q: search,
+      destination: destFilter
     });
 
-    if (!res.ok) {
+    try {
+      const res = await fetch(`/.netlify/functions/listShipments?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      setItems(json.items || []);
+      setTotal(json.total || 0);
+    } catch (e) {
+      console.error("Error fetching shipments:", e);
+    } finally {
       setLoading(false);
-      setErrorMsg(`Error (${res.status})`);
-      return;
     }
-
-    const json = await res.json();
-    setItems((json.items ?? json.data ?? []) as Shipment[]);
-    setTotal(Number(json.total ?? json.count ?? 0));
-    setLoading(false);
   }
 
-  // ✅ FUNCIÓN CORREGIDA
-  async function applySearch() {
-    setPage(1);
-    await fetchShipments({ page: 1, search });
-  }
-
-  useEffect(() => { 
-    fetchShipments(); 
-  }, [page, dir, destination]);
+  useEffect(() => { fetchShipments(); }, [destFilter]);
 
   return (
-    <ClientLayout title="Embarques" subtitle="Gestión de exportaciones." wide>
-      <div className="ff-page-container">
+    <ClientLayout title="Panel de Logística" wide>
+      <div className="md-container">
         
-        {/* Toolbar Minimalista */}
-        <div className="ff-toolbar">
-          <div className="ff-search-group">
-            <Search size={14} color="#94a3b8" />
+        {/* HEADER DE BIENVENIDA CON MÉTRICAS */}
+        <header className="md-header">
+          <div className="md-header-left">
+            <h1 className="md-title">Historial de Embarques</h1>
+            <p className="md-subtitle">Gestionando <strong>{total}</strong> operaciones activas</p>
+          </div>
+          <div className="md-quick-stats">
+            <div className="md-stat">
+              <span className="md-stat-val">{total}</span>
+              <span className="md-stat-lab">ENVÍOS</span>
+            </div>
+          </div>
+        </header>
+
+        {/* TOOLBAR AVANZADO */}
+        <div className="md-toolbar">
+          <div className="md-search-box">
+            <Search size={18} className="md-icon-muted" />
             <input 
-              className="ff-input-clean" 
-              placeholder="Buscar código..." 
+              placeholder="Buscar por código, AWB o producto..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && applySearch()}
+              onKeyDown={(e) => e.key === "Enter" && fetchShipments()}
             />
           </div>
           
-          <select 
-            className="ff-select-clean"
-            value={destination}
-            onChange={(e) => { setPage(1); setDestination(e.target.value); }}
-          >
-            <option value="">Destinos</option>
-            <option value="MAD">Madrid</option>
-            <option value="AMS">Amsterdam</option>
-          </select>
-
-          <button className="ff-btn-search" onClick={applySearch}>Buscar</button>
-          <button className="ff-btn-icon" onClick={() => fetchShipments()}><RefreshCcw size={14} /></button>
+          <div className="md-filters">
+            <div className="md-select-group">
+              <MapPin size={16} className="md-icon-muted" />
+              <select value={destFilter} onChange={(e) => setDestFilter(e.target.value)}>
+                <option value="">Todos los Destinos</option>
+                <option value="MAD">Madrid (MAD)</option>
+                <option value="AMS">Amsterdam (AMS)</option>
+                <option value="MIA">Miami (MIA)</option>
+              </select>
+            </div>
+            <button className="md-btn-refresh" onClick={fetchShipments} disabled={loading}>
+              <RefreshCcw size={16} className={loading ? "spin" : ""} />
+            </button>
+          </div>
         </div>
 
-        {/* Listado */}
-        <div className="ff-list-grid">
-          {items.map((s) => (
-            <Link key={s.id} href={`/shipments/${s.id}`} className={`ff-card status-l-${s.status}`}>
-              <div className="ff-card-layout">
+        {/* LISTADO DE EMBARQUES (ESTILO CARDS PREMIUM) */}
+        <div className="md-grid">
+          {loading ? (
+            <div className="md-loading-state">Sincronizando flota...</div>
+          ) : items.map((s) => (
+            <Link key={s.id} href={`/shipments/${s.id}`} className="md-card-link">
+              <div className="md-card">
                 
-                {/* ID / Producto */}
-                <div className="ff-section-main">
-                  <div className="ff-icon-wrapper">
-                    <Package size={16} color="#64748b" />
+                {/* 1. SECCIÓN PRINCIPAL: PRODUCTO & CLIENTE */}
+                <div className="md-col-info">
+                  <div className="md-package-box">
+                    <Package size={22} />
                   </div>
                   <div>
-                    <h3 className="ff-ship-id">{s.code}</h3>
-                    <p className="ff-ship-sub">Piña MD2 · 4 Palets</p>
+                    <div className="md-code-tag">#{s.code}</div>
+                    <h3 className="md-product-title">
+                      {s.product_name} <span className="md-variety">({s.product_variety})</span>
+                    </h3>
+                    <p className="md-client-name">{s.clients?.name || s.client_name || "Cliente Corporativo"}</p>
                   </div>
                 </div>
 
-                {/* Destino */}
-                <div className="ff-section-center">
-                  <div className="ff-metric">
-                    <MapPin size={13} color="#cbd5e1" />
-                    <div>
-                      <span className="ff-label-small">DESTINO</span>
-                      <span className="ff-value-small">{s.destination || "—"}</span>
-                    </div>
+                {/* 2. LOGÍSTICA: RUTA & CARGA */}
+                <div className="md-col-logistics">
+                  <div className="md-route">
+                    <span className="md-badge-city">PTY</span>
+                    <ArrowRight size={14} className="md-arrow" />
+                    <span className="md-badge-city active">{s.destination || "TBD"}</span>
+                  </div>
+                  <div className="md-cargo-details">
+                    <Layers size={12} />
+                    <span>{s.pallets} Pallets • {s.boxes} Cajas</span>
                   </div>
                 </div>
 
-                {/* Fecha */}
-                <div className="ff-section-center">
-                  <div className="ff-metric">
-                    <Calendar size={13} color="#cbd5e1" />
-                    <div>
-                      <span className="ff-label-small">FECHA</span>
-                      <span className="ff-value-small">{formatDate(s.created_at)}</span>
-                    </div>
+                {/* 3. VUELO & FECHA */}
+                <div className="md-col-flight">
+                  <div className="md-flight-row">
+                    <Plane size={14} />
+                    <span>{s.flight_number || "TBD"}</span>
+                  </div>
+                  <div className="md-date-row">
+                    <Calendar size={14} />
+                    <span>{new Date(s.created_at).toLocaleDateString('es-PA', { day:'2-digit', month:'short' }).toUpperCase()}</span>
                   </div>
                 </div>
 
-                {/* Status */}
-                <div className="ff-section-right">
-                  <span className={`ff-pill ${statusBadgeClass(s.status)}`}>
+                {/* 4. STATUS FINAL */}
+                <div className="md-col-status">
+                  <span className={`md-status-pill ${statusBadgeClass(s.status)}`}>
                     {labelStatus(s.status)}
                   </span>
                 </div>
@@ -165,126 +164,84 @@ export default function ShipmentsPage() {
       </div>
 
       <style jsx>{`
-        .ff-page-container {
-          max-width: 1000px;
-          margin: 0 auto;
-          padding: 24px;
-        }
+        .md-container { max-width: 1200px; margin: 0 auto; padding: 40px 24px; zoom: 0.94; }
+        
+        /* Header */
+        .md-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
+        .md-title { font-size: 32px; font-weight: 800; color: #0f172a; letter-spacing: -1px; margin: 0; }
+        .md-subtitle { color: #64748b; font-size: 16px; margin-top: 4px; }
+        .md-stat { background: #1e293b; color: white; padding: 12px 24px; border-radius: 18px; text-align: center; }
+        .md-stat-val { display: block; font-size: 20px; font-weight: 800; }
+        .md-stat-lab { font-size: 10px; font-weight: 700; opacity: 0.6; letter-spacing: 0.1em; }
 
         /* Toolbar */
-        .ff-toolbar {
-          display: flex;
-          gap: 12px;
-          margin-bottom: 24px;
-          align-items: center;
+        .md-toolbar { display: flex; gap: 16px; margin-bottom: 30px; }
+        .md-search-box { 
+          flex: 1; background: white; border: 1px solid #e2e8f0; border-radius: 16px; 
+          display: flex; align-items: center; padding: 0 18px; gap: 12px; transition: 0.2s;
         }
-        .ff-search-group {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          background: #fff;
-          border: 1px solid #e2e8f0;
-          padding: 0 12px;
-          border-radius: 6px;
-          height: 36px;
+        .md-search-box:focus-within { border-color: #1e293b; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
+        .md-search-box input { border: none; outline: none; width: 100%; height: 52px; font-size: 15px; font-weight: 500; }
+        
+        .md-filters { display: flex; gap: 12px; }
+        .md-select-group { 
+          background: white; border: 1px solid #e2e8f0; border-radius: 16px; 
+          display: flex; align-items: center; padding: 0 16px; gap: 10px;
         }
-        .ff-input-clean {
-          border: none;
-          outline: none;
-          width: 100%;
-          font-size: 0.85rem;
-          color: #1e293b;
+        .md-select-group select { border: none; outline: none; height: 52px; font-size: 14px; font-weight: 700; color: #475569; appearance: none; cursor: pointer; }
+        
+        .md-btn-refresh { 
+          width: 52px; height: 52px; border-radius: 16px; border: 1px solid #e2e8f0; 
+          background: white; display: grid; place-items: center; cursor: pointer; color: #64748b; transition: 0.2s;
         }
-        .ff-select-clean {
-          height: 36px;
-          border: 1px solid #e2e8f0;
-          border-radius: 6px;
-          padding: 0 8px;
-          font-size: 0.8rem;
-          color: #64748b;
-          background: #fff;
+        .md-btn-refresh:hover { background: #f8fafc; color: #0f172a; border-color: #cbd5e1; }
+
+        /* Grid de Cards */
+        .md-grid { display: flex; flex-direction: column; gap: 12px; }
+        .md-card-link { text-decoration: none; display: block; }
+        .md-card { 
+          background: white; border: 1px solid #f1f5f9; border-radius: 24px; 
+          display: grid; grid-template-columns: 1.6fr 1.2fr 1fr 1fr; 
+          align-items: center; padding: 20px 32px; transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.01);
         }
-        .ff-btn-search {
-          height: 36px;
-          padding: 0 16px;
-          background: #1e293b;
-          color: white;
-          border-radius: 6px;
-          font-size: 0.8rem;
-          font-weight: 600;
-        }
-        .ff-btn-icon {
-          width: 36px;
-          height: 36px;
-          border: 1px solid #e2e8f0;
-          background: #fff;
-          border-radius: 6px;
-          display: grid;
-          place-items: center;
-          color: #94a3b8;
+        .md-card-link:hover .md-card { 
+          border-color: #cbd5e1; transform: translateY(-3px); 
+          box-shadow: 0 12px 24px rgba(0,0,0,0.05); 
         }
 
-        /* Cards Minimalistas */
-        .ff-card {
-          display: block;
-          text-decoration: none;
-          background: #ffffff !important;
-          border: 1px solid #f1f5f9;
-          border-radius: 8px;
-          margin-bottom: 8px;
-          transition: all 0.2s;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.02);
-        }
-        .ff-card:hover {
-          border-color: #cbd5e1;
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.04);
-        }
+        /* Columnas */
+        .md-col-info { display: flex; align-items: center; gap: 20px; }
+        .md-package-box { width: 48px; height: 48px; background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 14px; display: grid; place-items: center; color: #475569; }
+        .md-code-tag { font-family: monospace; font-size: 11px; font-weight: 800; color: #94a3b8; margin-bottom: 2px; }
+        .md-product-title { font-size: 17px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.3px; }
+        .md-variety { color: #64748b; font-weight: 500; font-size: 14px; }
+        .md-client-name { font-size: 13px; color: #94a3b8; font-weight: 600; margin: 2px 0 0; }
 
-        /* ADN Borde Status */
-        .status-l-in_transit { border-left: 3px solid #3b82f6 !important; }
-        .status-l-delivered { border-left: 3px solid #10b981 !important; }
-        .status-l-pending { border-left: 3px solid #f59e0b !important; }
+        .md-route { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .md-badge-city { font-size: 11px; font-weight: 800; color: #64748b; background: #f8fafc; padding: 4px 12px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .md-badge-city.active { color: #2563eb; background: #eff6ff; border-color: #dbeafe; }
+        .md-arrow { color: #cbd5e1; }
+        .md-cargo-details { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #94a3b8; }
 
-        .ff-card-layout {
-          display: grid;
-          grid-template-columns: 1.2fr 1fr 1fr 0.8fr;
-          align-items: center;
-          padding: 12px 20px;
+        .md-col-flight { display: flex; flex-direction: column; gap: 6px; }
+        .md-flight-row, .md-date-row { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #475569; }
+        .md-icon-muted { color: #cbd5e1; }
+
+        .md-col-status { display: flex; justify-content: flex-end; }
+        :global(.md-status-pill) {
+          padding: 8px 16px; border-radius: 100px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
         }
 
-        .ff-section-main { display: flex; align-items: center; gap: 12px; }
-        .ff-icon-wrapper {
-          width: 32px;
-          height: 32px;
-          background: #f8fafc;
-          border-radius: 6px;
-          display: grid;
-          place-items: center;
-        }
-        .ff-ship-id { font-size: 0.9rem; font-weight: 700; color: #0f172a; margin: 0; }
-        .ff-ship-sub { font-size: 0.75rem; color: #94a3b8; margin: 0; }
+        .md-loading-state { padding: 40px; text-align: center; color: #94a3b8; font-weight: 600; letter-spacing: 1px; }
+        
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spin { animation: spin 1s linear infinite; }
 
-        .ff-section-center { display: flex; justify-content: center; }
-        .ff-metric { display: flex; align-items: center; gap: 8px; }
-        .ff-label-small { display: block; font-size: 0.55rem; font-weight: 800; color: #cbd5e1; letter-spacing: 0.02em; }
-        .ff-value-small { display: block; font-size: 0.8rem; font-weight: 600; color: #475569; }
-
-        .ff-section-right { display: flex; justify-content: flex-end; }
-        :global(.ff-pill) {
-          padding: 4px 10px;
-          border-radius: 100px;
-          font-size: 0.65rem;
-          font-weight: 700;
-          text-transform: uppercase;
-        }
-        :global(.bg-blue-100) { background: #eff6ff !important; color: #2563eb !important; }
-        :global(.bg-green-100) { background: #f0fdf4 !important; color: #16a34a !important; }
-
-        @media (max-width: 768px) {
-          .ff-card-layout { grid-template-columns: 1fr; gap: 12px; }
-          .ff-section-center, .ff-section-right { justify-content: flex-start; }
+        @media (max-width: 1000px) {
+          .md-card { grid-template-columns: 1fr; gap: 20px; padding: 24px; }
+          .md-col-status, .md-col-flight { justify-content: flex-start; align-items: flex-start; }
+          .md-toolbar { flex-direction: column; }
         }
       `}</style>
     </ClientLayout>
