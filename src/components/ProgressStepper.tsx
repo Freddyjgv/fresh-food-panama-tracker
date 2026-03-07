@@ -94,9 +94,22 @@ export function ProgressStepper({
             return (
               <div key={i} className={`ff-step-column ${isDone ? 'is-done' : ''} ${isActive ? 'is-active' : ''}`}>
                 <div className="ff-dot-wrapper">
-                  <div className="ff-step-dot"></div>
-                  {isActive && <div className="ff-active-halo"></div>}
-                </div>
+  <div className="ff-step-dot">
+    {/* PEQUEÑO INDICADOR SI HAY NOTA */}
+    {hit?.note && <div className="ff-note-indicator-dot"></div>}
+  </div>
+  
+  {isActive && <div className="ff-active-halo"></div>}
+
+  {/* EL TOOLTIP (Aparece al hacer hover en .ff-step-column) */}
+  {hit?.note && (
+    <div className="ff-note-tooltip">
+      <div className="ff-tooltip-tag">COMENTARIO TÉCNICO</div>
+      <p className="ff-tooltip-text">{hit.note}</p>
+      <div className="ff-tooltip-arrow"></div>
+    </div>
+  )}
+</div>
                 <div className="ff-step-content">
                   <span className="ff-label-text">{s.label}</span>
                   <span className="ff-time-text">{time || "—:—"}</span>
@@ -203,6 +216,51 @@ export function ProgressStepper({
           .ff-step-column { min-width: 100px; }
           .ff-stepper-track-area { overflow-x: auto; padding-top: 40px; }
         }
+
+        /* El punto que avisa que hay una nota */
+.ff-note-indicator-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  background: #ea580c; /* Naranja llamativo */
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 5px rgba(234, 88, 12, 0.4);
+}
+
+/* Tooltip mejorado */
+.ff-note-tooltip {
+  position: absolute;
+  bottom: 35px;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  width: 240px;
+  background: #1e293b;
+  padding: 14px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.ff-step-column:hover .ff-note-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.ff-tooltip-tag { font-size: 9px; font-weight: 800; color: #94a3b8; margin-bottom: 4px; }
+.ff-tooltip-text { font-size: 12px; color: #f1f5f9; line-height: 1.5; margin: 0; }
+.ff-tooltip-arrow {
+  position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%);
+  border-left: 7px solid transparent; border-right: 7px solid transparent;
+  border-top: 7px solid #1e293b;
+}
       `}</style>
     </div>
   );
