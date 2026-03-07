@@ -8,7 +8,7 @@ import { ProgressStepper } from "../../components/ProgressStepper";
 import { Timeline as ModernTimeline } from "../../components/Timeline";
 import { labelStatus, statusBadgeClass } from "../../lib/shipmentFlow";
 
-import { FileText, Image as ImageIcon, Download, Info, ArrowLeft, Package, MapPin, Shield } from "lucide-react";
+import { FileText, Image as ImageIcon, Download, Info, Plane, ArrowLeft, Package, MapPin, Shield } from "lucide-react";
 
 /* =======================
    Types

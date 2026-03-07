@@ -41,11 +41,8 @@ export default function ShipmentsPage() {
 
   useEffect(() => { fetchShipments(); }, [destination]);
 
-    return (
-    <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh', padding: '40px' }}>
-      {/* QUITAMOS EL CLIENT LAYOUT PARA PROBAR 
-         Si aquí se ve bien, el problema es ClientLayout.tsx
-      */}
+  return (
+    <ClientLayout title="Mis Embarques" subtitle="Panel de control logístico" wide>
       <div className="ff-viewport">
         
         {/* TOOLBAR REFINADA */}
@@ -125,167 +122,80 @@ export default function ShipmentsPage() {
       </div>
 
       <style jsx>{`
-  /* 1. Fondo de página para que resalte el blanco de las cards */
-  :global(body) {
-    background-color: #f8fafc !important; 
-  }
+        .ff-viewport { max-width: 1080px; margin: 0 auto; padding: 20px; }
 
-  .ff-viewport { 
-    max-width: 1100px; 
-    margin: 0 auto; 
-    padding: 40px 20px; 
-  }
+        .ff-toolbar {
+          display: flex; gap: 10px; background: white; padding: 8px;
+          border-radius: 12px; border: 1px solid #eef2f6; margin-bottom: 25px;
+          box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01);
+        }
+        .ff-search-bar {
+          flex: 1; display: flex; align-items: center; gap: 10px;
+          background: #f8fafc; padding: 0 14px; border-radius: 8px; height: 42px;
+        }
+        .ff-search-bar input { border: none; background: transparent; width: 100%; outline: none; font-size: 0.9rem; color: #1e293b; }
+        .ff-select { border: 1px solid #eef2f6; border-radius: 8px; padding: 0 12px; font-weight: 600; color: #64748b; font-size: 0.85rem; }
+        .ff-btn-primary { background: #0f172a; color: white; border: none; padding: 0 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        .ff-btn-white { background: white; border: 1px solid #eef2f6; border-radius: 8px; width: 42px; color: #94a3b8; cursor: pointer; display: grid; place-items: center; }
 
-  /* 2. Toolbar más limpia y elevada */
-  .ff-toolbar {
-    display: flex; 
-    gap: 12px; 
-    background: white; 
-    padding: 12px;
-    border-radius: 16px; 
-    border: 1px solid #e2e8f0; 
-    margin-bottom: 32px;
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
-  }
+        /* CARDS BLANCAS - ESTILO MOCKUP */
+        .ff-card-item {
+          background: #ffffff !important;
+          border: 1px solid #f1f5f9 !important;
+          border-radius: 16px !important;
+          display: grid;
+          grid-template-columns: 1.3fr 1fr 1fr 1fr;
+          align-items: center;
+          padding: 18px 25px !important;
+          margin-bottom: 12px;
+          transition: all 0.2s ease-in-out;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.02) !important;
+          position: relative;
+        }
+        .ff-card-item:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 20px -5px rgba(0,0,0,0.05) !important;
+          border-color: #cbd5e1 !important;
+        }
 
-  .ff-search-bar {
-    flex: 1; 
-    display: flex; 
-    align-items: center; 
-    gap: 12px;
-    background: #f1f5f9; 
-    padding: 0 16px; 
-    border-radius: 12px; 
-    height: 48px;
-    transition: all 0.2s;
-  }
-  
-  .ff-search-bar:focus-within {
-    background: #fff;
-    box-shadow: 0 0 0 2px #e2e8f0;
-  }
+        /* LÍNEAS DE STATUS */
+        .border-created { border-left: 5px solid #94a3b8 !important; }
+        .border-packed { border-left: 5px solid #3b82f6 !important; }
+        .border-docs_ready { border-left: 5px solid #8b5cf6 !important; }
+        .border-in_transit { border-left: 5px solid #f59e0b !important; }
+        .border-at_destination { border-left: 5px solid #10b981 !important; }
 
-  .ff-search-bar input { 
-    border: none; 
-    background: transparent; 
-    width: 100%; 
-    outline: none; 
-    font-size: 1rem; 
-    color: #1e293b; 
-  }
+        .ff-col { display: flex; align-items: center; gap: 15px; }
+        .ff-col.center { justify-content: center; }
+        .ff-col.end { justify-content: flex-end; gap: 20px; }
 
-  /* 3. Tarjetas con sombras dinámicas y bordes definidos */
-  .ff-card-item {
-    background: #ffffff !important;
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 20px !important;
-    display: grid;
-    grid-template-columns: 1.5fr 1fr 1fr 1fr;
-    align-items: center;
-    padding: 24px 30px !important;
-    margin-bottom: 16px;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    cursor: pointer;
-  }
+        .ff-icon-box { width: 44px; height: 44px; background: #f0fdf4; color: #16a34a; border-radius: 12px; display: grid; place-items: center; }
+        .ff-code { display: block; font-size: 1.1rem; font-weight: 800; color: #0f172a; letter-spacing: -0.01em; }
+        .ff-sub { font-size: 0.8rem; color: #94a3b8; font-weight: 500; }
 
-  .ff-card-item:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02) !important;
-    border-color: #cbd5e1 !important;
-  }
+        .ff-meta-group { display: flex; align-items: center; gap: 10px; }
+        .ff-label-mini { display: block; font-size: 0.6rem; font-weight: 800; color: #cbd5e1; letter-spacing: 0.05em; }
+        .ff-value-mini { font-size: 0.85rem; font-weight: 600; color: #475569; }
 
-  /* 4. Indicador de status más grueso (ADN Premium) */
-  .border-created { border-left: 8px solid #94a3b8 !important; }
-  .border-packed { border-left: 8px solid #3b82f6 !important; }
-  .border-docs_ready { border-left: 8px solid #8b5cf6 !important; }
-  .border-in_transit { border-left: 8px solid #f59e0b !important; }
-  .border-at_destination { border-left: 8px solid #10b981 !important; }
+        /* STATUS BADGE */
+        :global(.ff-pill) {
+          display: inline-flex; align-items: center; gap: 7px;
+          padding: 7px 15px !important; border-radius: 100px !important;
+          font-size: 0.72rem !important; font-weight: 700 !important;
+          text-transform: uppercase;
+        }
+        .ff-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
-  .ff-col { display: flex; align-items: center; gap: 20px; }
-  .ff-col.center { justify-content: center; }
-  .ff-col.end { justify-content: flex-end; gap: 24px; }
+        /* Colores dinámicos */
+        :global(.ff-badge-blue) { background: #eff6ff !important; color: #2563eb !important; }
+        :global(.ff-badge-orange) { background: #fff7ed !important; color: #ea580c !important; }
+        :global(.ff-badge-green) { background: #f0fdf4 !important; color: #16a34a !important; }
 
-  /* 5. Iconos y Textos con mejores pesos */
-  .ff-icon-box { 
-    width: 52px; 
-    height: 52px; 
-    background: #f0fdf4; 
-    color: #16a34a; 
-    border-radius: 14px; 
-    display: grid; 
-    place-items: center; 
-  }
+        .ff-chevron-icon { color: #e2e8f0; transition: 0.2s; }
+        .ff-card-item:hover .ff-chevron-icon { transform: translateX(4px); color: #64748b; }
 
-  .ff-code { 
-    display: block; 
-    font-size: 1.25rem; 
-    font-weight: 800; 
-    color: #0f172a; 
-    letter-spacing: -0.03em; 
-    line-height: 1.2;
-  }
-
-  .ff-sub { 
-    font-size: 0.85rem; 
-    color: #64748b; 
-    font-weight: 500; 
-  }
-
-  .ff-meta-group { display: flex; align-items: center; gap: 14px; }
-  .ff-label-mini { 
-    display: block; 
-    font-size: 0.65rem; 
-    font-weight: 800; 
-    color: #94a3b8; 
-    letter-spacing: 0.1em; 
-    text-transform: uppercase;
-    margin-bottom: 2px;
-  }
-  .ff-value-mini { 
-    font-size: 0.95rem; 
-    font-weight: 600; 
-    color: #334155; 
-  }
-
-  /* 6. Badges estilo "Pill" con contraste real */
-  :global(.ff-pill) {
-    display: inline-flex; 
-    align-items: center; 
-    gap: 8px;
-    padding: 8px 16px !important; 
-    border-radius: 12px !important; /* Menos redondeado para look moderno */
-    font-size: 0.75rem !important; 
-    font-weight: 700 !important;
-    letter-spacing: 0.02em;
-  }
-
-  .ff-dot { 
-    width: 8px; 
-    height: 8px; 
-    border-radius: 50%; 
-    background: currentColor; 
-  }
-
-  /* Colores dinámicos reforzados */
-  :global(.ff-badge-blue) { background: #dbeafe !important; color: #1e40af !important; }
-  :global(.ff-badge-orange) { background: #ffedd5 !important; color: #9a3412 !important; }
-  :global(.ff-badge-green) { background: #dcfce7 !important; color: #166534 !important; }
-
-  .ff-chevron-icon { 
-    color: #cbd5e1; 
-    transition: all 0.2s; 
-  }
-  
-  .ff-card-item:hover .ff-chevron-icon { 
-    color: #1e293b; 
-    transform: translateX(6px); 
-  }
-
-  @media (max-width: 900px) { 
-    .ff-card-item { grid-template-columns: 1fr; gap: 20px; padding: 20px !important; } 
-  }
-`}</style>
+        @media (max-width: 900px) { .ff-card-item { grid-template-columns: 1fr; gap: 15px; } }
+      `}</style>
     </ClientLayout>
   );
 }
