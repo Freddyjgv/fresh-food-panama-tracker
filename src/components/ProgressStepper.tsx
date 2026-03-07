@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-// Mantenemos tipos y lógica intacta
+// Lógica de tipos y utilidades (Sin cambios para no romper nada)
 type StepType = | "CREATED" | "PACKED" | "DOCS_READY" | "AT_ORIGIN" | "IN_TRANSIT" | "AT_DESTINATION" | string;
 type Milestone = { type: StepType; at?: string | null; created_at?: string | null; note?: string | null; };
 
@@ -15,17 +15,13 @@ const STEPS: { type: StepType; label: string }[] = [
 
 const IN_TRANSIT_INDEX = STEPS.findIndex((s) => String(s.type).toUpperCase() === "IN_TRANSIT");
 
-function ShipmentBoxIcon({ size = 20 }: { size?: number }) {
+// Icono de Piña con colores del Brandbook
+function BrandPineappleIcon({ size = 44 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <defs>
-        <linearGradient id="boxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#22c55e" />
-          <stop offset="100%" stopColor="#16a34a" />
-        </linearGradient>
-      </defs>
-      <path d="M7 7.5 12 5l5 2.5v6.8c0 .6-.3 1.2-.9 1.5L12 18l-4.1-2.2c-.6-.3-.9-.9-.9-1.5V7.5Z" fill="url(#boxGrad)" />
-      <path d="M7 7.5 12 10l5-2.5M10.2 12.1h3.6" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M12 2L10 7L12 6L14 7L12 2Z" fill="var(--ff-green)" />
+      <path d="M12 21C15.3137 21 18 18.3137 18 15C18 11.6863 15.3137 9 12 9C8.68629 9 6 11.6863 6 15C6 18.3137 8.68629 21 12 21Z" fill="var(--ff-orange)" />
+      <path d="M9 13L15 17M9 17L15 13" stroke="white" strokeWidth="0.5" strokeOpacity="0.4" />
     </svg>
   );
 }
@@ -42,7 +38,7 @@ function computeCurrentIndex(milestones: Milestone[]) {
   return idx;
 }
 
-export function ProgressStepper({ milestones, flightNumber, introMs = 1200 }: { milestones: Milestone[]; flightNumber?: string | null; introMs?: number; }) {
+export function ProgressStepper({ milestones, flightNumber, introMs = 1400 }: { milestones: Milestone[]; flightNumber?: string | null; introMs?: number; }) {
   const currentIndex = useMemo(() => computeCurrentIndex(milestones ?? []), [milestones]);
   const targetPct = useMemo(() => (STEPS.length <= 1 ? 0 : (currentIndex / (STEPS.length - 1)) * 100), [currentIndex]);
   
@@ -51,7 +47,7 @@ export function ProgressStepper({ milestones, flightNumber, introMs = 1200 }: { 
 
   useEffect(() => {
     setMounted(true);
-    const t = setTimeout(() => setPct(targetPct), 50);
+    const t = setTimeout(() => setPct(targetPct), 100);
     return () => clearTimeout(t);
   }, [targetPct]);
 
@@ -65,62 +61,55 @@ export function ProgressStepper({ milestones, flightNumber, introMs = 1200 }: { 
   const transitPct = (IN_TRANSIT_INDEX / (STEPS.length - 1)) * 100;
 
   return (
-    <div className="stepper-main-container">
-      {/* Header con más fuerza visual */}
-      <div className="stepper-visual-header">
-        <div className="status-brand">
-          <div className="live-indicator">
-            <span className="ping"></span>
-            <span className="dot"></span>
-            LIVE TRACKING
-          </div>
-          <h3>Logística Aérea Internacional</h3>
+    <div className="ff-stepper-card">
+      {/* Header Alineado a Brandbook */}
+      <div className="ff-stepper-header">
+        <div>
+          <span className="ff-live-tag">TRACKING EN VIVO</span>
+          <h3 className="ff-title">Estatus del Embarque CIP/AIR</h3>
         </div>
-        <div className="current-status-display">
-          <span className="status-label">ESTADO ACTUAL</span>
-          <span className="status-value">{STEPS[currentIndex]?.label}</span>
+        <div className="ff-status-pill">
+          {STEPS[currentIndex]?.label}
         </div>
       </div>
 
-      {/* Track de Progreso de Alto Impacto */}
-      <div className="interactive-track-area">
-        <div className="track-rail">
+      {/* Track de Progreso con variables Brand */}
+      <div className="ff-track-container">
+        <div className="ff-rail">
           <div 
-            className="track-progress-fill" 
+            className="ff-fill" 
             style={{ 
-              width: `${pct}%`, 
-              transition: `width ${introMs}ms cubic-bezier(0.22, 1, 0.36, 1)` 
+                width: `${pct}%`, 
+                transition: `width ${introMs}ms cubic-bezier(0.34, 1.56, 0.64, 1)` 
             }} 
           >
-            <div className="progress-glow" />
-            <div className="scan-line" />
+            <div className="ff-glow" />
           </div>
         </div>
 
-        {/* Hotspot de Vuelo Estilo Radar */}
+        {/* Radar de Vuelo */}
         {transitReached && (
-          <div className="vuelo-radar-hotspot" style={{ left: `${transitPct}%` }}>
-            <div className="radar-waves" />
-            <div className="radar-point" />
-            <span className="radar-label">CIP/AIR</span>
+          <div className="ff-vuelo-radar" style={{ left: `${transitPct}%` }}>
+            <div className="radar-pulse" />
+            <div className="radar-dot" />
+            <span className="radar-txt">Vuelo</span>
           </div>
         )}
 
-        {/* Ícono de Caja con sombra proyectada */}
+        {/* Piña Flotante */}
         <div 
-          className="shipment-box-float" 
+          className="ff-pineapple-float" 
           style={{ 
             left: `${pct}%`, 
-            transition: `left ${introMs}ms cubic-bezier(0.22, 1, 0.36, 1)` 
+            transition: `left ${introMs}ms cubic-bezier(0.34, 1.56, 0.64, 1)` 
           }}
         >
-          <div className="box-shadow-fx" />
-          <ShipmentBoxIcon size={28} />
+          <BrandPineappleIcon size={46} />
         </div>
       </div>
 
-      {/* Grid de Tarjetas con Elevación Dinámica */}
-      <div className="milestones-grid">
+      {/* Grid de Pasos */}
+      <div className="ff-steps-grid">
         {STEPS.map((s, i) => {
           const isDone = i <= currentIndex;
           const isCurrent = i === currentIndex;
@@ -128,144 +117,158 @@ export function ProgressStepper({ milestones, flightNumber, introMs = 1200 }: { 
           const time = hit ? (hit.at || hit.created_at) : null;
 
           return (
-            <div key={s.type} className={`milestone-card ${isDone ? 'done' : ''} ${isCurrent ? 'active' : ''}`}>
-              <div className="card-inner">
-                <div className="card-top">
-                  <div className="status-circle">
-                    {isDone && <div className="inner-check" />}
-                  </div>
-                  <span className="milestone-name">{s.label}</span>
-                </div>
-                
-                <div className="card-bottom">
-                  <span className="time-stamp">{time ? fmtStepTime(time) : "PROXIMAMENTE"}</span>
-                  {i === IN_TRANSIT_INDEX && flightNumber && isDone && (
-                    <div className="flight-tag">
-                      <span className="plane-icon">✈</span>
-                      {flightNumber}
-                    </div>
-                  )}
-                </div>
+            <div key={s.type} className={`ff-step-box ${isDone ? 'done' : ''} ${isCurrent ? 'active' : ''}`}>
+              <div className="ff-step-head">
+                <div className="ff-step-dot" />
+                <span className="ff-step-label">{s.label}</span>
               </div>
+              <div className="ff-step-time">{time ? fmtStepTime(time) : "---"}</div>
+              {i === IN_TRANSIT_INDEX && flightNumber && isDone && (
+                <div className="ff-step-flight">✈ {flightNumber}</div>
+              )}
             </div>
           );
         })}
       </div>
 
       <style jsx>{`
-        .stepper-main-container {
-          background: #ffffff;
+        .ff-stepper-card {
+          background: var(--ff-surface);
           padding: 24px;
-          border-radius: 20px;
-          box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
-          border: 1px solid #f1f5f9;
+          border-radius: 16px;
+          border: 1px solid var(--ff-border);
+          box-shadow: var(--ff-shadow);
+          margin-bottom: 20px;
         }
 
-        /* HEADER IMPACTO */
-        .stepper-visual-header {
+        .ff-stepper-header {
           display: flex;
           justify-content: space-between;
-          align-items: flex-end;
+          align-items: center;
           margin-bottom: 32px;
         }
-        .live-indicator {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 10px;
-          font-weight: 900;
-          color: #16a34a;
+
+        .ff-live-tag {
+          font-size: 9px;
+          font-weight: 950;
+          color: var(--ff-green);
           letter-spacing: 1px;
+          display: block;
           margin-bottom: 4px;
         }
-        .live-indicator .dot { width: 6px; height: 6px; background: #16a34a; border-radius: 50%; }
-        .live-indicator .ping {
-          position: absolute; width: 6px; height: 6px; background: #16a34a; border-radius: 50%;
-          animation: ping 1.5s infinite;
-        }
-        .status-brand h3 { margin: 0; font-size: 18px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px; }
-        .current-status-display { text-align: right; }
-        .status-label { display: block; font-size: 10px; font-weight: 800; color: #94a3b8; }
-        .status-value { font-size: 16px; font-weight: 900; color: #16a34a; }
 
-        /* TRACKER ANIMADO */
-        .interactive-track-area {
+        .ff-title {
+          margin: 0;
+          font-size: 16px;
+          font-weight: 950;
+          color: var(--ff-text);
+          letter-spacing: -0.5px;
+        }
+
+        .ff-status-pill {
+          background: var(--ff-green);
+          color: white;
+          padding: 6px 14px;
+          border-radius: 99px;
+          font-size: 11px;
+          font-weight: 800;
+          box-shadow: 0 4px 10px rgba(31, 122, 58, 0.2);
+        }
+
+        .ff-track-container {
           position: relative;
           height: 60px;
           display: flex;
           align-items: center;
-          margin-bottom: 24px;
+          margin-bottom: 20px;
         }
-        .track-rail {
-          width: 100%; height: 12px; background: #f1f5f9; border-radius: 20px;
-          border: 1px solid #e2e8f0; overflow: hidden; position: relative;
+
+        .ff-rail {
+          width: 100%;
+          height: 8px;
+          background: var(--ff-bg);
+          border-radius: 10px;
+          border: 1px solid var(--ff-border);
+          overflow: hidden;
         }
-        .track-progress-fill {
+
+        .ff-fill {
           height: 100%;
-          background: linear-gradient(90deg, #16a34a, #22c55e);
-          border-radius: 20px;
+          background: linear-gradient(90deg, var(--ff-green-dark), var(--ff-green));
           position: relative;
         }
-        .progress-glow {
-          position: absolute; top: 0; right: 0; bottom: 0; width: 20px;
-          background: white; filter: blur(10px); opacity: 0.6;
-        }
-        .scan-line {
-          position: absolute; top: 0; left: 0; bottom: 0; width: 40px;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-          animation: scan 3s infinite linear;
+
+        .ff-glow {
+          position: absolute;
+          right: 0;
+          height: 100%;
+          width: 20px;
+          background: white;
+          filter: blur(8px);
+          opacity: 0.4;
         }
 
-        .shipment-box-float {
-          position: absolute; transform: translate(-50%, -15px);
-          z-index: 20; filter: drop-shadow(0 10px 10px rgba(22, 163, 74, 0.2));
+        .ff-pineapple-float {
+          position: absolute;
+          transform: translate(-50%, -18px);
+          z-index: 10;
+          filter: drop-shadow(0 6px 12px rgba(0,0,0,0.1));
+          animation: floaty 3s ease-in-out infinite;
         }
 
-        /* RADAR CIP/AIR */
-        .vuelo-radar-hotspot { position: absolute; transform: translateX(-50%); top: 45px; display: flex; flex-direction: column; align-items: center; }
-        .radar-point { width: 8px; height: 8px; background: #0f172a; border-radius: 50%; border: 2px solid white; }
-        .radar-waves {
-          position: absolute; width: 20px; height: 20px; border: 1px solid #0f172a; border-radius: 50%;
-          animation: radar 2s infinite; top: -6px;
-        }
-        .radar-label { font-size: 9px; font-weight: 900; color: #0f172a; margin-top: 4px; }
-
-        /* GRID Y TARJETAS */
-        .milestones-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
-        .milestone-card {
-          background: #f8fafc; border-radius: 16px; border: 1px solid #f1f5f9;
-          padding: 14px; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-          opacity: 0.5;
-        }
-        .milestone-card.done { opacity: 1; border-color: #e2e8f0; background: white; }
-        .milestone-card.active {
-          opacity: 1; border-color: #16a34a; background: #f0fdf4;
-          transform: translateY(-8px) scale(1.05);
-          box-shadow: 0 20px 25px -5px rgba(22, 163, 74, 0.1);
+        .ff-vuelo-radar {
+          position: absolute;
+          transform: translateX(-50%);
+          top: 40px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
         }
 
-        .status-circle {
-          width: 14px; height: 14px; border: 2px solid #cbd5e1; border-radius: 50%;
-          display: flex; align-items: center; justify-content: center;
+        .radar-dot { width: 6px; height: 6px; background: var(--ff-orange); border-radius: 50%; }
+        .radar-pulse {
+          position: absolute; width: 16px; height: 16px; border: 1px solid var(--ff-orange);
+          border-radius: 50%; animation: pulse 2s infinite; top: -5px;
         }
-        .done .status-circle { border-color: #16a34a; background: #16a34a; }
-        .inner-check { width: 6px; height: 6px; background: white; border-radius: 50%; }
+        .radar-txt { font-size: 9px; font-weight: 900; color: var(--ff-muted); margin-top: 4px; }
 
-        .card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-        .milestone-name { font-size: 12px; font-weight: 900; color: #1e293b; }
-        .time-stamp { font-size: 10px; font-weight: 700; color: #94a3b8; }
-        .flight-tag {
-          margin-top: 8px; background: #0f172a; color: white;
-          font-size: 10px; font-weight: 900; padding: 4px 8px; border-radius: 6px;
-          display: flex; gap: 4px; align-items: center;
+        .ff-steps-grid {
+          display: grid;
+          grid-template-columns: repeat(6, 1fr);
+          gap: 10px;
         }
 
-        @keyframes ping { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(3); opacity: 0; } }
-        @keyframes scan { 0% { left: -100%; } 100% { left: 100%; } }
-        @keyframes radar { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
+        .ff-step-box {
+          padding: 12px;
+          border-radius: 12px;
+          border: 1px solid transparent;
+          background: var(--ff-bg);
+          opacity: 0.6;
+          transition: 0.3s;
+        }
 
-        @media (max-width: 1024px) { .milestones-grid { grid-template-columns: repeat(3, 1fr); } }
-        @media (max-width: 640px) { .milestones-grid { grid-template-columns: repeat(2, 1fr); } }
+        .ff-step-box.done { opacity: 1; background: var(--ff-surface); border-color: var(--ff-border); }
+        .ff-step-box.active {
+          opacity: 1;
+          background: var(--ff-surface);
+          border-color: var(--ff-green);
+          box-shadow: 0 4px 12px rgba(31, 122, 58, 0.08);
+          transform: translateY(-2px);
+        }
+
+        .ff-step-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+        .ff-step-dot { width: 7px; height: 7px; background: #cbd5e1; border-radius: 50%; }
+        .done .ff-step-dot { background: var(--ff-green); }
+        .active .ff-step-dot { background: var(--ff-green); box-shadow: 0 0 6px var(--ff-green); }
+
+        .ff-step-label { font-size: 11px; font-weight: 900; color: var(--ff-text); }
+        .ff-step-time { font-size: 10px; font-weight: 700; color: var(--ff-muted); }
+        .ff-step-flight { margin-top: 6px; font-size: 10px; font-weight: 950; color: var(--ff-orange); }
+
+        @keyframes floaty { 0%, 100% { transform: translate(-50%, -18px); } 50% { transform: translate(-50%, -24px); } }
+        @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
+
+        @media (max-width: 900px) { .ff-steps-grid { grid-template-columns: repeat(3, 1fr); } }
       `}</style>
     </div>
   );
