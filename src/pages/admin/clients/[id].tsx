@@ -114,39 +114,51 @@ export default function ClientDetailPage() {
     <AdminLayout title={`Expediente: ${client?.name}`}>
       <div className="view-container">
         
-        {/* --- HEADER PREMIUM --- */}
-        <header className="ff-header-premium">
-          <div className="ff-header-top-row">
-            <div className="ff-client-profile">
-              <div className="ff-logo-wrapper">
-                {client.logo_url ? (
-                  <img src={`https://oqgkbduqztrpfhfclker.supabase.co/storage/v1/object/public/client-logos/${client.logo_url}`} className="ff-logo-img" />
-                ) : (
-                  <div className="ff-logo-placeholder">{client.name?.charAt(0)}</div>
-                )}
-                <label className="ff-upload-btn">
-                  <FileUp size={16} />
-                  <input type="file" hidden onChange={handleLogoUpload} accept="image/*" />
-                </label>
-              </div>
-              <div className="ff-client-info">
-                <h1 className="ff-client-name-display">{client.name}</h1>
-                <div className="ff-client-meta-row">
-                  <span className="ff-meta-value-main">{client.legal_name || 'Razón Social no definida'}</span>
-                  <span className="ff-meta-divider">|</span>
-                  <span className="ff-meta-value">{client.tax_id || 'SIN RUC'}</span>
-                  <span className="ff-meta-divider">|</span>
-                  <span className="ff-meta-value">{client.country || 'Panamá'}</span>
-                  <span className="ff-badge-status">Cuenta Activa</span>
-                </div>
-              </div>
-            </div>
-            <div className="ff-header-actions-column">
-              <button className="ff-btn-action ff-btn-primary"><Plus size={16}/><span>Nuevo Embarque</span></button>
-              <button className="ff-btn-action ff-btn-secondary"><Calculator size={16}/><span>Nueva Cotización</span></button>
-            </div>
+        {/* --- HEADER ULTRA-MINIMAL PORTAL --- */}
+<header className="ff-header-minimal">
+  <div className="ff-header-top-row">
+    <div className="ff-client-profile">
+      <div className="ff-logo-wrapper">
+        {client.logo_url ? (
+          <img 
+            src={`https://oqgkbduqztrpfhfclker.supabase.co/storage/v1/object/public/client-logos/${client.logo_url}`} 
+            className="ff-logo-img" 
+          />
+        ) : (
+          <div className="ff-logo-placeholder">{client.name?.charAt(0)}</div>
+        )}
+      </div>
+      
+      <div className="ff-client-info">
+        <div className="ff-name-row">
+          <h1 className="ff-client-name-display">{client.name}</h1>
+          <span className="ff-badge-status-inline">Cuenta Activa</span>
+        </div>
+        
+        <div className="ff-client-meta-stack">
+          <div className="ff-legal-name-row">{client.legal_name || 'Razón Social no definida'}</div>
+          <div className="ff-meta-sub-row">
+            <span>{client.tax_id || 'SIN TAX ID'}</span>
+            <span className="ff-meta-divider">|</span>
+            <span>{client.country || 'Panamá'}</span>
           </div>
-        </header>
+        </div>
+      </div>
+    </div>
+
+    {/* BOTONES MINIMALISTAS CON TRANSPARENCIAS */}
+    <div className="ff-header-actions-minimal">
+      <button className="ff-btn-mini ff-btn-glass-secondary" onClick={() => router.push(`/admin/quotes/new?clientId=${id}`)}>
+        <Calculator size={14} />
+        <span>Nueva Cotización</span>
+      </button>
+      <button className="ff-btn-mini ff-btn-glass-primary" onClick={() => router.push(`/admin/shipments/new?clientId=${id}`)}>
+        <Plus size={14} />
+        <span>Nuevo Embarque</span>
+      </button>
+    </div>
+  </div>
+</header>
 
         <div className="main-grid">
           {/* COLUMNA PRINCIPAL */}
