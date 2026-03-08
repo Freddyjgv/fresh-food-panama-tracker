@@ -1,5 +1,4 @@
-// src/pages/admin/shipments/[id].tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { supabase } from "../../../lib/supabaseClient";
@@ -9,601 +8,304 @@ import { labelStatus } from "../../../lib/shipmentFlow";
 import { Timeline as ModernTimeline } from "../../../components/Timeline";
 
 import {
-  FileText,
-  Image as ImageIcon,
-  Download,
-  PackageCheck,
-  Plane,
-  MapPin,
-  ClipboardCheck,
-  ArrowLeft,
-  Info,
-  Package,
-  PlusCircle,
-  CheckCircle,
-  Loader2,
-  X
+  FileText, Image as ImageIcon, Download, PackageCheck, Plane,
+  MapPin, ClipboardCheck, ArrowLeft, Info, Package, PlusCircle,
+  CheckCircle, Loader2, X, Hash, Globe, Scale, Droplets, Trash2,
+  AlertCircle
 } from "lucide-react";
 
-type ShipmentMilestone = {
-  type: string;
-  at?: string | null;
-  note?: string | null;
-};
-
-type ShipmentDocument = {
-  id: string;
-  filename: string;
-  doc_type?: string | null;
-  created_at: string;
-};
-
-type ShipmentPhoto = {
-  id: string;
-  filename: string;
-  created_at: string;
-  url?: string | null;
-};
-
-type ShipmentDetail = {
-  id: string;
-  code: string;
-  destination: string;
-  status: string;
-  created_at: string;
-
-  // cliente
-  client_name?: string | null;
-  client?: { name?: string | null } | null;
-
-  // producto
-  product_name?: string | null;
-  product_variety?: string | null;
-  product_mode?: string | null;
-
-  // cantidades
-  boxes?: number | null;
-  pallets?: number | null;
-  weight_kg?: number | null;
-
-  // logística
-  flight_number?: string | null;
-  awb?: string | null;
-
-  // packing
-  caliber?: string | null;
-  color?: string | null;
-
-  // relaciones
-  milestones?: ShipmentMilestone[];
-  documents?: ShipmentDocument[];
-  photos?: ShipmentPhoto[];
-};
-
-type UiLang = "es" | "en";
-
-const SALES_LINES = [
-  { key: "fruit_value", es: "1. Valor de la fruta (FOB/FCA)", en: "1. Fruit Value (FOB/FCA)" },
-  { key: "intl_logistics", es: "2. Logística internacional", en: "2. International Logistics" },
-  { key: "origin_customs", es: "3. Gastos en origen y aduana", en: "3. Origin Charges & Customs" },
-  { key: "inspection_quality", es: "4. Inspección y calidad", en: "4. Inspection & Quality" },
-] as const;
-
-function lineLabel(key: string, lang: UiLang) {
-  const row = SALES_LINES.find((x) => x.key === key);
-  return row ? (lang === "en" ? row.en : row.es) : key;
-};
-
+// --- CONFIGURACIÓN DE TIPOS Y CONSTANTES ---
 const DOC_TYPES = [
   { v: "invoice", l: "Factura" },
   { v: "packing_list", l: "Packing list" },
   { v: "awb", l: "AWB (guía aérea)" },
   { v: "phytosanitary", l: "Certificado fitosanitario" },
   { v: "eur1", l: "EUR1" },
-  { v: "export_declaration", l: "Declaración de exportación (aduana)" },
-  { v: "non_recyclable_plastics", l: "Declaración de plásticos no reciclables" },
-  { v: "sanitary_general_info", l: "Declaración de la Información general de carácter sanitario" },
-  { v: "additives_declaration", l: "Declaración de aditivos usados" },
+  { v: "export_declaration", l: "Declaración de aduana" },
+  { v: "non_recyclable_plastics", l: "Plásticos no reciclables" },
+  { v: "sanitary_general_info", l: "Info. Sanitaria" },
+  { v: "additives_declaration", l: "Declaración de aditivos" },
   { v: "quality_report", l: "Informe de calidad" },
 ] as const;
 
-type DocTypeValue = (typeof DOC_TYPES)[number]["v"];
-
 type MilestoneType = "PACKED" | "DOCS_READY" | "AT_ORIGIN" | "IN_TRANSIT" | "AT_DESTINATION";
-
 const CHAIN: MilestoneType[] = ["PACKED", "DOCS_READY", "AT_ORIGIN", "IN_TRANSIT", "AT_DESTINATION"];
-
-function fmtDT(iso: string) {
-  try {
-    return new Date(iso).toLocaleString("es-PA");
-  } catch {
-    return iso;
-  }
-}
-
-function clean(v: any) {
-  return String(v ?? "").trim();
-}
-
-function productShort(d: ShipmentDetail) {
-  const name = clean(d.product_name);
-  const variety = clean(d.product_variety);
-  return [name, variety].filter(Boolean).join(" ") || "—";
-}
-
-function productLine(d: ShipmentDetail) {
-  const name = clean(d.product_name) || "—";
-  const variety = clean(d.product_variety) || "—";
-  const mode = clean(d.product_mode) || "—";
-  return `${name} ${variety} · ${mode}`;
-}
 
 export default function AdminShipmentDetail() {
   const router = useRouter();
   const { id } = router.query;
 
   const [authReady, setAuthReady] = useState(false);
-
-  const [data, setData] = useState<ShipmentDetail | null>(null);
+  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  
+  // Popups/Toasts de estado
+  const [popup, setPopup] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
+
+  // Formulario de configuración técnica
+  const [editForm, setEditForm] = useState({
+    product_name: "",
+    product_variety: "",
+    caliber: "",
+    color: "",
+    brix_grade: "",
+    boxes: 0,
+    pallets: 0,
+    weight_kg: 0,
+    destination: "",
+    destination_port: "",
+    incoterm: ""
+  });
 
   const [note, setNote] = useState("");
   const [flight, setFlight] = useState("");
   const [awb, setAwb] = useState("");
 
-  // ✅ nuevos campos de Datos
-  const [caliber, setCaliber] = useState("");
-  const [color, setColor] = useState("");
+  const showPopup = (msg: string, type: 'success' | 'error' = 'success') => {
+    setPopup({ msg, type });
+    setTimeout(() => setPopup(null), 4000);
+  };
 
-  // ✅ doc type por “casillas”
-  const [docType, setDocType] = useState<DocTypeValue | null>("packing_list");
+  const load = useCallback(async (sid: string) => {
+    setLoading(true);
+    const { data: res } = await supabase
+      .from('shipments')
+      .select('*, clients(name), shipment_documents(*), shipment_photos(*), status_history(*)')
+      .eq('id', sid)
+      .single();
 
-  const [busy, setBusy] = useState(false);
-
-  const [toast, setToast] = useState<string | null>(null);
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2500);
-  }
-
-  async function getTokenOrRedirect() {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-    if (!token) {
-      window.location.href = "/login";
-      return null;
+    if (res) {
+      setData(res);
+      setEditForm({
+        product_name: res.product_name || "",
+        product_variety: res.product_variety || "",
+        caliber: res.caliber || "",
+        color: res.color || "",
+        brix_grade: res.brix_grade || "",
+        boxes: res.boxes || 0,
+        pallets: res.pallets || 0,
+        weight_kg: res.weight_kg || 0,
+        destination: res.destination || "",
+        destination_port: res.destination_port || "",
+        incoterm: res.incoterm || ""
+      });
+      setFlight(res.flight_number || "");
+      setAwb(res.awb || "");
     }
-    return token;
-  }
-
-  async function deleteFile(fileId: string, kind: "doc" | "photo") {
-  // 1. Confirmación de seguridad
-  if (!confirm("¿Estás seguro de que deseas eliminar este archivo? Esta acción no se puede deshacer.")) return;
-
-  setBusy(true);
-  const token = await getTokenOrRedirect();
-  if (!token) {
-    setBusy(false);
-    return;
-  }
-
-  try {
-    // 2. Llamada a tu API (Netlify Function)
-    const res = await fetch("/.netlify/functions/deleteFile", {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json", 
-        Authorization: `Bearer ${token}` 
-      },
-      body: JSON.stringify({ 
-        fileId, 
-        kind, 
-        shipmentId: data?.id 
-      }),
-    });
-
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(txt || "Error al eliminar el archivo");
-    }
-
-    // 3. Feedback y recarga de datos
-    showToast("Archivo eliminado correctamente 🗑️");
-    if (data?.id) load(data.id); 
-
-  } catch (err: any) {
-    console.error("Error deleting file:", err);
-    showToast(err.message || "No se pudo eliminar");
-  } finally {
-    setBusy(false);
-  }
-}
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     (async () => {
       const r = await requireAdminOrRedirect();
-      if (!r.ok) return;
-      setAuthReady(true);
-    })();
-  }, []);
-
-  async function load(shipmentId: string) {
-    setLoading(true);
-    setError(null);
-
-    const token = await getTokenOrRedirect();
-    if (!token) return;
-
-    const res = await fetch(
-      `/.netlify/functions/getShipment?id=${encodeURIComponent(shipmentId)}&mode=admin`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      setError(t || "Error");
-      setLoading(false);
-      return;
-    }
-
-    const json = (await res.json()) as ShipmentDetail;
-
-    setData(json);
-    setFlight(json.flight_number ?? "");
-    setAwb(json.awb ?? "");
-    setCaliber(json.caliber ?? "");
-    setColor(json.color ?? "");
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    if (!authReady) return;
-    if (typeof id === "string") load(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, authReady]);
-
-  const has = (t: string) =>
-    (data?.milestones ?? []).some((m) => (m.type || "").toUpperCase() === t.toUpperCase());
-
-  function prevOf(type: MilestoneType): MilestoneType | null {
-    const idx = CHAIN.indexOf(type);
-    if (idx <= 0) return null;
-    return CHAIN[idx - 1];
-  }
-
-  function canMark(type: MilestoneType) {
-    if (!data) return { ok: false, reason: "No hay embarque cargado." };
-    if (has(type)) return { ok: false, reason: "Ese hito ya está marcado." };
-
-    const prev = prevOf(type);
-    if (prev && !has(prev)) {
-      return { ok: false, reason: `Debes completar primero: ${labelStatus(prev)}.` };
-    }
-
-    // ✅ PACKED requiere Calibre y Color
-    if (type === "PACKED") {
-      if (!caliber.trim() || !color.trim()) {
-        return { ok: false, reason: "Para marcar 'En Empaque' debes completar Calibre y Color." };
+      if (r.ok) {
+        setAuthReady(true);
+        if (id) load(id as string);
       }
-    }
+    })();
+  }, [id, load]);
 
-    // ✅ IN_TRANSIT requiere vuelo (y ya queda en cadena por AT_ORIGIN)
-    if (type === "IN_TRANSIT" && !flight.trim()) {
-      return { ok: false, reason: "Para marcar 'En tránsito' debes colocar el número de vuelo." };
-    }
-
-    return { ok: true, reason: "" };
-  }
-
-  async function mark(type: MilestoneType) {
-    const chk = canMark(type);
-    if (!chk.ok) {
-      showToast(chk.reason || "No se puede marcar ese hito todavía.");
-      return;
-    }
-    if (!data) return;
-
+  const saveConfig = async () => {
     setBusy(true);
-    const token = await getTokenOrRedirect();
-    if (!token) return;
-
-    const res = await fetch("/.netlify/functions/updateMilestone", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        shipmentId: data.id,
-        type,
-        note: note.trim() || null,
-        flight_number: flight.trim() || null,
-        awb: awb.trim() || null,
-
-        // ✅ nuevos (si tu backend los persiste)
-        caliber: caliber.trim() || null,
-        color: color.trim() || null,
-      }),
-    });
-
-    const t = await res.text().catch(() => "");
+    const { error } = await supabase.from('shipments').update(editForm).eq('id', id);
     setBusy(false);
+    if (error) showPopup("Error al guardar configuración", "error");
+    else showPopup("Datos del embarque actualizados ✅");
+  };
 
-    if (!res.ok) {
-      showToast(t || "No se pudo actualizar");
-      return;
-    }
-
-    setNote("");
-    showToast("Hito actualizado ✅");
-    load(data.id);
-  }
-
-  async function upload(kind: "doc" | "photo", file: File) {
-    if (!data) return;
-
-    if (kind === "doc" && !docType) {
-      showToast("Selecciona el tipo de documento antes de subir.");
-      return;
-    }
-
+  const handleUpdateStatus = async (type: MilestoneType) => {
     setBusy(true);
-    const token = await getTokenOrRedirect();
-    if (!token) return;
-
-    const bucket = kind === "doc" ? "shipment-docs" : "shipment-photos";
-
-    // 1) signed upload url
-    const res1 = await fetch("/.netlify/functions/getUploadUrl", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ bucket, shipmentCode: data.code, filename: file.name }),
+    // Llamada a RPC o API para actualizar hito
+    const { error } = await supabase.rpc('update_shipment_status_v2', {
+      p_shipment_id: id,
+      p_new_status: type,
+      p_note: note,
+      p_flight: flight,
+      p_awb: awb
     });
-
-    if (!res1.ok) {
-      const t = await res1.text().catch(() => "");
-      setBusy(false);
-      showToast(t || "No se pudo preparar la subida");
-      return;
-    }
-
-    const { uploadUrl, path } = await res1.json();
-
-    // 2) upload file
-    const up = await fetch(uploadUrl, {
-      method: "PUT",
-      body: file,
-      headers: { "Content-Type": file.type || "application/octet-stream" },
-    });
-
-    if (!up.ok) {
-      setBusy(false);
-      showToast("Falló la subida del archivo");
-      return;
-    }
-
-    // 3) register file in DB
-    const res2 = await fetch("/.netlify/functions/registerFile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        shipmentId: data.id,
-        kind,
-        doc_type: kind === "doc" ? docType : null,
-        filename: file.name,
-        storage_path: path,
-        bucket,
-      }),
-    });
-
-    const t2 = await res2.text().catch(() => "");
+    
     setBusy(false);
-
-    if (!res2.ok) {
-      showToast(t2 || "No se pudo registrar el archivo");
-      return;
+    if (!error) {
+      showPopup(`Hito ${labelStatus(type)} registrado correctamente`);
+      setNote("");
+      load(id as string);
+    } else {
+      showPopup("No se pudo actualizar el hito", "error");
     }
+  };
 
-    showToast(kind === "doc" ? "Documento cargado ✅" : "Foto cargada ✅");
-    load(data.id);
-  }
+  const uploadFile = async (kind: 'doc' | 'photo', file: File, docType?: string) => {
+    setBusy(true);
+    try {
+      const path = `${id}/${Date.now()}_${file.name}`;
+      const bucket = kind === 'doc' ? 'shipment-documents' : 'shipment-photos';
+      const { error: upErr } = await supabase.storage.from(bucket).upload(path, file);
+      if (upErr) throw upErr;
 
-  async function download(fileId: string) {
-    const token = await getTokenOrRedirect();
-    if (!token) return;
+      const table = kind === 'doc' ? 'shipment_documents' : 'shipment_photos';
+      const payload: any = { shipment_id: id, file_url: path, file_name: file.name };
+      if (docType) payload.doc_type = docType;
 
-    const res = await fetch(`/.netlify/functions/getDownloadUrl?fileId=${encodeURIComponent(fileId)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+      await supabase.from(table).insert(payload);
+      showPopup(`${kind === 'doc' ? 'Documento' : 'Foto'} cargada con éxito`);
+      load(id as string);
+    } catch (e) { showPopup("Error en la subida", "error"); }
+    finally { setBusy(false); }
+  };
 
-    if (!res.ok) {
-      showToast("No se pudo generar el link de descarga");
-      return;
+  const deleteFile = async (fileId: string, kind: 'doc' | 'photo') => {
+    if (!confirm("¿Estás seguro de eliminar este archivo permanentemente?")) return;
+    const table = kind === 'doc' ? 'shipment_documents' : 'shipment_photos';
+    const { error } = await supabase.from(table).delete().eq('id', fileId);
+    if (!error) {
+      showPopup("Archivo eliminado 🗑️");
+      load(id as string);
     }
+  };
 
-    const { url } = await res.json();
-    window.open(url, "_blank");
-  }
-
-  const timelineItems = useMemo(() => {
-    const ms = [...(data?.milestones ?? [])].sort((a, b) => {
-      const ta = new Date(a.at).getTime();
-      const tb = new Date(b.at).getTime();
-      return ta - tb;
-    });
-
-    return ms.map((m, idx) => ({
-      id: `${m.type}-${idx}`,
-      type: m.type,
-      created_at: m.at,
-      note: m.note,
-    }));
-  }, [data?.milestones]);
-
-  const clientName =
-    clean(data?.client_name) ||
-    clean((data as any)?.client?.name) ||
-    "—";
+  if (!authReady || loading || !data) return (
+    <div className="loader-screen">
+      <Loader2 className="animate-spin" size={40} color="#16a34a" />
+      <p>Cargando detalles del embarque...</p>
+    </div>
+  );
 
   return (
-    <AdminLayout title="Detalle de embarque" subtitle="Acciones, hitos, documentos y fotos.">
-      {/* Top bar */}
-      <div className="ff-spread2" style={{ marginBottom: 12 }}>
-        <Link href="/admin/shipments" className="btnSmall">
-          <ArrowLeft size={16} />
-          Volver
-        </Link>
-
-        <div className="ff-row2" style={{ gap: 8 }}>
-          {data?.flight_number ? <span className="chip">Vuelo: {data.flight_number}</span> : null}
-          {data?.awb ? <span className="chip">AWB: {data.awb}</span> : null}
-          {data ? <span className="statusPill">{labelStatus(data.status)}</span> : null}
-        </div>
-      </div>
-
-      {toast ? (
-        <div className="msgOk" style={{ marginBottom: 12 }}>
-          {toast}
-        </div>
-      ) : null}
-
-<div className="ff-card2" style={{ padding: 12 }}>
-        {!authReady ? (
-          <div className="muted">Verificando permisos…</div>
-        ) : loading ? (
-          <div className="muted">Cargando…</div>
-        ) : error ? (
-          <div className="msgWarn">
-            <b>Error</b>
-            <div>{error}</div>
+    <AdminLayout title={`Embarque ${data.code}`}>
+      <div className="admin-container">
+        
+        {/* POPUP NOTIFICATION SYSTEM */}
+        {popup && (
+          <div className={`popup-msg ${popup.type}`}>
+            {popup.type === 'success' ? <CheckCircle size={18}/> : <AlertCircle size={18}/>}
+            <span>{popup.msg}</span>
+            <button onClick={() => setPopup(null)}><X size={14}/></button>
           </div>
-        ) : data ? (
-          <>
-            {/* 1. HEADER RESUMEN */}
-            <div className="cardHead">
-              <div className="ff-spread2" style={{ alignItems: "flex-start" }}>
-                <div style={{ minWidth: 0 }}>
-                  <div className="codeRow">
-                    <span className="codeIcon" aria-hidden="true">
-                      <Package size={16} color="var(--ff-green-dark)" />
-                    </span>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="code">{data.code}</div>
-                      <div className="meta" style={{ marginTop: 2 }}>
-                        Cliente: <b>{clientName}</b>
-                      </div>
-                      <div className="meta" style={{ marginTop: 2 }}>
-                        <b>{productLine(data)}</b>
-                      </div>
-                      <div className="meta" style={{ marginTop: 2 }}>
-                        Destino: <b>{data.destination}</b> · Creado: {fmtDT(data.created_at)}
-                      </div>
+        )}
+
+        <div className="top-nav-actions">
+          <Link href="/admin/shipments" className="btn-back">
+            <ArrowLeft size={16}/> Volver al listado
+          </Link>
+          <div className="status-badge-wrapper">
+             Estado Actual: <span className={`pill ${data.status.toLowerCase()}`}>{labelStatus(data.status)}</span>
+          </div>
+        </div>
+
+        {/* 1. HEADER RESUMEN */}
+        <header className="shipment-header-v3">
+          <div className="header-info">
+            <div className="id-tag"><Hash size={14}/> {data.code}</div>
+            <h1>{data.product_name} <small>{data.product_variety}</small></h1>
+            <p className="client-name">Cliente: <strong>{data.clients?.name}</strong></p>
+          </div>
+          <div className="header-stats">
+            <div className="stat-card">
+              <label><Package size={14}/> Cajas / Pallets</label>
+              <span>{data.boxes || 0} / {data.pallets || 0}</span>
+            </div>
+            <div className="stat-divider" />
+            <div className="stat-card">
+              <label><Scale size={14}/> Peso Neto</label>
+              <span>{data.weight_kg || 0} kg</span>
+            </div>
+            <div className="stat-divider" />
+            <div className="stat-card">
+              <label><Globe size={14}/> Destino</label>
+              <span>{data.destination_port || data.destination}</span>
+            </div>
+          </div>
+        </header>
+
+        <div className="main-grid-layout">
+          
+          <div className="left-column">
+            {/* BLOQUE DE CONFIGURACIÓN TÉCNICA */}
+            <section className="glass-card">
+              <div className="card-header">
+                <div className="title-group"><Info size={18} /> <h3>Configuración técnica</h3></div>
+                <button className="btn-save-config" onClick={saveConfig} disabled={busy}>
+                  {busy ? <Loader2 size={14} className="spin"/> : 'Actualizar Datos'}
+                </button>
+              </div>
+              <div className="config-form-grid">
+                <div className="f-group"><label>Producto</label><input value={editForm.product_name} onChange={e => setEditForm({...editForm, product_name: e.target.value})} /></div>
+                <div className="f-group"><label>Variedad</label><input value={editForm.product_variety} onChange={e => setEditForm({...editForm, product_variety: e.target.value})} /></div>
+                <div className="f-group"><label>Calibre</label><input value={editForm.caliber} onChange={e => setEditForm({...editForm, caliber: e.target.value})} /></div>
+                <div className="f-group"><label>Color</label><input value={editForm.color} onChange={e => setEditForm({...editForm, color: e.target.value})} /></div>
+                <div className="f-group"><label><Droplets size={12}/> Brix</label><input value={editForm.brix_grade} onChange={e => setEditForm({...editForm, brix_grade: e.target.value})} /></div>
+                <div className="f-group"><label>Incoterm</label><input value={editForm.incoterm} onChange={e => setEditForm({...editForm, incoterm: e.target.value})} /></div>
+                <div className="f-group"><label>Cajas</label><input type="number" value={editForm.boxes} onChange={e => setEditForm({...editForm, boxes: parseInt(e.target.value)})} /></div>
+                <div className="f-group"><label>Pallets</label><input type="number" value={editForm.pallets} onChange={e => setEditForm({...editForm, pallets: parseInt(e.target.value)})} /></div>
+                <div className="f-group"><label>Peso (kg)</label><input type="number" value={editForm.weight_kg} onChange={e => setEditForm({...editForm, weight_kg: parseFloat(e.target.value)})} /></div>
+              </div>
+            </section>
+
+            {/* CONTROL DE HITOS */}
+            <section className="glass-card spacing-top">
+              <div className="card-header"><ClipboardCheck size={18} /> <h3>Control de Hitos de Progreso</h3></div>
+              <div className="milestone-controls">
+                <div className="inputs-row">
+                  <div className="f-group full"><label>Observaciones/Nota para el Cliente</label><textarea placeholder="Detalla novedades para el cliente..." value={note} onChange={e => setNote(e.target.value)} /></div>
+                  <div className="f-group"><label>N° de Vuelo</label><input value={flight} onChange={e => setFlight(e.target.value)} /></div>
+                  <div className="f-group"><label>N° Guía AWB</label><input value={awb} onChange={e => setAwb(e.target.value)} /></div>
+                </div>
+                <div className="buttons-grid">
+                  {CHAIN.map(step => (
+                    <button key={step} className={`btn-step ${data.status === step ? 'active' : ''}`} onClick={() => handleUpdateStatus(step)} disabled={busy}>
+                      {labelStatus(step)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {/* FOTOS */}
+            <section className="glass-card spacing-top">
+              <div className="card-header-between">
+                <div className="title-group"><ImageIcon size={18}/> <h3>Evidencia Fotográfica</h3></div>
+                <label className="btn-add-mini">
+                  <PlusCircle size={14}/> Subir Foto
+                  <input type="file" hidden accept="image/*" onChange={e => e.target.files?.[0] && uploadFile('photo', e.target.files[0])} />
+                </label>
+              </div>
+              <div className="photo-grid">
+                {data.shipment_photos?.map((p: any) => (
+                  <div key={p.id} className="photo-card">
+                    <img src={`https://oqgkbduqztrpfhfclker.supabase.co/storage/v1/object/public/shipment-photos/${p.file_url}`} alt="evidencia" />
+                    <div className="photo-overlay">
+                        <button className="del-btn" onClick={() => deleteFile(p.id, 'photo')}><Trash2 size={14}/></button>
                     </div>
                   </div>
-                </div>
-                <div className="ff-row2" style={{ gap: 8, justifyContent: "flex-end" }}>
-                  <span className="chipSoft">Estado: {labelStatus(data.status)}</span>
-                </div>
+                ))}
               </div>
-            </div>
+            </section>
+          </div>
 
-            <div className="ff-divider" />
-
-            {/* 2. ACCIONES RÁPIDAS */}
-            <div className="ff-card2" style={{ padding: 12, background: "rgba(15,23,42,.02)" }}>
-              <div className="sectionTitle">Acciones rápidas</div>
-              <div className="muted" style={{ marginTop: 2 }}>
-                Los hitos avanzan en cadena. Para <b>En tránsito</b> el <b>Vuelo</b> es obligatorio.
-              </div>
-              <div className="ff-divider" style={{ margin: "12px 0" }} />
-              <div className="row3" style={{ gridTemplateColumns: "1.2fr .9fr .9fr" }}>
-                <div>
-                  <label className="lbl">Nota</label>
-                  <input className="in2" value={note} onChange={(e) => setNote(e.target.value)} placeholder="..." />
-                </div>
-                <div>
-                  <label className="lbl">Vuelo *</label>
-                  <input className="in2" value={flight} onChange={(e) => setFlight(e.target.value)} placeholder="Ej: IB1234" />
-                </div>
-                <div>
-                  <label className="lbl">AWB</label>
-                  <input className="in2" value={awb} onChange={(e) => setAwb(e.target.value)} placeholder="Ej: 123-..." />
-                </div>
-              </div>
-              <div className="ff-divider" style={{ margin: "12px 0" }} />
-              <div className="actionsGrid">
-                <button className="ff-primary" type="button" disabled={busy} onClick={() => mark("PACKED")}><PackageCheck size={16} /> En Empaque</button>
-                <button className="ff-primary" type="button" disabled={busy} onClick={() => mark("DOCS_READY")}><ClipboardCheck size={16} /> Documentación lista</button>
-                <button className="ff-primary" type="button" disabled={busy} onClick={() => mark("AT_ORIGIN")}><MapPin size={16} /> En Origen</button>
-                <button className="ff-primary" type="button" disabled={busy} onClick={() => mark("IN_TRANSIT")}><Plane size={16} /> En tránsito</button>
-                <button className="ff-primary" type="button" disabled={busy} onClick={() => mark("AT_DESTINATION")}><PackageCheck size={16} /> En Destino</button>
-              </div>
-              {busy && <div className="muted" style={{ marginTop: 10 }}>Procesando…</div>}
-            </div>
-
-            <div className="ff-divider" />
-
-            {/* 3. DATOS + TIMELINE */}
-            <div className="grid2">
-              <div className="ff-card2 soft">
-                <div className="sectionTitle"><Info size={16} /> Datos</div>
-                <div className="kv"><span>Cajas</span><b>{data.boxes ?? "-"}</b></div>
-                <div className="kv"><span>Pallets</span><b>{data.pallets ?? "-"}</b></div>
-                <div className="ff-divider" style={{ margin: "10px 0" }} />
-                <div className="row2">
-                  <div><label className="lbl">Calibre *</label><input className="in2" value={caliber} onChange={(e) => setCaliber(e.target.value)} /></div>
-                  <div><label className="lbl">Color *</label><input className="in2" value={color} onChange={(e) => setColor(e.target.value)} /></div>
-                </div>
-              </div>
-              <div className="ff-card2">
-                <div className="sectionTitle">Hitos</div>
-                <ModernTimeline milestones={timelineItems as any} />
-              </div>
-            </div>
-
-            <div className="ff-divider" />
-
-            {/* 4. EXPEDIENTE DIGITAL (DOCUMENTOS) */}
-            <section className="glass-card docs-section">
-              <div className="section-header-compact">
-                <div className="title-group">
-                  <FileText size={18} className="text-green-600" />
-                  <h4>Expediente Digital</h4>
-                </div>
-                <span className="doc-counter">{data.documents?.length || 0} / {DOC_TYPES.length}</span>
-              </div>
-              <div className="docs-grid-modern">
-                {DOC_TYPES.map((type) => {
-                  const uploadedDoc = data.documents?.find(d => d.doc_type === type.v);
-                  const isUploadingThis = busy && docType === type.v;
+          <aside className="right-column">
+            {/* DOCUMENTACIÓN */}
+            <section className="glass-card">
+              <div className="card-header"><FileText size={18} /> <h3>Expediente Digital</h3></div>
+              <div className="docs-list">
+                {DOC_TYPES.map(type => {
+                  const doc = data.shipment_documents?.find((d: any) => d.doc_type === type.v);
                   return (
-                    <div key={type.v} className={`doc-slot ${uploadedDoc ? 'is-filled' : 'is-empty'}`}>
-                      <div className="slot-body">
-                        <div className="slot-icon">
-                          {isUploadingThis ? <Loader2 size={14} className="spin" /> : uploadedDoc ? <CheckCircle size={14} /> : <PlusCircle size={14} />}
-                        </div>
-                        <div className="slot-info">
-                          <span className="slot-label">{type.l}</span>
-                          <span className="slot-status">{uploadedDoc ? 'Cargado' : 'Pendiente'}</span>
-                        </div>
+                    <div key={type.v} className={`doc-row ${doc ? 'active' : 'empty'}`}>
+                      <div className="doc-indicator" />
+                      <div className="doc-info">
+                        <span className="doc-name">{type.l}</span>
+                        <span className="doc-status">{doc ? 'Completado' : 'Pendiente'}</span>
                       </div>
-                      <div className="slot-actions">
-                        {uploadedDoc ? (
-  <div className="ff-row2" style={{ gap: 4 }}>
-    <button type="button" onClick={() => download(uploadedDoc.id)} className="action-btn download">
-      <Download size={14} />
-    </button>
-    
-    {/* AGREGA ESTE BOTÓN AQUÍ */}
-    <button type="button" disabled={busy} onClick={() => deleteFile(uploadedDoc.id, "doc")} className="action-btn delete">
-      <X size={14} />
-    </button>
-  </div>
+                      <div className="doc-actions">
+                        {doc ? (
+                          <div className="doc-actions-done">
+                            <button onClick={() => deleteFile(doc.id, 'doc')} className="btn-icon-del"><X size={14}/></button>
+                          </div>
                         ) : (
-                          <label className="action-btn upload">
-                            <PlusCircle size={14} />
-                            <input type="file" hidden disabled={busy} onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (f) { setDocType(type.v); upload("doc", f); }
-                            }} />
+                          <label className="btn-icon-up">
+                            <PlusCircle size={14}/>
+                            <input type="file" hidden onChange={e => e.target.files?.[0] && uploadFile('doc', e.target.files[0], type.v)} />
                           </label>
                         )}
                       </div>
@@ -613,169 +315,120 @@ export default function AdminShipmentDetail() {
               </div>
             </section>
 
-            <div className="ff-divider" />
-
-            {/* 5. FOTOS */}
-            <div className="ff-card2">
-              <div className="section-header-compact">
-                <div className="title-group">
-                  <ImageIcon size={18} className="text-blue-600" />
-                  <h4 style={{ margin: 0 }}>Registro Fotográfico</h4>
-                </div>
-                <label className="upload-photo-btn">
-                  <PlusCircle size={14} /> Subir Foto
-                  <input type="file" accept="image/*" hidden disabled={busy} onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) upload("photo", f);
-                  }} />
-                </label>
+            {/* HISTORIAL / TIMELINE */}
+            <section className="glass-card spacing-top">
+              <div className="card-header"><CheckCircle size={18}/> <h3>Historial Cliente</h3></div>
+              <div className="timeline-wrapper">
+                <ModernTimeline milestones={data.status_history?.map((h: any) => ({
+                  id: h.id, type: h.type, created_at: h.at || h.created_at, note: h.note
+                }))} />
               </div>
-              <div style={{ marginTop: 10 }}>
-                {data.photos?.length ? (
-                  <div className="modern-photo-grid">
-                    {data.photos.map((p) => (
-                      <div key={p.id} className="photo-card-new">
-                        <div className="photo-display">
-                          {p.url ? <img src={p.url} alt="Envío" /> : <div className="photo-placeholder" />}
-                          <div className="photo-overlay">
-  <button type="button" onClick={() => download(p.id)} className="overlay-btn view">
-    <Download size={16} />
-  </button>
-  
-  {/* AGREGA ESTE BOTÓN AQUÍ */}
-  <button type="button" disabled={busy} onClick={() => deleteFile(p.id, "photo")} className="overlay-btn del">
-    <X size={16} />
-  </button>
-</div>
-                        </div>
-                        <div className="photo-info-mini"><span className="photo-date">{fmtDT(p.created_at)}</span></div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="muted">No hay fotos registradas.</div>
-                )}
-              </div>
-            </div>
-          </>
-        ) : null}
+            </section>
+          </aside>
+        </div>
       </div>
 
-     <style jsx>{`
-  /* --- CONTENEDORES BASE --- */
-  .ff-card2 {
-    background: var(--ff-surface);
-    border: 1px solid var(--ff-border);
-    border-radius: var(--ff-radius);
-    box-shadow: var(--ff-shadow);
-    padding: 12px;
-  }
-  .soft { background: rgba(15, 23, 42, 0.02); }
-  .ff-divider { height: 1px; background: var(--ff-border); margin: 20px 0; }
-  .ff-row2 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .ff-spread2 { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+      <style jsx>{`
+        .admin-container { padding: 20px 40px; background: #f8fafc; min-height: 100vh; position: relative; font-family: 'Inter', sans-serif; }
+        
+        /* POPUP SYSTEM */
+        .popup-msg {
+          position: fixed; top: 20px; right: 20px; z-index: 9999;
+          display: flex; align-items: center; gap: 12px;
+          padding: 16px 20px; border-radius: 16px;
+          color: white; font-weight: 700; font-size: 14px;
+          box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);
+          animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .popup-msg.success { background: #16a34a; border-left: 5px solid #052e16; }
+        .popup-msg.error { background: #dc2626; border-left: 5px solid #450a0a; }
+        .popup-msg button { background: transparent; border: none; color: white; cursor: pointer; opacity: 0.7; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-  /* --- HEADER Y TEXTOS --- */
-  .cardHead { border: 1px solid var(--ff-border); background: var(--ff-surface); border-radius: var(--ff-radius); padding: 12px; }
-  .codeRow { display: flex; align-items: flex-start; gap: 10px; }
-  .codeIcon { 
-    width: 32px; height: 32px; border-radius: 8px; 
-    border: 1px solid rgba(31, 122, 58, 0.18); 
-    background: rgba(31, 122, 58, 0.08); 
-    display: grid; place-items: center; 
-  }
-  .code { font-weight: 950; font-size: 16px; letter-spacing: -0.2px; }
-  .meta { font-size: 12px; color: var(--ff-muted); margin-top: 4px; }
-  .sectionTitle { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 13px; text-transform: uppercase; letter-spacing: 0.03em; }
-  .lbl { display: block; font-size: 11px; font-weight: 900; color: var(--ff-muted); margin-bottom: 6px; text-transform: uppercase; }
+        /* LOADER */
+        .loader-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh; gap: 15px; color: #64748b; font-weight: 600; }
 
+        /* HEADER */
+        .shipment-header-v3 { background: #fff; padding: 25px 30px; border-radius: 24px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .id-tag { background: #eff6ff; color: #2563eb; padding: 4px 10px; border-radius: 8px; font-family: monospace; font-weight: 800; font-size: 11px; display: flex; align-items: center; gap: 5px; }
+        .header-info h1 { font-size: 24px; font-weight: 900; margin: 8px 0 2px; color: #0f172a; }
+        .header-info h1 small { color: #64748b; font-weight: 400; font-size: 16px; margin-left: 8px; }
+        .client-name { color: #64748b; font-size: 14px; margin: 0; }
 
-  /* --- FORMULARIO E INPUTS --- */
-  .in2 {
-    width: 100%; height: 38px; border: 1px solid var(--ff-border);
-    border-radius: var(--ff-radius); padding: 0 10px; font-size: 13px;
-    outline: none; background: #fff;
-  }
-  .in2:focus { border-color: var(--ff-green); box-shadow: 0 0 0 3px rgba(31, 122, 58, 0.1); }
-  
-  .ff-primary {
-    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    background: var(--ff-green); color: #fff; border: none;
-    border-radius: var(--ff-radius); height: 36px; padding: 0 12px;
-    font-weight: 900; font-size: 12px; cursor: pointer;
-  }
-  .ff-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .header-stats { display: flex; gap: 24px; background: #f8fafc; padding: 12px 20px; border-radius: 16px; border: 1px solid #f1f5f9; }
+        .stat-card { display: flex; flex-direction: column; }
+        .stat-card label { font-size: 9px; font-weight: 800; color: #94a3b8; text-transform: uppercase; display: flex; align-items: center; gap: 4px; margin-bottom: 2px; }
+        .stat-card span { font-size: 15px; font-weight: 800; color: #1e293b; }
+        .stat-divider { width: 1px; height: 30px; background: #e2e8f0; }
 
-  /* --- GRIDS RESPONSIVOS --- */
-  .row3, .actionsGrid { display: grid; gap: 10px; grid-template-columns: 1fr; }
-  .grid2 { display: grid; gap: 12px; grid-template-columns: 1fr; }
-  
-  @media (min-width: 980px) {
-    .row3 { grid-template-columns: 1.2fr 0.9fr 0.9fr; }
-    .actionsGrid { grid-template-columns: repeat(5, 1fr); }
-    .grid2 { grid-template-columns: 0.95fr 1.05fr; }
-  }
+        /* NAVIGATION */
+        .top-nav-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .btn-back { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #64748b; text-decoration: none; transition: 0.2s; }
+        .btn-back:hover { color: #0f172a; }
 
-  /* --- EXPEDIENTE DIGITAL (SLOTS) --- */
-  .docs-section { padding: 20px; border-radius: 16px; background: #fff; border: 1px solid #f1f5f9; }
-  .section-header-compact { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-  .docs-grid-modern { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
-  
-  .doc-slot {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 14px; border-radius: 12px; border: 1px solid #f1f5f9;
-    background: #fff; transition: 0.2s;
-  }
-  .doc-slot.is-filled { background: #f0fdf480; border-color: #dcfce7; }
-  .doc-slot.is-empty { border-style: dashed; background: #f8fafc; }
+        /* LAYOUT & CARDS */
+        .main-grid-layout { display: grid; grid-template-columns: 1fr 360px; gap: 24px; }
+        .glass-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 22px; transition: box-shadow 0.3s; }
+        .glass-card:hover { box-shadow: 0 10px 15px -3px rgba(0,0,0,0.02); }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .card-header-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .title-group { display: flex; align-items: center; gap: 10px; }
+        .card-header h3 { font-size: 13px; font-weight: 900; margin: 0; text-transform: uppercase; color: #1e293b; letter-spacing: 0.5px; }
+        .spacing-top { margin-top: 24px; }
 
-  .slot-body { display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .slot-info { display: flex; flex-direction: column; min-width: 0; }
-  .slot-label { font-size: 12px; font-weight: 800; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .slot-status { font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; }
+        /* CONFIG FORM */
+        .config-form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .f-group { display: flex; flex-direction: column; gap: 4px; }
+        .f-group label { font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.3px; }
+        .f-group input, .f-group textarea { padding: 11px; border-radius: 10px; border: 1px solid #e2e8f0; font-size: 13px; font-weight: 600; outline: none; transition: 0.2s; background: #fcfcfc; }
+        .f-group input:focus { border-color: #16a34a; background: #fff; box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.05); }
+        .full { grid-column: span 3; }
+        .btn-save-config { background: #0f172a; color: #fff; border: none; padding: 10px 18px; border-radius: 12px; font-size: 12px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .btn-save-config:hover { background: #1e293b; transform: translateY(-1px); }
 
-  /* --- FOTOS --- */
-  .modern-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
-  .photo-card-new { border-radius: 12px; overflow: hidden; border: 1px solid #f1f5f9; background: #fff; position: relative; }
-  .photo-display { aspect-ratio: 1/1; background: #f8fafc; position: relative; }
-  .photo-display img { width: 100%; height: 100%; object-fit: cover; }
-  
-  .photo-overlay {
-    position: absolute; inset: 0; background: rgba(15, 23, 42, 0.7);
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    opacity: 0; transition: 0.2s;
-  }
-  .photo-card-new:hover .photo-overlay { opacity: 1; }
-  .overlay-btn { 
-    width: 32px; height: 32px; border-radius: 8px; border: none; 
-    display: grid; place-items: center; cursor: pointer; color: #fff;
-  }
-  .overlay-btn.view { background: #16a34a; }
-  .overlay-btn.del { background: #e11d48; }
+        /* MILESTONE PROGRESS */
+        .inputs-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; background: #f8fafc; padding: 18px; border-radius: 14px; margin-bottom: 15px; border: 1px solid #f1f5f9; }
+        .buttons-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+        .btn-step { padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0; background: #fff; font-size: 10px; font-weight: 800; cursor: pointer; transition: all 0.2s; color: #64748b; }
+        .btn-step:hover { border-color: #16a34a; color: #16a34a; background: #f0fdf4; }
+        .btn-step.active { background: #16a34a; color: #fff; border-color: #16a34a; box-shadow: 0 8px 15px rgba(22, 163, 74, 0.25); }
 
-  /* --- BOTONES DE ACCIÓN SLOTS --- */
-  .action-btn { 
-    width: 28px; height: 28px; border-radius: 8px; border: none; 
-    display: grid; place-items: center; cursor: pointer; transition: 0.2s;
-  }
-  .action-btn.download { background: #fff; color: #16a34a; border: 1px solid #dcfce7; }
-  .action-btn.delete { background: #fff1f2; color: #e11d48; }
-  .action-btn.upload { background: #f1f5f9; color: #64748b; }
-  .action-btn:hover { transform: scale(1.05); }
+        /* DOCS LIST */
+        .docs-list { display: flex; flex-direction: column; gap: 8px; }
+        .doc-row { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: 14px; border: 1px solid transparent; transition: 0.2s; }
+        .doc-row.active { background: #f0fdf4; border-color: #dcfce7; }
+        .doc-row.empty { background: #f8fafc; border-color: #f1f5f9; }
+        .doc-indicator { width: 8px; height: 8px; border-radius: 50%; background: #cbd5e1; flex-shrink: 0; }
+        .active .doc-indicator { background: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1); }
+        .doc-info { flex: 1; display: flex; flex-direction: column; }
+        .doc-name { font-size: 12px; font-weight: 700; color: #1e293b; }
+        .doc-status { font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; }
 
-  .upload-photo-btn {
-    font-size: 11px; font-weight: 800; color: #2563eb; background: #eff6ff;
-    padding: 6px 12px; border-radius: 8px; cursor: pointer;
-    display: flex; align-items: center; gap: 6px; border: 1px solid #dbeafe;
-  }
+        /* DOC ACTIONS */
+        .btn-icon-up { width: 32px; height: 32px; border-radius: 8px; background: #fff; border: 1px solid #e2e8f0; display: grid; place-items: center; cursor: pointer; color: #64748b; transition: 0.2s; }
+        .btn-icon-up:hover { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+        .btn-icon-del { width: 32px; height: 32px; border-radius: 8px; background: #fff; border: 1px solid #fee2e2; display: grid; place-items: center; cursor: pointer; color: #ef4444; transition: 0.2s; }
+        .btn-icon-del:hover { background: #fef2f2; transform: scale(1.1); }
 
-  /* --- ESTADOS --- */
-  .muted { font-size: 12px; color: var(--ff-muted); }
-  .spin { animation: spin 1s linear infinite; }
-  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-`}</style>
+        /* PHOTOS */
+        .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; }
+        .photo-card { position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden; border: 1px solid #e2e8f0; background: #f8fafc; }
+        .photo-card img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }
+        .photo-card:hover img { transform: scale(1.05); }
+        .photo-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.4); opacity: 0; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+        .photo-card:hover .photo-overlay { opacity: 1; }
+        .btn-add-mini { font-size: 11px; font-weight: 800; color: #2563eb; background: #eff6ff; padding: 6px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; border: 1px solid #dbeafe; transition: 0.2s; }
+        .btn-add-mini:hover { background: #dbeafe; }
+
+        /* STATUS PILLS */
+        .pill { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; }
+        .pill.packed { background: #fef3c7; color: #d97706; }
+        .pill.docs_ready { background: #dcfce7; color: #16a34a; }
+        .pill.in_transit { background: #dbeafe; color: #2563eb; }
+
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
     </AdminLayout>
   );
-  
 }
-
