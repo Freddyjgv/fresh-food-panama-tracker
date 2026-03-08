@@ -103,7 +103,7 @@ export default function ShipmentsPage() {
       <div className="ff-logo-wrapper">
         {items[0]?.clients?.logo_url ? (
           <img 
-            src={`https://https://oqgkbduqztrpfhfclker.supabase.co/storage/v1/object/public/client-logos/${items[0].clients.logo_url}`} 
+            src={`https://oqgkbduqztrpfhfclker.supabase.co/storage/v1/object/public/client-logos/${items[0].clients.logo_url}`} 
             alt="Logo" 
             className="ff-logo-img"
           />
