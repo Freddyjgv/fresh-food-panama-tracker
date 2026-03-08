@@ -48,14 +48,16 @@ export const handler: Handler = async (event) => {
 
     // Firmar URLs de fotos
     const photosWithUrl = await Promise.all(
-      photos.map(async (p) => {
-        if (!p.storage_path) return { ...p, url: null };
-        const { data, error: sErr } = await sbAdmin.storage
-          .from(p.bucket || "shipment-photos")
-          .createSignedUrl(p.storage_path, 3600);
-        return { ...p, url: sErr ? null : data.signedUrl };
-      })
-    );
+  photos.map(async (p) => {
+    if (!p.storage_path) return { ...p, url: null };
+    const { data } = await sbAdmin.storage
+      .from(p.bucket || "shipment-photos")
+      .createSignedUrl(p.storage_path, 3600);
+    
+    // IMPORTANTE: Asegurar que siempre devuelva el objeto p, incluso si url es null
+    return { ...p, url: data?.signedUrl || null };
+  })
+);
 
     return json(200, {
       ...shipment,
