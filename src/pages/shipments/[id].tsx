@@ -262,11 +262,14 @@ export default function ShipmentDetailPage() {
 </div>
 
           {/* PROGRESS */}
-          <div className="block">
-            <ProgressStepper 
+<div className="block">
+  <ProgressStepper 
     milestones={data.milestones ?? []} 
     flightNumber={data.flight_number ?? null} 
-    awb={data.awb ?? null}  // <--- ¡AÑADE ESTA LÍNEA AQUÍ!
+    awb={data.awb ?? null}
+    flightStatus={data.flight_status}
+    departureTime={data.flight_departure_time}
+    arrivalTime={data.flight_arrival_time}
   />
 </div>
 
