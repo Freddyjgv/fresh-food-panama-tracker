@@ -258,6 +258,70 @@ export default function ShipmentsPage() {
         .md-stat-val { display: block; font-size: 20px; font-weight: 800; }
         .md-stat-lab { font-size: 10px; font-weight: 700; opacity: 0.6; letter-spacing: 0.1em; }
 
+        .ff-header-premium { padding: 40px 0; border-bottom: 1px solid #f1f5f9; margin-bottom: 40px; }
+
+.ff-header-top-row { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  margin-bottom: 32px; 
+}
+
+/* Profile Section */
+.ff-client-profile { display: flex; align-items: center; gap: 24px; }
+.ff-logo-wrapper { 
+  width: 76px; height: 76px; border-radius: 20px; 
+  background: #f8fafc; border: 1.5px solid #e2e8f0; 
+  overflow: hidden; display: grid; place-items: center;
+}
+.ff-logo-img { width: 100%; height: 100%; object-fit: contain; padding: 10px; }
+.ff-logo-placeholder { font-size: 32px; font-weight: 900; color: #cbd5e1; }
+
+.ff-client-name-display { 
+  font-size: 34px; font-weight: 900; color: #0f172a; 
+  letter-spacing: -0.04em; margin: 0; line-height: 0.9;
+}
+
+.ff-client-meta-row { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+.ff-meta-label { font-size: 11px; font-weight: 800; color: #94a3b8; letter-spacing: 0.05em; }
+.ff-meta-value { font-size: 13px; font-weight: 700; color: #64748b; }
+.ff-meta-divider { color: #e2e8f0; font-weight: 300; }
+
+/* KPI Badge Style */
+.ff-id-badge-kpi { 
+  display: flex; align-items: center; gap: 18px; 
+  background: white; border: 1.5px solid #e2e8f0; 
+  padding: 14px 28px; border-radius: 22px; 
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.03);
+}
+.ff-badge-icon-stack { position: relative; display: flex; align-items: center; }
+.ff-badge-number { font-size: 26px; font-weight: 900; color: #0f172a; display: block; line-height: 1; }
+.ff-badge-label { font-size: 10px; font-weight: 800; color: #94a3b8; letter-spacing: 0.08em; }
+:global(.ff-icon-green) { color: #22c55e; }
+
+/* Pulse Animation */
+.ff-pulse-dot {
+  position: absolute; top: -6px; right: -6px; width: 10px; height: 10px;
+  background: #22c55e; border-radius: 50%; border: 2px solid white;
+}
+.ff-pulse-dot::after {
+  content: ''; position: absolute; width: 100%; height: 100%;
+  background: #22c55e; border-radius: 50%; animation: pulse 2s infinite;
+}
+@keyframes pulse { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(3); opacity: 0; } }
+
+/* Specs Bar */
+.ff-header-specs-bar { 
+  display: flex; align-items: center; gap: 32px; 
+  background: #f8fafc; padding: 16px 28px; border-radius: 18px; 
+}
+.ff-spec-item { display: flex; flex-direction: column; }
+.ff-spec-label { font-size: 10px; font-weight: 800; color: #94a3b8; letter-spacing: 0.08em; margin-bottom: 4px; }
+.ff-spec-value { font-size: 14px; font-weight: 800; color: #334155; }
+.ff-spec-divider { width: 1px; height: 30px; background: #e2e8f0; }
+.ff-spec-divider-heavy { width: 2px; height: 30px; background: #cbd5e1; }
+.ff-text-blue { color: #2563eb; }
+
         .md-toolbar { display: flex; gap: 16px; margin-bottom: 30px; }
         .md-search-box { flex: 1; background: white; border: 1px solid #e2e8f0; border-radius: 16px; display: flex; align-items: center; padding: 0 18px; gap: 12px; }
         .md-search-box input { border: none; outline: none; width: 100%; height: 52px; font-size: 15px; font-weight: 500; }
