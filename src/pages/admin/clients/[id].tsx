@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { AdminLayout, notify } from '../../../components/AdminLayout';
 import { 
-  Building2, MapPin, Mail, Phone, Pencil, Loader2, Plus, 
+  Building2, Mail, Phone, Pencil, Loader2, Plus, 
   ExternalLink, User, Save, Globe, Bell, ShoppingBag, 
   CreditCard, Truck, ChevronDown, Calculator
 } from 'lucide-react';
@@ -13,21 +13,11 @@ export default function ClientDetailPage() {
   const router = useRouter();
   const { id } = router.query;
 
-  // --- ESTADOS INICIALIZADOS CON ESTRUCTURA SEGURA ---
   const [client, setClient] = useState<any>(null);
   const [shipments, setShipments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditingMaster, setIsEditingMaster] = useState(false);
-  
-  // EditData con valores por defecto para evitar errores de "undefined"
-  const [editData, setEditData] = useState<any>({
-    name: '',
-    stakeholders: {
-      purchasing: { name: '', email: '', phone: '' },
-      accounting: { name: '', email: '', phone: '' },
-      logistics: { name: '', email: '', phone: '' }
-    }
-  });
+  const [editData, setEditData] = useState<any>({});
 
   const statusConfig: any = {
     'CREATED': { label: 'Creado', class: 'created' },
@@ -46,7 +36,6 @@ export default function ClientDetailPage() {
         .from('shipments').select('*').eq('client_id', clientId).order('created_at', { ascending: false });
       if (sErr) throw sErr;
 
-      // Unificación de estructura para evitar errores de lectura
       const safeClient = { 
         ...clientData, 
         billing_info: clientData.billing_info || { address: '' },
@@ -75,26 +64,26 @@ export default function ClientDetailPage() {
 
   const saveMasterData = async () => {
     try {
-      const { error } = await supabase.from('clients').update({
-        name: editData.name,
-        legal_name: editData.legal_name,
-        tax_id: editData.tax_id,
-        website: editData.website,
-        country: editData.country,
-        city: editData.city,
-        phone: editData.phone,
-        contact_name: editData.contact_name,
-        contact_email: editData.contact_email,
-        default_incoterm: editData.default_incoterm,
-        credit_days: editData.credit_days,
-        sales_rep: editData.sales_rep
-      }).eq('id', id);
-
+      const payload = {
+        name: editData.name || null,
+        legal_name: editData.legal_name || null,
+        tax_id: editData.tax_id || null,
+        website: editData.website || null,
+        country: editData.country || null,
+        city: editData.city || null,
+        phone: editData.phone || null,
+        contact_name: editData.contact_name || null,
+        contact_email: editData.contact_email || null,
+        default_incoterm: editData.default_incoterm || null,
+        credit_days: editData.credit_days ? parseInt(editData.credit_days) : 0,
+        sales_rep: editData.sales_rep || null
+      };
+      const { error } = await supabase.from('clients').update(payload).eq('id', id);
       if (error) throw error;
       setClient({...editData});
       setIsEditingMaster(false);
       notify("Datos Maestros actualizados", "success");
-    } catch (err) { notify("Error al guardar", "error"); }
+    } catch (err: any) { notify("Error al guardar", "error"); }
   };
 
   if (loading || !client) return <div className="loader-full"><Loader2 className="animate-spin" size={40}/></div>;
@@ -103,13 +92,13 @@ export default function ClientDetailPage() {
     <AdminLayout title={`Expediente: ${client.name}`}>
       <div className="view-container">
         
-        {/* --- HEADER --- */}
+        {/* HEADER */}
         <header className="ff-header-minimal">
           <div className="ff-header-top-row">
             <div className="ff-client-profile">
               <div className="ff-logo-wrapper">
                 {client.logo_url ? (
-                  <img src={`https://oqgkbduqztrpfhfclker.supabase.co/storage/v1/object/public/client-logos/${client.logo_url}`} className="ff-logo-img" />
+                  <img src={`https://oqgkbduqztrpfhfclker.supabase.co/storage/v1/object/public/client-logos/${client.logo_url}`} className="ff-logo-img" alt="logo" />
                 ) : (
                   <div className="ff-logo-placeholder">{client.name?.charAt(0)}</div>
                 )}
@@ -142,21 +131,24 @@ export default function ClientDetailPage() {
 
         <div className="main-grid">
           <div className="main-col">
-            {/* --- DATOS MAESTROS --- */}
+            {/* DATOS MAESTROS */}
             <section className="pro-card">
               <div className="card-header-v2">
                 <div className="header-title-group">
-                  <Building2 size={18} className="ff-icon-accent" />
-                  <h3>Expediente Legal y Comercial</h3>
+                  <div className="ff-icon-circle"><Building2 size={18} /></div>
+                  <div className="ff-header-text-group">
+                    <h3>Expediente del Cliente</h3>
+                    <p>Información legal y términos comerciales</p>
+                  </div>
                 </div>
                 {!isEditingMaster ? (
-                  <button className="ff-btn-edit-inline" onClick={() => setIsEditingMaster(true)}>
-                    <Pencil size={14} /> Editar Información
+                  <button className="ff-btn-edit-main" onClick={() => setIsEditingMaster(true)}>
+                    <Pencil size={14} /> <span>Editar Perfil</span>
                   </button>
                 ) : (
-                  <div className="ff-edit-inline-actions">
-                    <button className="ff-save-mini" onClick={saveMasterData}><Save size={14}/> Guardar</button>
-                    <button className="ff-cancel-mini" onClick={() => { setIsEditingMaster(false); setEditData(client); }}>Cancelar</button>
+                  <div className="ff-edit-group">
+                    <button className="ff-btn-save" onClick={saveMasterData}><Save size={14}/> <span>Guardar</span></button>
+                    <button className="ff-btn-cancel" onClick={() => { setIsEditingMaster(false); setEditData(client); }}>Cancelar</button>
                   </div>
                 )}
               </div>
@@ -176,25 +168,28 @@ export default function ClientDetailPage() {
                   { label: 'Vendedor', key: 'sales_rep' }
                 ].map((item) => (
                   <div className="ff-master-item" key={item.key}>
-                    <label>{item.label}</label>
+                    <span className="ff-item-label">{item.label}</span>
                     {isEditingMaster ? (
                       <input 
                         className="ff-master-input"
+                        type={item.key === 'credit_days' ? 'number' : 'text'}
                         value={editData[item.key] || ''} 
                         onChange={e => setEditData({...editData, [item.key]: e.target.value})}
                       />
                     ) : (
-                      <div className="ff-master-value">{client[item.key] || '—'}</div>
+                      <div className="ff-item-value">{client[item.key] || '—'}</div>
                     )}
                   </div>
                 ))}
               </div>
             </section>
 
-            {/* --- TABLA DE EMBARQUES --- */}
+            {/* MONITOR DE EMBARQUES */}
             <section className="pro-card">
               <div className="card-header-v2">
-                <h3>Monitor de Embarques Recientes</h3>
+                <div className="ff-header-text-group">
+                  <h3>Monitor de Embarques</h3>
+                </div>
                 <Link href="/admin/shipments" className="link-all">Ver todos <ExternalLink size={12}/></Link>
               </div>
               <div className="table-wrapper">
@@ -211,12 +206,7 @@ export default function ClientDetailPage() {
                     {shipments.map(s => (
                       <tr key={s.id}>
                         <td><span className="code-tag">{s.code}</span></td>
-                        <td>
-                          <div className="prod-cell">
-                            <strong>{s.product_name}</strong>
-                            <span>{s.product_variety}</span>
-                          </div>
-                        </td>
+                        <td><strong>{s.product_name}</strong></td>
                         <td><div className="dest-cell"><Globe size={12}/> {s.destination_port}</div></td>
                         <td className="txt-center">
                           <span className={`pill-status-v2 ${statusConfig[s.status]?.class || 'created'}`}>
@@ -231,9 +221,10 @@ export default function ClientDetailPage() {
             </section>
           </div>
 
+          {/* SIDEBAR */}
           <aside className="side-col">
             <div className="pro-card mini-padding">
-              <h4 className="side-label">Direcciones Logísticas</h4>
+              <h4 className="side-label">Direcciones BL/AWB</h4>
               <div className="stakeholders-stack">
                 {[
                   { id: 'billing_info', label: 'Billing Party', icon: <CreditCard size={14}/> },
@@ -241,7 +232,13 @@ export default function ClientDetailPage() {
                   { id: 'notify_info', label: 'Notify Party', icon: <Bell size={14}/> }
                 ].map(addr => (
                   <details className="dept-accordion" key={addr.id}>
-                    <summary><div className="sum-left">{addr.icon} <span>{addr.label}</span></div><ChevronDown size={14}/></summary>
+                    <summary className="ff-summary-clean">
+                      <div className="sum-left">{addr.icon} <span>{addr.label}</span></div>
+                      <div className="sum-right">
+                        <button className="ff-btn-mini-edit"><Pencil size={10} /></button>
+                        <ChevronDown size={14} className="chevron-icon"/>
+                      </div>
+                    </summary>
                     <div className="dept-view">
                       <p className="ff-address-text">{client[addr.id]?.address || 'No definida'}</p>
                     </div>
@@ -259,15 +256,17 @@ export default function ClientDetailPage() {
                   { id: 'logistics', label: 'Logística', icon: <Truck size={14}/>, color: '#10b981' }
                 ].map(dept => (
                   <details className="dept-accordion" key={dept.id}>
-                    <summary style={{ borderLeft: `4px solid ${dept.color}` }}>
+                    <summary className="ff-summary-clean" style={{ borderLeft: `4px solid ${dept.color}` }}>
                       <div className="sum-left">{dept.icon} <span>{dept.label}</span></div>
-                      <ChevronDown size={14}/>
+                      <div className="sum-right">
+                        <button className="ff-btn-mini-edit"><Pencil size={10} /></button>
+                        <ChevronDown size={14} className="chevron-icon"/>
+                      </div>
                     </summary>
                     <div className="dept-view">
-                      {/* ACCESO SEGURO CON OPTIONAL CHAINING */}
-                      <p><strong>{client.stakeholders?.[dept.id]?.name || 'No asignado'}</strong></p>
-                      <div className="mailto-btn"><Mail size={12}/> {client.stakeholders?.[dept.id]?.email || 'Sin correo'}</div>
-                      <div className="tel-btn"><Phone size={12}/> {client.stakeholders?.[dept.id]?.phone || 'Sin tel.'}</div>
+                      <p className="ff-contact-name">{client.stakeholders?.[dept.id]?.name || 'No asignado'}</p>
+                      <div className="ff-contact-item"><Mail size={12}/> <span>{client.stakeholders?.[dept.id]?.email || '—'}</span></div>
+                      <div className="ff-contact-item"><Phone size={12}/> <span>{client.stakeholders?.[dept.id]?.phone || '—'}</span></div>
                     </div>
                   </details>
                 ))}
@@ -278,143 +277,63 @@ export default function ClientDetailPage() {
       </div>
 
       <style jsx>{`
-  /* CONTENEDOR PRINCIPAL */
-  .view-container { 
-    padding: 20px 40px; 
-    max-width: 1600px; 
-    margin: 0 auto; 
-    background: #f8fafc; 
-    min-height: 100vh; 
-    font-family: 'Inter', sans-serif; 
-  }
-
-  /* HEADER SIN BORDES */
-  .ff-header-minimal { 
-    padding: 10px 0 40px 0; 
-    background: transparent; 
-  }
-  .ff-header-top-row { 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-  }
-
-  /* CLIENT PROFILE & BADGE INLINE */
-  .ff-client-profile { display: flex; align-items: center; gap: 20px; }
-  .ff-name-row { display: flex; align-items: center; gap: 12px; }
-  .ff-client-name-display { 
-    font-size: 28px; 
-    font-weight: 900; 
-    color: #0f172a; 
-    letter-spacing: -0.03em; 
-    margin: 0;
-  }
-  .ff-badge-status-inline { 
-    background: rgba(34, 197, 94, 0.1); 
-    color: #166534; 
-    padding: 4px 12px; 
-    border-radius: 8px; 
-    font-size: 11px; 
-    font-weight: 800; 
-    border: 1px solid rgba(34, 197, 94, 0.2);
-    white-space: nowrap;
-  }
-
-  /* BOTONES MINIMALISTAS (TRANSACCIONALES) */
-  .ff-header-actions-minimal { display: flex; gap: 12px; }
-  .ff-btn-mini { 
-    display: flex; 
-    align-items: center; 
-    gap: 8px; 
-    padding: 10px 18px; 
-    border-radius: 12px; 
-    font-size: 13px; 
-    font-weight: 700; 
-    cursor: pointer; 
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
-    border: 1px solid transparent; 
-  }
-
-  /* Botón Blanco / Glass */
-  .ff-btn-glass-secondary { 
-    background: white; 
-    color: #475569; 
-    border-color: #e2e8f0;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-  }
-  .ff-btn-glass-secondary:hover { 
-    background: #f8fafc; 
-    border-color: #cbd5e1;
-    transform: translateY(-1px);
-  }
-
-  /* Botón Dark Transparent */
-  .ff-btn-glass-primary { 
-    background: rgba(15, 23, 42, 0.06); 
-    color: #0f172a; 
-    border-color: rgba(15, 23, 42, 0.08); 
-  }
-  .ff-btn-glass-primary:hover { 
-    background: #0f172a; 
-    color: white; 
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
-  }
-
-  /* GRID Y CARDS */
-  .main-grid { display: grid; grid-template-columns: 1fr 360px; gap: 30px; }
-  .pro-card { 
-    background: white; 
-    border-radius: 24px; 
-    border: 1px solid #eef2f6; 
-    margin-bottom: 24px; 
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.01);
-  }
-  .card-header-v2 { 
-    padding: 24px; 
-    border-bottom: 1px solid #f8fafc; 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-  }
-
-  /* INPUTS DE EDICIÓN */
-  .ff-master-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; padding: 24px; }
-  .ff-master-input { 
-    width: 100%; 
-    padding: 10px 12px; 
-    border: 1px solid #e2e8f0; 
-    border-radius: 10px; 
-    font-size: 14px; 
-    font-weight: 600; 
-    background: #fdfdfd; 
-    color: #1e293b;
-    transition: border 0.2s;
-  }
-  .ff-master-input:focus { 
-    border-color: #3b82f6; 
-    outline: none; 
-    background: white;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  }
-
-  /* SIDEBAR REFINADO */
-  .mini-padding { padding: 24px; }
-  .side-label { 
-    font-size: 11px; 
-    font-weight: 800; 
-    color: #94a3b8; 
-    text-transform: uppercase; 
-    letter-spacing: 0.05em;
-    margin-bottom: 16px; 
-  }
-  .dept-accordion { margin-bottom: 12px; border-radius: 16px; border: 1px solid #f1f5f9; background: #fafafa; }
-  .dept-accordion summary { padding: 14px; font-weight: 700; color: #475569; }
-  .dept-view { padding: 0 14px 14px 14px; background: #fafafa; }
-
-  /* LOADER */
-  .loader-full { height: 100vh; display: flex; align-items: center; justify-content: center; color: #3b82f6; }
-`}</style>
+        .view-container { padding: 20px 40px; max-width: 1600px; margin: 0 auto; background: #f8fafc; min-height: 100vh; font-family: 'Inter', sans-serif; }
+        .ff-header-minimal { padding: 10px 0 32px 0; background: transparent; }
+        .ff-header-top-row { display: flex; justify-content: space-between; align-items: center; }
+        .ff-client-profile { display: flex; align-items: center; gap: 20px; }
+        .ff-logo-wrapper { width: 64px; height: 64px; background: white; border-radius: 14px; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .ff-logo-img { width: 100%; height: 100%; object-fit: contain; padding: 8px; }
+        .ff-logo-placeholder { font-size: 24px; font-weight: 800; color: #cbd5e1; }
+        .ff-name-row { display: flex; align-items: center; gap: 12px; }
+        .ff-client-name-display { font-size: 26px; font-weight: 900; color: #0f172a; margin: 0; letter-spacing: -0.03em; }
+        .ff-badge-status-inline { background: rgba(34, 197, 94, 0.1); color: #166534; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; border: 1px solid rgba(34, 197, 94, 0.2); }
+        .ff-client-meta-stack { margin-top: 4px; }
+        .ff-legal-name-row { font-size: 14px; font-weight: 600; color: #475569; }
+        .ff-meta-sub-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #94a3b8; font-weight: 500; }
+        .ff-meta-divider { color: #e2e8f0; }
+        .ff-header-actions-minimal { display: flex; gap: 12px; }
+        .ff-btn-mini { display: flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.2s; border: 1px solid transparent; }
+        .ff-btn-glass-secondary { background: white; color: #475569; border-color: #e2e8f0; }
+        .ff-btn-glass-primary { background: rgba(15, 23, 42, 0.05); color: #0f172a; border-color: rgba(15, 23, 42, 0.1); }
+        .main-grid { display: grid; grid-template-columns: 1fr 340px; gap: 24px; }
+        .pro-card { background: white; border-radius: 20px; border: 1px solid #e2e8f0; margin-bottom: 24px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .card-header-v2 { padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+        .ff-icon-circle { width: 32px; height: 32px; background: #eff6ff; color: #2563eb; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+        .ff-header-text-group h3 { font-size: 15px; font-weight: 800; color: #1e293b; margin: 0; }
+        .ff-header-text-group p { font-size: 11px; color: #94a3b8; margin: 0; }
+        .ff-master-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px 32px; padding: 24px; }
+        .ff-master-item { display: flex; flex-direction: column; gap: 4px; }
+        .ff-item-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+        .ff-item-value { font-size: 14px; font-weight: 600; color: #1e293b; padding: 4px 0; }
+        .ff-master-input { width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-weight: 600; background: #f8fafc; outline: none; }
+        .ff-btn-edit-main { display: flex; align-items: center; gap: 6px; background: #f1f5f9; border: none; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; color: #475569; cursor: pointer; }
+        .ff-btn-save { background: #16a34a; color: white; border: none; padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; }
+        .ff-btn-cancel { background: white; border: 1px solid #e2e8f0; color: #64748b; padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; }
+        .ff-summary-clean { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #fafafa; cursor: pointer; list-style: none; }
+        .ff-summary-clean::-webkit-details-marker { display: none; }
+        .sum-left { display: flex; align-items: center; gap: 10px; font-weight: 700; color: #475569; font-size: 13px; }
+        .sum-right { display: flex; align-items: center; gap: 12px; }
+        .chevron-icon { transition: 0.2s; color: #94a3b8; }
+        .dept-accordion[open] .chevron-icon { transform: rotate(180deg); }
+        .ff-btn-mini-edit { width: 22px; height: 22px; border-radius: 6px; border: 1px solid #e2e8f0; background: white; color: #94a3b8; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .dept-view { padding: 0 16px 16px 16px; background: #fafafa; }
+        .ff-address-text { font-size: 12px; color: #64748b; line-height: 1.5; margin: 0; padding: 10px; background: white; border-radius: 8px; border: 1px solid #edf2f7; }
+        .ff-contact-name { font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 6px; }
+        .ff-contact-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #64748b; margin-top: 4px; }
+        .table-refine { width: 100%; border-collapse: collapse; }
+        .table-refine th { text-align: left; padding: 14px 24px; font-size: 11px; color: #94a3b8; font-weight: 800; background: #fafafa; border-bottom: 1px solid #f1f5f9; }
+        .table-refine td { padding: 16px 24px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        .code-tag { font-family: monospace; font-weight: 800; color: #2563eb; background: #eff6ff; padding: 4px 8px; border-radius: 6px; }
+        .pill-status-v2 { font-size: 10px; font-weight: 800; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; }
+        .created { background: #fef3c7; color: #92400e; }
+        .delivered { background: #dcfce7; color: #166534; }
+        .side-label { font-size: 11px; font-weight: 900; color: #94a3b8; text-transform: uppercase; margin-bottom: 16px; display: block; }
+        .dept-accordion { margin-bottom: 8px; border-radius: 12px; border: 1px solid #f1f5f9; overflow: hidden; }
+        .loader-full { height: 100vh; display: flex; align-items: center; justify-content: center; color: #2563eb; }
+        .link-all { font-size: 12px; color: #2563eb; font-weight: 700; text-decoration: none; display: flex; align-items: center; gap: 4px; }
+        .txt-center { text-align: center; }
+        .mini-padding { padding: 20px; }
+      `}</style>
     </AdminLayout>
   );
 }
