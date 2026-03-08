@@ -306,58 +306,121 @@ export default function ClientDetailPage() {
       </div>
 
       <style jsx>{`
-        .view-container { padding: 30px 40px; max-width: 1600px; margin: 0 auto; background: #f8fafc; min-height: 100vh; font-family: 'Inter', sans-serif; }
-        .main-grid { display: grid; grid-template-columns: 1fr 340px; gap: 24px; }
-        .pro-card { background: white; border-radius: 20px; border: 1px solid #e2e8f0; margin-bottom: 24px; overflow: hidden; }
-        
-        /* HEADER */
-        .ff-header-premium { background: white; padding: 32px; border-radius: 24px; border: 1px solid #e2e8f0; margin-bottom: 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-        .ff-header-top-row { display: flex; justify-content: space-between; align-items: center; }
-        .ff-client-profile { display: flex; align-items: center; gap: 24px; }
-        .ff-logo-wrapper { width: 80px; height: 80px; background: #f8fafc; border-radius: 18px; border: 1px solid #e2e8f0; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-        .ff-logo-img { width: 100%; height: 100%; object-fit: contain; padding: 10px; }
-        .ff-upload-btn { position: absolute; inset: 0; background: rgba(0,0,0,0.5); color: white; display: flex; align-items: center; justify-content: center; opacity: 0; cursor: pointer; transition: 0.2s; }
-        .ff-logo-wrapper:hover .ff-upload-btn { opacity: 1; }
-        .ff-client-name-display { font-size: 30px; font-weight: 900; color: #0f172a; margin: 0; letter-spacing: -0.03em; }
-        .ff-client-meta-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; color: #64748b; font-size: 14px; font-weight: 600; }
-        .ff-meta-value-main { color: #1e293b; font-weight: 700; }
-        .ff-meta-divider { color: #e2e8f0; }
-        .ff-badge-status { background: #f0fdf4; color: #166534; padding: 4px 12px; border-radius: 100px; font-size: 11px; font-weight: 800; border: 1px solid #dcfce7; }
+  /* ELIMINACIÓN DE BORDES Y AJUSTE DE HEADER */
+  .ff-header-minimal {
+    background: transparent; /* Eliminamos el fondo blanco sólido si prefieres que flote */
+    padding: 20px 0 32px 0; /* Espaciado sin bordes */
+    margin-bottom: 20px;
+  }
 
-        /* DATOS MAESTROS GRID */
-        .ff-master-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; padding: 24px; }
-        .ff-master-item { display: flex; flex-direction: column; gap: 6px; }
-        .ff-master-item label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
-        .ff-master-value { font-size: 14px; font-weight: 600; color: #1e293b; padding-bottom: 6px; border-bottom: 1px solid #f1f5f9; }
-        .ff-master-input { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-weight: 600; background: #f0f7ff; outline: none; border-color: #2563eb; }
-        .ff-icon-accent { color: #2563eb; }
+  .ff-header-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
 
-        /* TABLA */
-        .table-refine { width: 100%; border-collapse: collapse; }
-        .table-refine th { text-align: left; padding: 16px 24px; font-size: 11px; color: #94a3b8; font-weight: 800; background: #fafafa; border-bottom: 1px solid #f1f5f9; }
-        .table-refine td { padding: 16px 24px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
-        .code-tag { font-family: monospace; font-weight: 800; color: #2563eb; background: #eff6ff; padding: 4px 8px; border-radius: 6px; }
-        .pill-status-v2 { font-size: 10px; font-weight: 800; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; }
-        .created { background: #fef3c7; color: #92400e; }
-        .delivered { background: #dcfce7; color: #166534; }
+  /* LOGO Y NOMBRE */
+  .ff-logo-wrapper {
+    width: 64px;
+    height: 64px;
+    background: white;
+    border-radius: 14px;
+    border: 1px solid #f1f5f9;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+  }
 
-        /* ACORDEONES */
-        .dept-accordion { margin-bottom: 8px; border-radius: 12px; border: 1px solid #f1f5f9; overflow: hidden; }
-        .dept-accordion summary { padding: 12px 16px; background: #fafafa; display: flex; justify-content: space-between; align-items: center; cursor: pointer; list-style: none; font-weight: 700; font-size: 13px; }
-        .dept-view, .dept-form { padding: 16px; background: white; display: flex; flex-direction: column; gap: 8px; }
-        .ff-address-text { font-size: 12px; color: #64748b; line-height: 1.5; margin: 0; }
-        .mailto-btn, .tel-btn { font-size: 12px; color: #2563eb; text-decoration: none; display: flex; align-items: center; gap: 6px; font-weight: 600; }
+  .ff-name-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
 
-        /* BOTONES */
-        .ff-btn-action { display: flex; align-items: center; gap: 10px; padding: 10px 20px; border-radius: 12px; font-size: 14px; font-weight: 700; border: none; cursor: pointer; }
-        .ff-btn-primary { background: #0f172a; color: white; }
-        .ff-btn-secondary { background: white; color: #334155; border: 1px solid #e2e8f0; }
-        .ff-btn-edit-inline { background: #f1f5f9; border: none; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; color: #475569; cursor: pointer; }
-        .ff-save-mini { background: #16a34a; color: white; border: none; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; }
-        .ff-cancel-mini { background: #fff1f2; color: #e11d48; border: none; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; }
-        .side-label { font-size: 11px; font-weight: 900; color: #94a3b8; text-transform: uppercase; margin-bottom: 16px; display: block; }
-        .loader-full { height: 100vh; display: flex; align-items: center; justify-content: center; color: #16a34a; }
-      `}</style>
+  .ff-client-name-display {
+    font-size: 24px;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+  }
+
+  /* BADGE AL LADO DEL NOMBRE */
+  .ff-badge-status-inline {
+    background: rgba(34, 197, 94, 0.1);
+    color: #166534;
+    padding: 2px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid rgba(34, 197, 94, 0.2);
+  }
+
+  /* STACK DE INFORMACIÓN DEBAJO */
+  .ff-client-meta-stack {
+    margin-top: 4px;
+  }
+
+  .ff-legal-name-row {
+    font-size: 14px;
+    font-weight: 600;
+    color: #475569;
+  }
+
+  .ff-meta-sub-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #94a3b8;
+    font-weight: 500;
+    margin-top: 2px;
+  }
+
+  .ff-meta-divider {
+    color: #e2e8f0;
+  }
+
+  /* BOTONES MINIMALISTAS (GLASSMORFISM) */
+  .ff-header-actions-minimal {
+    display: flex;
+    gap: 10px;
+  }
+
+  .ff-btn-mini {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s all ease;
+    border: 1px solid transparent;
+  }
+
+  /* Transparencia para Cotización */
+  .ff-btn-glass-secondary {
+    background: rgba(241, 245, 249, 0.7);
+    color: #475569;
+    border-color: #e2e8f0;
+  }
+  .ff-btn-glass-secondary:hover {
+    background: #f1f5f9;
+    transform: translateY(-1px);
+  }
+
+  /* Transparencia para Embarque (Sutilmente oscuro) */
+  .ff-btn-glass-primary {
+    background: rgba(15, 23, 42, 0.05);
+    color: #0f172a;
+    border-color: rgba(15, 23, 42, 0.1);
+  }
+  .ff-btn-glass-primary:hover {
+    background: #0f172a;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  }
+`}</style>
     </AdminLayout>
   );
 }
