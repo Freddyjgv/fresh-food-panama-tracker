@@ -1,11 +1,15 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
 import { 
-  Plus, X, Mail, Phone, Edit3, Loader2, Search, Building2, 
-  Globe, CreditCard, MapPin, ExternalLink, Trash2
+  Plus, X, Mail, Phone, Loader2, Send, Search, Copy, 
+  Building2, Globe, ShieldCheck, Upload, MapPin, Info,
+  Pencil
 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import { AdminLayout, notify } from "../../components/AdminLayout";
+
+// --- HELPERS SENIOR ---
+const getInitials = (name: string) => name?.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2) || "??";
 
 export default function AdminUsersPage() {
   const router = useRouter();
@@ -15,16 +19,28 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [dataList, setDataList] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const initialForm = {
-    id: null, name: "", legal_name: "", tax_id: "", email_corp: "", phone_corp: "", 
-    country_origin: "Panamá", payment_condition: "Prepagado", billing_address: "",
-    website: "", shipping_addresses: [{ id: Date.now(), address: "" }],
-    staff_name: "", staff_email: "", staff_role: "admin"
+    id: null, 
+    name: "", 
+    legal_name: "", 
+    tax_id: "", 
+    contact_email: "", 
+    phone: "", 
+    country: "Panamá",
+    mode: "invite" as "invite" | "manual",
+    password: "",
+    // Estructuras JSON para logística TOP
+    billing_info: { address: "", email: "", phone: "" },
+    consignee_info: { address: "", email: "", phone: "" },
+    notify_info: { address: "", email: "", phone: "" }
   };
   
   const [f, setF] = useState(initialForm);
 
+  // --- CARGA DE DATOS ---
   const loadData = async () => {
     setLoading(true);
     try {
@@ -33,7 +49,7 @@ export default function AdminUsersPage() {
       const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${session?.access_token}` } });
       const data = await res.json();
       setDataList(data.items || []);
-    } catch (e) { notify("Error de carga", "error"); }
+    } catch (e) { notify("Error de conexión", "error"); }
     finally { setLoading(false); }
   };
 
@@ -42,198 +58,221 @@ export default function AdminUsersPage() {
   const filteredData = useMemo(() => {
     return dataList.filter(item => {
       const s = searchQuery.toLowerCase();
-      const name = (item.name || item.full_name || "").toLowerCase();
-      const email = (item.contact_email || item.email || "").toLowerCase();
-      return name.includes(s) || email.includes(s);
+      return (item.name || "").toLowerCase().includes(s) || (item.contact_email || "").toLowerCase().includes(s);
     });
   }, [dataList, searchQuery]);
 
+  // --- LÓGICA DE GUARDADO (HILVANADO CON NETLIFY) ---
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const endpoint = activeTab === 'clients' ? "/.netlify/functions/manageClient" : "/.netlify/functions/inviteUser";
-      
-      const payload = activeTab === 'clients' 
-        ? { ...f, shipping_addresses: f.shipping_addresses.filter((a: any) => a.address.trim() !== "") }
-        : { email: f.staff_email, full_name: f.staff_name, role: f.staff_role, id: f.id };
+      let finalLogoUrl = f.id ? (dataList.find(d => d.id === f.id)?.logo_url) : "";
 
-      const res = await fetch(endpoint, {
+      // 1. Subida de Logo si hay archivo nuevo
+      if (logoFile) {
+        const fileExt = logoFile.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage.from('client-logos').upload(fileName, logoFile);
+        if (uploadError) throw uploadError;
+        finalLogoUrl = fileName;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // 2. Llamada a createClient (La función de Netlify que analizamos)
+      const res = await fetch('/.netlify/functions/createClient', {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ ...f, logo_url: finalLogoUrl })
       });
 
       if (res.ok) {
-        notify("Registro actualizado", "success");
+        notify(f.id ? "Perfil actualizado" : "Cliente y Acceso Creados", "success");
         setIsDrawerOpen(false);
         loadData();
       } else {
-        const err = await res.json();
-        notify(err.message, "error");
+        const errData = await res.json();
+        throw new Error(errData.error || "Error en el servidor");
       }
-    } catch (err) { notify("Error de servidor", "error"); }
-    finally { setIsSaving(false); }
+    } catch (err: any) {
+      notify(err.message, "error");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
-    <AdminLayout title="Directorio" subtitle="Gestión de identidades y accesos">
+    <AdminLayout title="Directorio Maestro" subtitle="Control de identidades y entidades logísticas">
       
-      <div className="directory-header">
-        <div className="tab-switcher">
-          <button className={activeTab === 'clients' ? 'active' : ''} onClick={() => setActiveTab('clients')}>Clientes</button>
-          <button className={activeTab === 'staff' ? 'active' : ''} onClick={() => setActiveTab('staff')}>Equipo</button>
-        </div>
-        
-        <div className="top-actions">
-          <div className="search-bar-slim">
-            <Search size={14} />
-            <input placeholder="Filtrar por nombre o email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+      <div className="ff-directory-container">
+        {/* HEADER TOOLS */}
+        <div className="directory-header">
+          <div className="tabs">
+            <button className={activeTab === 'clients' ? 'active' : ''} onClick={() => setActiveTab('clients')}>
+              Clientes <span className="tab-count">{activeTab === 'clients' ? filteredData.length : '0'}</span>
+            </button>
+            <button className={activeTab === 'staff' ? 'active' : ''} onClick={() => setActiveTab('staff')}>
+              Staff Interno
+            </button>
           </div>
-          <button className="btn-create-main" onClick={() => { setF(initialForm); setIsDrawerOpen(true); }}>
-            <Plus size={16} /> Nuevo {activeTab === 'clients' ? 'Cliente' : 'Miembro'}
-          </button>
+          
+          <div className="actions-bar">
+            <div className="search-wrapper">
+              <Search size={16} />
+              <input placeholder="Buscar identidad..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+            </div>
+            <button className="ff-btn-primary-top" onClick={() => { setF(initialForm); setPreviewUrl(null); setIsDrawerOpen(true); }}>
+              <Plus size={18} /> Nuevo Cliente
+            </button>
+          </div>
+        </div>
+
+        {/* TABLA PREMIUM */}
+        <div className="ff-table-wrapper">
+          <table className="ff-table-top">
+            <thead>
+              <tr>
+                <th>CLIENTE / TAX ID</th>
+                <th>CONTACTO PRINCIPAL</th>
+                <th>PAÍS</th>
+                <th>PLATAFORMA</th>
+                <th className="txt-right">GESTOR</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={5} className="py-20 text-center"><Loader2 className="animate-spin inline" /></td></tr>
+              ) : filteredData.map(item => (
+                <tr key={item.id} className="row-hover">
+                  <td>
+                    <div className="client-cell">
+                      <div className="avatar-box">
+                        {item.logo_url ? (
+                          <img src={`https://fofvskqshlyqmsvshnps.supabase.co/storage/v1/object/public/client-logos/${item.logo_url}`} alt="L" />
+                        ) : (
+                          <div className="avatar-fallback">{getInitials(item.name)}</div>
+                        )}
+                      </div>
+                      <div className="client-meta">
+                        <span className="client-name">{item.name}</span>
+                        <span className="client-sub">{item.tax_id || 'SIN RUC'}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="contact-col">
+                      <span className="email"><Mail size={12}/> {item.contact_email}</span>
+                      <span className="phone"><Phone size={12}/> {item.phone || '—'}</span>
+                    </div>
+                  </td>
+                  <td><span className="country-tag">{item.country || 'Panamá'}</span></td>
+                  <td>
+                    <span className={`status-pill ${item.has_platform_access ? 'active' : 'pending'}`}>
+                      {item.has_platform_access ? 'ACTIVO' : 'SÓLO DB'}
+                    </span>
+                  </td>
+                  <td className="txt-right">
+                    <button className="btn-edit-round" onClick={() => { 
+                      setF({ ...initialForm, ...item }); 
+                      setIsDrawerOpen(true); 
+                    }}>
+                      <Pencil size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <div className="table-wrapper">
-        <table className="ff-table-pro">
-          <thead>
-            {activeTab === 'clients' ? (
-              <tr><th>Cliente / RUC</th><th>Contacto</th><th>Ubicación</th><th>Estado</th><th className="txt-right">Acciones</th></tr>
-            ) : (
-              <tr><th>Colaborador</th><th>Email</th><th>Rol</th><th>Estatus</th></tr>
-            )}
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={5} className="td-loading"><Loader2 className="spin" /></td></tr>
-            ) : filteredData.map(item => (
-              <tr key={item.id} className="tr-interactive">
-                {activeTab === 'clients' ? (
-                  <>
-                    <td onClick={() => router.push(`/admin/clients/${item.id}`)}>
-                      <div className="cell-identity">
-                        <strong>{item.name}</strong>
-                        <code>{item.tax_id || 'SIN RUC'}</code>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="cell-contact">
-                        <span><Mail size={10}/> {item.contact_email}</span>
-                        <span><Phone size={10}/> {item.phone || '---'}</span>
-                      </div>
-                    </td>
-                    <td><div className="cell-geo"><Globe size={10}/> {item.country || 'Panamá'}</div></td>
-                    <td>
-                      <span className={item.has_platform_access ? "tag-active" : "tag-prospect"}>
-                        {item.has_platform_access ? "Activo" : "Prospecto"}
-                      </span>
-                    </td>
-                    <td className="txt-right">
-                       <button className="btn-icon-edit" onClick={(e) => { e.stopPropagation(); setF({...f, ...item, email_corp: item.contact_email}); setIsDrawerOpen(true); }}>
-                          <Edit3 size={14}/>
-                       </button>
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td><strong>{item.full_name}</strong></td>
-                    <td className="txt-muted">{item.email}</td>
-                    <td><span className="role-badge">{item.role}</span></td>
-                    <td><div className={item.confirmed_at ? "dot-online" : "dot-offline"} /></td>
-                  </>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* DRAWER RECONSTRUIDO CON TODOS TUS CAMPOS */}
+      {/* DRAWER MAESTRO (HILVANADO) */}
       {isDrawerOpen && (
         <>
-          <div className="ff-backdrop" onClick={() => setIsDrawerOpen(false)} />
-          <div className="ff-drawer-right">
-            <div className="drawer-head">
+          <div className="ff-overlay" onClick={() => setIsDrawerOpen(false)} />
+          <div className="ff-drawer-pro">
+            <div className="drawer-header-pro">
               <div className="title-area">
-                <Building2 size={16} className="text-green" />
-                <h3>{f.id ? 'Expediente Cliente' : 'Nuevo Cliente'}</h3>
+                <Building2 className="text-blue" />
+                <div>
+                  <h3>Perfil de Entidad</h3>
+                  <p>Configuración fiscal y logística</p>
+                </div>
               </div>
-              <button className="btn-close" onClick={() => setIsDrawerOpen(false)}><X size={18}/></button>
+              <button onClick={() => setIsDrawerOpen(false)} className="close-btn"><X /></button>
             </div>
 
-            <form className="drawer-content" onSubmit={handleSave}>
-              <div className="form-group-sec">
-                <label>Identificación Legal</label>
-                <input required placeholder="Nombre Comercial" value={f.name} onChange={e=>setF({...f, name:e.target.value})} />
-                <input placeholder="Razón Social (Legal)" value={f.legal_name} onChange={e=>setF({...f, legal_name:e.target.value})} />
-                <div className="grid-2">
-                  <div className="sub-group">
-                    <label>RUC / Tax ID</label>
-                    <input placeholder="8-XXX-XXXX" value={f.tax_id} onChange={e=>setF({...f, tax_id:e.target.value})} />
+            <form onSubmit={handleSave} className="drawer-content-pro">
+              {/* SUBIDA DE LOGO PREMIUM */}
+              <div className="logo-upload-box">
+                <div className="preview-circle">
+                  {previewUrl ? <img src={previewUrl} /> : <div className="placeholder">{getInitials(f.name)}</div>}
+                  <label htmlFor="logo-input" className="edit-overlay"><Upload size={14}/></label>
+                </div>
+                <input id="logo-input" type="file" hidden onChange={e => {
+                  const file = e.target.files?.[0];
+                  if(file) { setLogoFile(file); setPreviewUrl(URL.createObjectURL(file)); }
+                }} />
+                <div className="logo-info">
+                  <span className="label">Imagen de Marca</span>
+                  <span className="sub">Formatos: PNG, JPG. Max 2MB.</span>
+                </div>
+              </div>
+
+              <div className="sections-container">
+                {/* BLOQUE 1: IDENTIDAD */}
+                <div className="form-section-top">
+                  <div className="section-header"><Info size={14}/> Datos Básicos</div>
+                  <input className="ff-input-top" required placeholder="Nombre Comercial" value={f.name} onChange={e=>setF({...f, name:e.target.value})} />
+                  <div className="grid-2">
+                    <input className="ff-input-top" placeholder="Razón Social" value={f.legal_name} onChange={e=>setF({...f, legal_name:e.target.value})} />
+                    <input className="ff-input-top" placeholder="RUC / TAX ID" value={f.tax_id} onChange={e=>setF({...f, tax_id:e.target.value})} />
                   </div>
-                  <div className="sub-group">
-                    <label>País</label>
-                    <input placeholder="Panamá" value={f.country_origin} onChange={e=>setF({...f, country_origin:e.target.value})} />
+                </div>
+
+                {/* BLOQUE 2: ACCESO PLATAFORMA */}
+                <div className="form-section-top highlight">
+                  <div className="section-header"><ShieldCheck size={14}/> Credenciales de Acceso</div>
+                  <div className="grid-2">
+                    <input className="ff-input-top" type="email" placeholder="Email de Login" value={f.contact_email} onChange={e=>setF({...f, contact_email:e.target.value})} />
+                    <select className="ff-input-top" value={f.mode} onChange={e=>setF({...f, mode: e.target.value as any})}>
+                      <option value="invite">Enviar Invitación</option>
+                      <option value="manual">Contraseña Manual</option>
+                    </select>
+                  </div>
+                  {f.mode === 'manual' && (
+                    <input className="ff-input-top mt-2" type="password" placeholder="Establecer Contraseña" value={f.password} onChange={e=>setF({...f, password:e.target.value})} />
+                  )}
+                </div>
+
+                {/* BLOQUE 3: LOGÍSTICA (TOP REQ) */}
+                <div className="form-section-top">
+                  <div className="section-header"><MapPin size={14}/> Configuración Logística (Default)</div>
+                  
+                  {/* BILLING */}
+                  <div className="logistics-card">
+                    <label>Billing Party</label>
+                    <textarea placeholder="Dirección completa de facturación..." value={f.billing_info.address} onChange={e=>setF({...f, billing_info:{...f.billing_info, address:e.target.value}})} />
+                  </div>
+
+                  {/* CONSIGNEE & NOTIFY */}
+                  <div className="grid-2">
+                    <div className="logistics-card">
+                      <label>Consignee Default</label>
+                      <textarea placeholder="Nombre, Tax ID, Dirección..." value={f.consignee_info.address} onChange={e=>setF({...f, consignee_info:{...f.consignee_info, address:e.target.value}})} />
+                    </div>
+                    <div className="logistics-card">
+                      <label>Notify Party Default</label>
+                      <textarea placeholder="Igual que consignee o específico..." value={f.notify_info.address} onChange={e=>setF({...f, notify_info:{...f.notify_info, address:e.target.value}})} />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="form-group-sec">
-                <label>Canales de Contacto</label>
-                <div className="input-with-icon">
-                  <Mail size={12} />
-                  <input required type="email" placeholder="email@empresa.com" value={f.email_corp} onChange={e=>setF({...f, email_corp:e.target.value})} />
-                </div>
-                <div className="input-with-icon">
-                  <Phone size={12} />
-                  <input placeholder="+507 0000-0000" value={f.phone_corp} onChange={e=>setF({...f, phone_corp:e.target.value})} />
-                </div>
-                <div className="input-with-icon">
-                  <ExternalLink size={12} />
-                  <input placeholder="www.website.com" value={f.website} onChange={e=>setF({...f, website:e.target.value})} />
-                </div>
-              </div>
-
-              <div className="form-group-sec">
-                <label>Logística y Pagos</label>
-                <select value={f.payment_condition} onChange={e=>setF({...f, payment_condition:e.target.value})}>
-                  <option value="Prepagado">Prepagado</option>
-                  <option value="Crédito 15 días">Crédito 15 días</option>
-                  <option value="Crédito 30 días">Crédito 30 días</option>
-                </select>
-                <textarea placeholder="Dirección de Facturación" value={f.billing_address} onChange={e=>setF({...f, billing_address:e.target.value})} />
-              </div>
-
-              <div className="form-group-sec">
-                <div className="label-row">
-                  <label>Puntos de Entrega</label>
-                  <button type="button" className="btn-mini" onClick={() => setF({...f, shipping_addresses: [...f.shipping_addresses, {id: Date.now(), address: ""}]})}>
-                    <Plus size={10}/> Añadir
-                  </button>
-                </div>
-                {f.shipping_addresses.map((addr: any, idx: number) => (
-                  <div key={addr.id} className="input-row-del">
-                    <input placeholder={`Dirección ${idx + 1}`} value={addr.address} onChange={e => {
-                      const newAddrs = [...f.shipping_addresses];
-                      newAddrs[idx].address = e.target.value;
-                      setF({...f, shipping_addresses: newAddrs});
-                    }} />
-                    {f.shipping_addresses.length > 1 && (
-                      <button type="button" className="btn-del" onClick={() => setF({...f, shipping_addresses: f.shipping_addresses.filter((_, i) => i !== idx)})}>
-                        <Trash2 size={12}/>
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <div className="drawer-actions-fixed">
-                <button type="button" className="btn-cancel-flat" onClick={() => setIsDrawerOpen(false)}>Descartar</button>
-                <button type="submit" className="btn-save-main" disabled={isSaving}>
-                  {isSaving ? <Loader2 className="spin" size={14} /> : (f.id ? "Guardar Cambios" : "Crear Cliente")}
+              <div className="drawer-footer-pro">
+                <button type="submit" className="ff-btn-submit-pro" disabled={isSaving}>
+                  {isSaving ? <Loader2 className="animate-spin" /> : (f.id ? "Actualizar Cliente" : "Crear Cliente Full Access")}
                 </button>
               </div>
             </form>
@@ -242,76 +281,69 @@ export default function AdminUsersPage() {
       )}
 
       <style jsx>{`
-        .directory-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .ff-directory-container { padding: 40px; max-width: 1400px; margin: 0 auto; }
         
-        .tab-switcher { display: flex; background: #f1f5f9; padding: 3px; border-radius: 10px; }
-        .tab-switcher button { border: none; background: none; padding: 6px 16px; font-size: 12px; font-weight: 700; color: #64748b; cursor: pointer; border-radius: 8px; transition: 0.2s; }
-        .tab-switcher button.active { background: white; color: #1f7a3a; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .directory-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+        .tabs { display: flex; gap: 4px; background: #f1f5f9; padding: 4px; border-radius: 12px; }
+        .tabs button { padding: 10px 20px; border-radius: 10px; border: none; font-size: 13px; font-weight: 700; color: #64748b; cursor: pointer; transition: 0.2s; }
+        .tabs button.active { background: white; color: #0f172a; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
 
-        .top-actions { display: flex; gap: 12px; }
-        .search-bar-slim { display: flex; align-items: center; gap: 8px; background: white; border: 1px solid #e2e8f0; padding: 0 12px; border-radius: 10px; width: 280px; }
-        .search-bar-slim input { border: none; padding: 8px 0; font-size: 12px; outline: none; width: 100%; }
-        .search-bar-slim :global(svg) { color: #94a3b8; }
+        .actions-bar { display: flex; gap: 16px; }
+        .search-wrapper { background: white; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 0 16px; display: flex; align-items: center; gap: 10px; width: 320px; }
+        .search-wrapper input { border: none; padding: 12px 0; outline: none; font-weight: 600; width: 100%; }
 
-        .btn-create-main { background: #1f7a3a; color: white; border: none; padding: 0 16px; height: 36px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .ff-btn-primary-top { background: #0f172a; color: white; border: none; padding: 0 24px; border-radius: 12px; font-weight: 800; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: 0.2s; }
+        .ff-btn-primary-top:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(15,23,42,0.15); }
 
-        .table-wrapper { background: white; border-radius: 16px; border: 1px solid #f1f5f9; overflow: hidden; }
-        .ff-table-pro { width: 100%; border-collapse: collapse; }
-        .ff-table-pro th { background: #fcfcfc; text-align: left; padding: 12px 20px; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid #f1f5f9; }
-        .ff-table-pro td { padding: 14px 20px; font-size: 12px; border-bottom: 1px solid #f8fafc; color: #1e293b; }
-        .tr-interactive:hover { background: #fafafa; cursor: pointer; }
-
-        .cell-identity { display: flex; flex-direction: column; gap: 2px; }
-        .cell-identity strong { font-weight: 700; font-size: 13px; }
-        .cell-identity code { font-size: 10px; color: #94a3b8; background: #f1f5f9; padding: 1px 4px; border-radius: 4px; width: fit-content; }
-
-        .cell-contact { display: flex; flex-direction: column; gap: 3px; }
-        .cell-contact span { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #64748b; }
+        /* TABLE */
+        .ff-table-wrapper { background: white; border-radius: 24px; border: 1.5px solid #f1f5f9; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.02); }
+        .ff-table-top { width: 100%; border-collapse: collapse; }
+        .ff-table-top th { background: #fafafa; padding: 18px 24px; text-align: left; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+        .ff-table-top td { padding: 20px 24px; border-bottom: 1px solid #f8fafc; vertical-align: middle; }
         
-        .tag-active { background: #dcfce7; color: #166534; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 800; }
-        .tag-prospect { background: #f1f5f9; color: #64748b; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 800; }
+        .client-cell { display: flex; align-items: center; gap: 16px; }
+        .avatar-box { width: 44px; height: 44px; border-radius: 12px; border: 1.5px solid #f1f5f9; overflow: hidden; }
+        .avatar-box img { width: 100%; height: 100%; object-fit: contain; }
+        .avatar-fallback { width: 100%; height: 100%; background: #f8fafc; display: grid; place-items: center; font-weight: 800; color: #cbd5e1; }
+        .client-name { display: block; font-weight: 800; color: #0f172a; font-size: 15px; }
+        .client-sub { font-size: 11px; color: #94a3b8; font-family: monospace; }
 
-        /* DRAWER SENIOR */
-        .ff-backdrop { position: fixed; inset: 0; background: rgba(2, 6, 23, 0.4); backdrop-filter: blur(3px); z-index: 9000; }
-        .ff-drawer-right { position: fixed; top: 0; right: 0; bottom: 0; width: 450px; background: white; z-index: 9001; display: flex; flex-direction: column; animation: slideRight 0.3s ease-out; }
-        @keyframes slideRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        .country-tag { background: #f1f5f9; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; color: #475569; }
+        .status-pill { font-size: 10px; font-weight: 900; padding: 4px 8px; border-radius: 6px; }
+        .status-pill.active { background: #dcfce7; color: #166534; }
+        .status-pill.pending { background: #fef3c7; color: #92400e; }
 
-        .drawer-head { padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
-        .title-area { display: flex; align-items: center; gap: 12px; }
-        .title-area h3 { font-size: 15px; font-weight: 800; margin: 0; }
-        .btn-close { background: none; border: none; color: #94a3b8; cursor: pointer; }
+        /* DRAWER PRO */
+        .ff-drawer-pro { position: fixed; right: 0; top: 0; bottom: 0; width: 520px; background: white; z-index: 1000; box-shadow: -20px 0 50px rgba(0,0,0,0.1); display: flex; flex-direction: column; animation: slideIn 0.3s ease; }
+        .drawer-header-pro { padding: 32px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+        .title-area { display: flex; gap: 16px; align-items: center; }
+        .title-area h3 { font-size: 20px; font-weight: 900; margin: 0; letter-spacing: -0.02em; }
+        .title-area p { font-size: 13px; color: #94a3b8; margin: 2px 0 0 0; }
 
-        .drawer-content { padding: 24px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 28px; padding-bottom: 100px; }
-        .form-group-sec { display: flex; flex-direction: column; gap: 12px; }
-        .form-group-sec label { font-size: 10px; font-weight: 800; color: #1f7a3a; text-transform: uppercase; letter-spacing: 0.05em; }
+        .drawer-content-pro { flex: 1; overflow-y: auto; padding-bottom: 40px; }
+        .logo-upload-box { padding: 32px; background: #fafafa; display: flex; align-items: center; gap: 24px; }
+        .preview-circle { position: relative; width: 80px; height: 80px; border-radius: 24px; background: white; border: 2px solid #e2e8f0; overflow: hidden; }
+        .preview-circle img { width: 100%; height: 100%; object-fit: contain; }
+        .edit-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.4); color: white; display: grid; place-items: center; opacity: 0; cursor: pointer; transition: 0.2s; }
+        .preview-circle:hover .edit-overlay { opacity: 1; }
+
+        .form-section-top { padding: 24px 32px; border-bottom: 1px solid #f8fafc; }
+        .form-section-top.highlight { background: #eff6ff; border-bottom: 1px solid #dbeafe; }
+        .section-header { font-size: 11px; font-weight: 900; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
         
-        .label-row { display: flex; justify-content: space-between; align-items: center; }
-        .btn-mini { background: #f0fdf4; border: 1px solid #dcfce7; color: #166534; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; cursor: pointer; }
+        .ff-input-top { width: 100%; padding: 14px 18px; border-radius: 12px; border: 1.5px solid #e2e8f0; font-size: 14px; font-weight: 600; margin-bottom: 12px; outline: none; transition: 0.2s; }
+        .ff-input-top:focus { border-color: #0f172a; box-shadow: 0 0 0 4px rgba(15,23,42,0.05); }
 
-        input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 12px; outline: none; transition: 0.2s; }
-        input:focus, select:focus, textarea:focus { border-color: #1f7a3a; box-shadow: 0 0 0 3px rgba(31,122,58,0.08); }
-        
+        .logistics-card { background: white; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+        .logistics-card label { display: block; font-size: 11px; font-weight: 800; color: #64748b; margin-bottom: 8px; }
+        .logistics-card textarea { width: 100%; border: none; outline: none; font-size: 13px; font-weight: 600; min-height: 60px; resize: none; color: #1e293b; }
+
+        .drawer-footer-pro { padding: 32px; background: white; border-top: 1px solid #f1f5f9; }
+        .ff-btn-submit-pro { width: 100%; background: #0f172a; color: white; border: none; padding: 18px; border-radius: 16px; font-size: 15px; font-weight: 800; cursor: pointer; transition: 0.3s; }
+        .ff-btn-submit-pro:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(15,23,42,0.2); }
+
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .sub-group { display: flex; flex-direction: column; gap: 6px; }
-
-        .input-with-icon { position: relative; }
-        .input-with-icon :global(svg) { position: absolute; left: 12px; top: 11px; color: #94a3b8; }
-        .input-with-icon input { padding-left: 35px; }
-
-        .input-row-del { display: flex; gap: 8px; align-items: center; }
-        .btn-del { background: #fff1f2; color: #e11d48; border: none; padding: 10px; border-radius: 8px; cursor: pointer; }
-
-        .drawer-actions-fixed { position: absolute; bottom: 0; left: 0; right: 0; padding: 20px 24px; background: white; border-top: 1px solid #f1f5f9; display: flex; gap: 12px; }
-        .btn-cancel-flat { flex: 1; border: none; background: #f8fafc; color: #64748b; padding: 12px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; }
-        .btn-save-main { flex: 2; background: #1f7a3a; color: white; border: none; padding: 12px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(31,122,58,0.2); }
-
-        .spin { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .txt-right { text-align: right; }
-        .txt-muted { color: #94a3b8; }
-        .role-badge { background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
-        .dot-online { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; margin: 0 auto; }
-        .dot-offline { width: 8px; height: 8px; background: #cbd5e1; border-radius: 50%; margin: 0 auto; }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
       `}</style>
     </AdminLayout>
   );
