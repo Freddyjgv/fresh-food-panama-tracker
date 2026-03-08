@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, Calendar, Package, MapPin, RefreshCcw, Plane, ArrowRight, Layers } from "lucide-react";
+import { Search, Calendar, Package, MapPin, RefreshCcw, Plane, PlusCircle, ArrowRight, Layers } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import { labelStatus, statusBadgeClass } from "../../lib/shipmentFlow";
 import { ClientLayout } from "../../components/ClientLayout";
@@ -94,77 +94,43 @@ export default function ShipmentsPage() {
     <ClientLayout title="Panel de Logística" wide>
       <div className="md-container">
         
-        {/* REFINED PREMIUM CLIENT HEADER - PORTAL MODE */}
-<header className="ff-header-premium">
-  <div className="ff-header-top-row">
+       <header className="ff-header-portal-clean">
+  <div className="ff-header-main-content">
     
-    {/* LADO IZQUIERDO: PERFIL DEL CLIENTE */}
-    <div className="ff-client-profile">
-      <div className="ff-logo-wrapper">
+    {/* IZQUIERDA: IDENTIDAD DEL CLIENTE */}
+    <div className="ff-client-profile-minimal">
+      <div className="ff-logo-container-glass">
         {items[0]?.clients?.logo_url ? (
           <img 
             src={`https://oqgkbduqztrpfhfclker.supabase.co/storage/v1/object/public/client-logos/${items[0].clients.logo_url}`} 
             alt="Logo" 
-            className="ff-logo-img"
+            className="ff-logo-img-clean"
           />
         ) : (
-          <div className="ff-logo-placeholder">
+          <div className="ff-logo-placeholder-clean">
             {items[0]?.client_name?.charAt(0) || 'C'}
           </div>
         )}
       </div>
       
-      <div className="ff-client-info">
-        <h1 className="ff-client-name-display">
-          {items[0]?.client_name || 'Panel de Control'}
-        </h1>
-        <div className="ff-client-meta-row">
-          <span className="ff-meta-label">TAX ID:</span>
-          <span className="ff-meta-value">{items[0]?.clients?.tax_id || '—'}</span>
-          <span className="ff-meta-divider">|</span>
-          <span className="ff-meta-value">{items[0]?.clients?.country || 'Panamá'}</span>
+      <div className="ff-client-text">
+        <h1 className="ff-client-title">{items[0]?.client_name || 'Panel de Cliente'}</h1>
+        <div className="ff-client-id-pill">
+          <span className="ff-id-label">TAX ID:</span>
+          <span className="ff-id-value">{items[0]?.clients?.tax_id || '—'}</span>
         </div>
       </div>
     </div>
 
-    {/* LADO DERECHO: KPI DE ENVÍOS ACTIVOS */}
-    <div className="ff-id-badge-kpi">
-      <div className="ff-badge-icon-stack">
-        {/* El punto verde parpadea si hay envíos activos (no entregados) */}
-        {items.some(s => s.status !== 'delivered' && s.status !== 'at_destination') && (
-          <span className="ff-pulse-dot"></span>
-        )}
-        <Package size={18} className="ff-icon-green" />
-      </div>
-      <div className="ff-badge-content">
-        <span className="ff-badge-number">{total}</span>
-        <span className="ff-badge-label">ENVÍOS ACTIVOS</span>
-      </div>
-    </div>
-  </div>
-
-  {/* BARRA DE SPECS (Estética del archivo ID) */}
-  <div className="ff-header-specs-bar">
-    <div className="ff-spec-item">
-      <span className="ff-spec-label">ESTADO DE CUENTA</span>
-      <span className="ff-spec-value ff-text-blue">AL DÍA</span>
-    </div>
-    <div className="ff-spec-divider"></div>
-    <div className="ff-spec-item">
-      <span className="ff-spec-label">ÚLTIMO EMBARQUE</span>
-      <span className="ff-spec-value">
-        {items[0]?.created_at ? new Date(items[0].created_at).toLocaleDateString('es-PA', { day: '2-digit', month: 'short' }).toUpperCase() : '—'}
-      </span>
-    </div>
-    <div className="ff-spec-divider-heavy"></div>
-    <div className="ff-spec-item">
-      <span className="ff-spec-label">COBERTURA</span>
-      <span className="ff-spec-value">GLOBAL</span>
-    </div>
-    <div className="ff-spec-divider"></div>
-    <div className="ff-spec-item">
-      <span className="ff-spec-label">ZONA HORARIA</span>
-      <span className="ff-spec-value">PTY (GMT-5)</span>
+    {/* DERECHA: ACCIÓN ÚNICA Y DISCRETA */}
+    <div className="ff-header-action-zone">
+      <button 
+        className="ff-btn-request-quote"
+        onClick={() => window.open(`https://wa.me/TUNUMERO?text=Hola, deseo solicitar una nueva cotización.`, '_blank')}
+      >
+        <PlusCircle size={14} />
+        <span>NUEVA COTIZACIÓN</span>
+      </button>
     </div>
   </div>
 </header>
@@ -259,6 +225,105 @@ export default function ShipmentsPage() {
         .md-stat-lab { font-size: 10px; font-weight: 700; opacity: 0.6; letter-spacing: 0.1em; }
 
         .ff-header-premium { padding: 40px 0; border-bottom: 1px solid #f1f5f9; margin-bottom: 40px; }
+
+        .ff-header-portal-clean {
+    /* Glassmorphism y Color Naranja 3% (usando hex con opacidad o rgba) */
+    background: rgba(255, 122, 0, 0.03); 
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 122, 0, 0.1);
+    border-radius: 20px;
+    padding: 24px 32px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+  }
+
+  .ff-header-main-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .ff-client-profile-minimal {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .ff-logo-container-glass {
+    width: 64px;
+    height: 64px;
+    background: white;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 1px solid #f1f5f9;
+  }
+
+  .ff-logo-img-clean {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 8px;
+  }
+
+  .ff-logo-placeholder-clean {
+    font-size: 24px;
+    font-weight: 700;
+    color: #ff7a00;
+  }
+
+  .ff-client-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.02em;
+  }
+
+  .ff-client-id-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 0, 0, 0.04);
+    padding: 4px 10px;
+    border-radius: 6px;
+  }
+
+  .ff-id-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #64748b;
+  }
+
+  .ff-id-value {
+    font-size: 11px;
+    font-weight: 500;
+    color: #334155;
+  }
+
+  .ff-btn-request-quote {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #1e293b; /* Color oscuro profesional */
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .ff-btn-request-quote:hover {
+    background: #0f172a;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
 
 .ff-header-top-row { 
   display: flex; 
