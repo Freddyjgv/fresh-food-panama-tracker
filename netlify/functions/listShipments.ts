@@ -24,7 +24,7 @@ export const handler: Handler = async (event) => {
     const privileged = isPrivilegedRole(profile.role || "");
     if (mode === "admin" && !privileged) return text(403, "Forbidden");
 
-    // Campos añadidos: boxes, pallets, weight, incoterm
+    // CAMBIO 1: Ampliamos la consulta para traer la metadata del perfil
     let selectFields = `
       id,
       code,
@@ -41,10 +41,10 @@ export const handler: Handler = async (event) => {
       color,
       boxes,
       pallets,
-      weight,
+      weight_kg,
       incoterm,
       milestones(at),
-      clients(name)
+      clients(name, legal_name, tax_id, country, logo_url)
     `;
 
     let query = sbAdmin.from("shipments").select(selectFields, { count: "exact" });
@@ -73,9 +73,10 @@ export const handler: Handler = async (event) => {
       return {
         ...s,
         last_event_at: lastMilestone?.at || s.created_at,
-        client_name: s.clients?.name ?? null,
-        clients: undefined,
-        milestones: undefined
+        // CAMBIO 2: Mantenemos el nombre pero YA NO borramos el objeto 'clients'
+        client_name: s.clients?.legal_name || s.clients?.name || null,
+        milestones: undefined 
+        // Nota: 'clients' se mantiene para que el frontend lo use en el Header
       };
     });
 

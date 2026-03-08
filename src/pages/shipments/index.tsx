@@ -18,7 +18,14 @@ type Shipment = {
   awb: string;
   flight_number: string;
   client_name?: string;
-  clients?: { name: string }; 
+  last_event_at?: string; // Nueva propiedad que envía Netlify
+  clients?: {
+    name: string;
+    legal_name?: string;
+    tax_id?: string;
+    country?: string;
+    logo_url?: string;
+  }; 
 };
 
 export default function ShipmentsPage() {
@@ -87,18 +94,80 @@ export default function ShipmentsPage() {
     <ClientLayout title="Panel de Logística" wide>
       <div className="md-container">
         
-        <header className="md-header">
-          <div className="md-header-left">
-            <h1 className="md-title">Historial de Embarques</h1>
-            <p className="md-subtitle">Gestionando <strong>{total}</strong> operaciones activas</p>
+        {/* REFINED PREMIUM CLIENT HEADER - PORTAL MODE */}
+<header className="ff-header-premium">
+  <div className="ff-header-top-row">
+    
+    {/* LADO IZQUIERDO: PERFIL DEL CLIENTE */}
+    <div className="ff-client-profile">
+      <div className="ff-logo-wrapper">
+        {items[0]?.clients?.logo_url ? (
+          <img 
+            src={`https://[TU_PROYECTO_ID].supabase.co/storage/v1/object/public/client-logos/${items[0].clients.logo_url}`} 
+            alt="Logo" 
+            className="ff-logo-img"
+          />
+        ) : (
+          <div className="ff-logo-placeholder">
+            {items[0]?.client_name?.charAt(0) || 'C'}
           </div>
-          <div className="md-quick-stats">
-            <div className="md-stat">
-              <span className="md-stat-val">{total}</span>
-              <span className="md-stat-lab">ENVÍOS</span>
-            </div>
-          </div>
-        </header>
+        )}
+      </div>
+      
+      <div className="ff-client-info">
+        <h1 className="ff-client-name-display">
+          {items[0]?.client_name || 'Panel de Control'}
+        </h1>
+        <div className="ff-client-meta-row">
+          <span className="ff-meta-label">TAX ID:</span>
+          <span className="ff-meta-value">{items[0]?.clients?.tax_id || '—'}</span>
+          <span className="ff-meta-divider">|</span>
+          <span className="ff-meta-value">{items[0]?.clients?.country || 'Panamá'}</span>
+        </div>
+      </div>
+    </div>
+
+    {/* LADO DERECHO: KPI DE ENVÍOS ACTIVOS */}
+    <div className="ff-id-badge-kpi">
+      <div className="ff-badge-icon-stack">
+        {/* El punto verde parpadea si hay envíos activos (no entregados) */}
+        {items.some(s => s.status !== 'delivered' && s.status !== 'at_destination') && (
+          <span className="ff-pulse-dot"></span>
+        )}
+        <Package size={18} className="ff-icon-green" />
+      </div>
+      <div className="ff-badge-content">
+        <span className="ff-badge-number">{total}</span>
+        <span className="ff-badge-label">ENVÍOS ACTIVOS</span>
+      </div>
+    </div>
+  </div>
+
+  {/* BARRA DE SPECS (Estética del archivo ID) */}
+  <div className="ff-header-specs-bar">
+    <div className="ff-spec-item">
+      <span className="ff-spec-label">ESTADO DE CUENTA</span>
+      <span className="ff-spec-value ff-text-blue">AL DÍA</span>
+    </div>
+    <div className="ff-spec-divider"></div>
+    <div className="ff-spec-item">
+      <span className="ff-spec-label">ÚLTIMO EMBARQUE</span>
+      <span className="ff-spec-value">
+        {items[0]?.created_at ? new Date(items[0].created_at).toLocaleDateString('es-PA', { day: '2-digit', month: 'short' }).toUpperCase() : '—'}
+      </span>
+    </div>
+    <div className="ff-spec-divider-heavy"></div>
+    <div className="ff-spec-item">
+      <span className="ff-spec-label">COBERTURA</span>
+      <span className="ff-spec-value">GLOBAL</span>
+    </div>
+    <div className="ff-spec-divider"></div>
+    <div className="ff-spec-item">
+      <span className="ff-spec-label">ZONA HORARIA</span>
+      <span className="ff-spec-value">PTY (GMT-5)</span>
+    </div>
+  </div>
+</header>
 
         <div className="md-toolbar">
           <div className="md-search-box">
