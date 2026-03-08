@@ -8,9 +8,9 @@ exports.handler = async () => {
   // 1. Buscamos embarques que estén entre "AT_ORIGIN" e "IN_TRANSIT" y que NO hayan aterrizado
   const { data: activeShipments } = await supabase
     .from('shipments')
-    .select('id, flight_number, code')
+    .select('id, flight_number, code, status') // Añadido 'status'
     .in('status', ['AT_ORIGIN', 'IN_TRANSIT'])
-    .neq('flight_status', 'landed');
+    .or('flight_status.neq.landed,flight_status.is.null'); // Trae los que NO son landed O son NULL
 
   for (const ship of activeShipments) {
     if (!ship.flight_number) continue;
