@@ -16,12 +16,19 @@ export function ProgressStepper({
   milestones, 
   flightNumber, 
   awb, 
-  introMs = 1600 
+  introMs = 1600,
+  // --- NUEVOS CAMPOS ---
+  flightStatus,
+  departureTime,
+  arrivalTime
 }: { 
   milestones: Milestone[]; 
   flightNumber?: string | null; 
   awb?: string | null; 
-  introMs?: number; 
+  introMs?: number;
+  flightStatus?: string | null;
+  departureTime?: string | null;
+  arrivalTime?: string | null;
 }) {
   const currentIndex = useMemo(() => {
     const types = new Set((milestones ?? []).map((m) => String(m.type).toUpperCase()));
@@ -50,14 +57,17 @@ export function ProgressStepper({
     <div className="ff-apple-container">
       <div className="ff-glass-header">
         <div className="ff-brand-section">
-          <div className="ff-live-indicator">
-            <span className="ff-pulse-core"></span>
-            <span className="ff-pulse-ring"></span>
-            LIVE TRACKING
-          </div>
-          <h2 className="ff-main-title">Logística en Tiempo Real</h2>
-          <p className="ff-subtitle">Cargamento actualmente en <span className="ff-highlight">{STEPS[currentIndex].label}</span></p>
-        </div>
+  <div className="ff-live-indicator">
+    <span className="ff-pulse-core"></span>
+    <span className="ff-pulse-ring"></span>
+    {flightStatus === 'active' ? 'VUELO EN CURSO' : 'LIVE TRACKING'}
+  </div>
+  <h2 className="ff-main-title">Logística en Tiempo Real</h2>
+  <p className="ff-subtitle">
+    Cargamento actualmente en <span className="ff-highlight">{STEPS[currentIndex].label}</span>
+    {flightStatus === 'landed' && " — ¡Llegó a destino!"}
+  </p>
+</div>
 
         <div className="ff-data-group">
           <div className="ff-data-card">
@@ -89,7 +99,16 @@ export function ProgressStepper({
             const isDone = i <= currentIndex;
             const isActive = i === currentIndex;
             const hit = hitMap.get(String(s.type).toUpperCase());
-            const time = hit ? new Date(hit.at || hit.created_at || '').toLocaleTimeString('es-PA', {hour:'2-digit', minute:'2-digit'}) : null;
+
+// Lógica de hora inteligente: Prioriza datos de la API de vuelo si existen
+let timeDisplay = hit ? new Date(hit.at || hit.created_at || '').toLocaleTimeString('es-PA', {hour:'2-digit', minute:'2-digit'}) : null;
+
+if (s.type === "IN_TRANSIT" && departureTime) {
+  timeDisplay = new Date(departureTime).toLocaleTimeString('es-PA', {hour:'2-digit', minute:'2-digit'});
+}
+if (s.type === "AT_DESTINATION" && arrivalTime) {
+  timeDisplay = new Date(arrivalTime).toLocaleTimeString('es-PA', {hour:'2-digit', minute:'2-digit'});
+}
 
             return (
               <div key={i} className={`ff-step-column ${isDone ? 'is-done' : ''} ${isActive ? 'is-active' : ''}`}>
@@ -111,9 +130,9 @@ export function ProgressStepper({
   )}
 </div>
                 <div className="ff-step-content">
-                  <span className="ff-label-text">{s.label}</span>
-                  <span className="ff-time-text">{time || "—:—"}</span>
-                </div>
+  <span className="ff-label-text">{s.label}</span>
+  <span className="ff-time-text">{timeDisplay || "—:—"}</span> {/* <--- AHORA COINCIDE CON TU VARIABLE */}
+</div>
                 {isActive && <div className="ff-current-indicator"></div>}
               </div>
             );

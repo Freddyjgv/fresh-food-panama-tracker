@@ -58,6 +58,10 @@ type ShipmentDetail = {
   milestones: Milestone[];
   documents: FileItem[];
   photos: FileItem[];
+  flight_departure_time?: string | null; // <--- Añadir
+  flight_arrival_time?: string | null;   // <--- Añadir
+  flight_status?: string | null;         // <--- Añadir
+  last_api_sync?: string | null;         // <--- Añadir
 };
 
 const DOC_LABELS: Record<string, string> = {
