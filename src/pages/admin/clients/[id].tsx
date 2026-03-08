@@ -18,7 +18,13 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState<any>({});
+  const [editData, setEditData] = useState<any>({
+  stakeholders: {
+    purchasing: { name: '', email: '', phone: '' },
+    accounting: { name: '', email: '', phone: '' },
+    logistics: { name: '', email: '', phone: '' }
+  }
+});
 
   const statusConfig: any = {
     'CREATED': { label: 'Creado', class: 'created' },
@@ -109,9 +115,24 @@ export default function ClientDetailPage() {
           <div className="header-actions">
             {!isEditing ? (
               <>
-                <button className="btn-refine-white" onClick={() => setIsEditing(true)}>
-                  <Pencil size={14}/> Editar Perfil
-                </button>
+                <button className="btn-refine-white" onClick={() => {
+  // Creamos una copia profunda y segura
+  const safeData = {
+    ...client,
+    stakeholders: {
+      purchasing: client.stakeholders?.purchasing || { name: '', email: '', phone: '' },
+      accounting: client.stakeholders?.accounting || { name: '', email: '', phone: '' },
+      logistics: client.stakeholders?.logistics || { name: '', email: '', phone: '' }
+    },
+    billing_info: client.billing_info || { address: '', email: '', phone: '' },
+    consignee_info: client.consignee_info || { address: '', email: '', phone: '' },
+    notify_info: client.notify_info || { address: '', email: '', phone: '' }
+  };
+  setEditData(safeData);
+  setIsEditing(true);
+}}>
+  <Pencil size={14}/> Editar Perfil
+</button>
                 <div className="action-divider"></div>
                 <button className="btn-action-outline"><Calculator size={14}/> Nueva Cotización</button>
                 <button className="btn-refine-green"><Plus size={14}/> Nuevo Embarque</button>
