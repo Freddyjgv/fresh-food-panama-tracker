@@ -130,19 +130,23 @@ export default function ClientDetailPage() {
         <header className="header-pro">
           <div className="header-left">
             <div className="logo-section">
-              <div className={`logo-holder ${uploading ? 'is-loading' : ''}`}>
+             <div className={`logo-holder ${uploading ? 'is-loading' : ''}`}>
   {client.logo_url ? (
     <img 
-      src={`https://fofvskqshlyqmsvshnps.supabase.co/storage/v1/object/public/client-logos/${client.logo_url}`} 
+      key={client.logo_url}
+      src={`https://oqgkbduqztrpfhfclker.supabase.co/storage/v1/object/public/client-logos/${client.logo_url}`} 
       alt="Logo" 
-      onError={(e: any) => e.target.src = '/placeholder-logo.png'} 
+      onError={(e: any) => {
+        e.target.onerror = null;
+        e.target.src = 'https://via.placeholder.com/150?text=Error+URL';
+      }} 
     />
   ) : (
     <Building2 size={24} className="opacity-20" />
   )}
   <label className="upload-btn">
     {uploading ? <Loader2 className="animate-spin" size={14} /> : <FileUp size={14} />}
-    <input type="file" hidden onChange={handleLogoUpload} disabled={uploading} />
+    <input type="file" hidden onChange={handleLogoUpload} disabled={uploading} accept="image/*" />
   </label>
 </div>
               <div className="client-titles">
@@ -189,38 +193,41 @@ export default function ClientDetailPage() {
             </div>
           </div>
 
-          <div className="header-actions">
-            {!isEditing ? (
-              <>
-                <button className="btn-refine-white" onClick={() => {
-  // Creamos una copia profunda y segura
-  const safeData = {
-    ...client,
-    stakeholders: {
-      purchasing: client.stakeholders?.purchasing || { name: '', email: '', phone: '' },
-      accounting: client.stakeholders?.accounting || { name: '', email: '', phone: '' },
-      logistics: client.stakeholders?.logistics || { name: '', email: '', phone: '' }
-    },
-    billing_info: client.billing_info || { address: '', email: '', phone: '' },
-    consignee_info: client.consignee_info || { address: '', email: '', phone: '' },
-    notify_info: client.notify_info || { address: '', email: '', phone: '' }
-  };
-  setEditData(safeData);
-  setIsEditing(true);
-}}>
-  <Pencil size={14}/> Editar Perfil
-</button>
-                <div className="action-divider"></div>
-                <button className="btn-action-outline"><Calculator size={14}/> Nueva Cotización</button>
-                <button className="btn-refine-green"><Plus size={14}/> Nuevo Embarque</button>
-              </>
-            ) : (
-              <div className="editing-actions">
-                <button className="btn-cancel" onClick={() => setIsEditing(false)}>Descartar</button>
-                <button className="btn-refine-green" onClick={saveClientData}><Save size={14}/> Guardar Maestro</button>
-              </div>
-            )}
-          </div>
+          <div className="header-actions-sidebar">
+  {!isEditing ? (
+    <>
+      <button className="btn-modern-primary pulse-green">
+        <div className="btn-content">
+          <Plus size={16} strokeWidth={2.5}/>
+          <span>Nuevo Embarque</span>
+        </div>
+      </button>
+
+      <button className="btn-modern-secondary">
+        <div className="btn-content">
+          <Calculator size={16} />
+          <span>Nueva Cotización</span>
+        </div>
+      </button>
+
+      <button className="btn-modern-ghost" onClick={() => setIsEditing(true)}>
+        <div className="btn-content">
+          <Pencil size={14} />
+          <span>Editar Perfil</span>
+        </div>
+      </button>
+    </>
+  ) : (
+    <div className="editing-stack">
+      <button className="btn-modern-save" onClick={saveClientData}>
+        <Save size={16} /> Guardar Cambios
+      </button>
+      <button className="btn-modern-cancel" onClick={() => setIsEditing(false)}>
+        Descartar
+      </button>
+    </div>
+  )}
+</div>
         </header>
 
         <div className="main-grid">
