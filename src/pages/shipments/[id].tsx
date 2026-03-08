@@ -274,30 +274,47 @@ export default function ShipmentDetailPage() {
 </div>
 
       <div className="ff-balanced-grid">
-  {/* COLUMNA FOTOS (40%) */}
-  <div className="ff-col-photos">
-    <div className="modern-section-header">
-      <div className="header-icon orange"><ImageIcon size={18} /></div>
-      <h3>Inspección</h3>
-    </div>
-    
-    <div className="ff-amazon-gallery">
-      <div className="ff-main-photo-wrapper">
-         <div className="ff-main-photo" onClick={() => download(data.photos[activePhotoIdx].id)}>
-            <img src={data.photos[activePhotoIdx].url || ''} alt="Inspección" />
-            <div className="ff-photo-counter">{activePhotoIdx + 1} / {data.photos.length}</div>
-         </div>
-      </div>
-      <div className="ff-thumbs-strip">
-        {data.photos.map((p, idx) => (
-          <div key={p.id} className={`ff-thumb ${idx === activePhotoIdx ? 'active' : ''}`} onClick={() => setActivePhotoIdx(idx)}>
-            <img src={p.url || ''} alt="thumb" />
-          </div>
-        ))}
-      </div>
-    </div>
+ {/* COLUMNA FOTOS (40%) */}
+<div className="ff-col-photos">
+  <div className="modern-section-header">
+    <div className="header-icon orange"><ImageIcon size={18} /></div>
+    <h3>Inspección</h3>
   </div>
-
+  
+  <div className="ff-amazon-gallery">
+    {/* 1. VALIDAMOS SI HAY FOTOS ANTES DE RENDERIZAR EL VISOR */}
+    {data?.photos && data.photos.length > 0 ? (
+      <>
+        <div className="ff-main-photo-wrapper">
+           {/* Usamos encadenamiento opcional ?. para evitar el crash */}
+           <div className="ff-main-photo" onClick={() => data.photos[activePhotoIdx]?.id && download(data.photos[activePhotoIdx].id)}>
+              <img src={data.photos[activePhotoIdx]?.url || ''} alt="Inspección" />
+              <div className="ff-photo-counter">
+                {activePhotoIdx + 1} / {data.photos.length}
+              </div>
+           </div>
+        </div>
+        <div className="ff-thumbs-strip">
+          {data.photos.map((p, idx) => (
+            <div 
+              key={p.id || idx} 
+              className={`ff-thumb ${idx === activePhotoIdx ? 'active' : ''}`} 
+              onClick={() => setActivePhotoIdx(idx)}
+            >
+              <img src={p.url || ''} alt="thumb" />
+            </div>
+          ))}
+        </div>
+      </>
+    ) : (
+      /* 2. ESTADO VACÍO SI NO HAY FOTOS */
+      <div className="ff-no-photos-placeholder">
+        <div className="placeholder-icon">📸</div>
+        <p>Esperando reporte fotográfico de inspección...</p>
+      </div>
+    )}
+  </div>
+</div>
   {/* COLUMNA DOCUMENTOS (60%) */}
   <div className="ff-col-docs">
     <div className="modern-section-header spread">
@@ -344,6 +361,21 @@ export default function ShipmentDetailPage() {
   .modern-section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
   .modern-section-header.spread { justify-content: space-between; }
   .modern-section-header h3 { font-size: 16px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.2px; }
+
+  .ff-no-photos-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    background: #f8fafc;
+    border: 2px dashed #e2e8f0;
+    border-radius: 16px;
+    color: #94a3b8;
+    text-align: center;
+  }
+  .placeholder-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.5; }
+  .ff-no-photos-placeholder p { font-size: 13px; font-weight: 500; margin: 0; }
   
   .header-icon { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; }
   .header-icon.dark { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
