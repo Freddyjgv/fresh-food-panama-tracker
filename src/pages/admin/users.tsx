@@ -141,48 +141,77 @@ export default function AdminUsersPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
-                <tr><td colSpan={5} className="py-20 text-center"><Loader2 className="animate-spin inline" /></td></tr>
-              ) : filteredData.map(item => (
-                <tr key={item.id} className="row-hover">
-                  <td>
-                    <div className="client-cell">
-                      <div className="avatar-box">
-                        {item.logo_url ? (
-                          <img src={`https://fofvskqshlyqmsvshnps.supabase.co/storage/v1/object/public/client-logos/${item.logo_url}`} alt="L" />
-                        ) : (
-                          <div className="avatar-fallback">{getInitials(item.name)}</div>
-                        )}
-                      </div>
-                      <div className="client-meta">
-                        <span className="client-name">{item.name}</span>
-                        <span className="client-sub">{item.tax_id || 'SIN RUC'}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="contact-col">
-                      <span className="email"><Mail size={12}/> {item.contact_email}</span>
-                      <span className="phone"><Phone size={12}/> {item.phone || '—'}</span>
-                    </div>
-                  </td>
-                  <td><span className="country-tag">{item.country || 'Panamá'}</span></td>
-                  <td>
-                    <span className={`status-pill ${item.has_platform_access ? 'active' : 'pending'}`}>
-                      {item.has_platform_access ? 'ACTIVO' : 'SÓLO DB'}
-                    </span>
-                  </td>
-                  <td className="txt-right">
-                    <button className="btn-edit-round" onClick={() => { 
-                      setF({ ...initialForm, ...item }); 
-                      setIsDrawerOpen(true); 
-                    }}>
-                      <Pencil size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+  {loading ? (
+    <tr><td colSpan={5} className="py-20 text-center"><Loader2 className="animate-spin inline" /></td></tr>
+  ) : filteredData.length === 0 ? (
+    <tr><td colSpan={5} className="text-center py-20 text-muted">No se encontraron registros en {activeTab}</td></tr>
+  ) : filteredData.map(item => (
+    <tr key={item.id} className="row-hover">
+      {/* IDENTIDAD: Redirección diferenciada */}
+      <td 
+        onClick={() => {
+          // Si es cliente, va a su perfil de cliente. Si es staff, a su perfil de usuario interno.
+          const route = activeTab === 'clients' 
+            ? `/admin/clients/${item.id}` 
+            : `/admin/users/${item.id}`; // O la ruta que tengas para staff
+          router.push(route);
+        }} 
+        className="ptr"
+      >
+        <div className="client-cell">
+          <div className="avatar-box">
+            {item.logo_url ? (
+              <img src={`https://fofvskqshlyqmsvshnps.supabase.co/storage/v1/object/public/client-logos/${item.logo_url}`} alt="L" />
+            ) : (
+              <div className="avatar-fallback">{getInitials(item.name || item.full_name)}</div>
+            )}
+          </div>
+          <div className="client-meta">
+            <span className="client-name">{item.name || item.full_name}</span>
+            <span className="client-sub">{item.tax_id || (activeTab === 'staff' ? item.role?.toUpperCase() : 'SIN RUC')}</span>
+          </div>
+        </div>
+      </td>
+
+      {/* CONTACTO */}
+      <td>
+        <div className="contact-col">
+          <span className="email"><Mail size={12}/> {item.contact_email || item.email}</span>
+          <span className="phone"><Phone size={12}/> {item.phone || '—'}</span>
+        </div>
+      </td>
+
+      {/* PAÍS / ROL */}
+      <td>
+        {activeTab === 'clients' ? (
+          <span className="country-tag">{item.country || 'Panamá'}</span>
+        ) : (
+          <span className="role-badge-staff">{item.role || 'Staff'}</span>
+        )}
+      </td>
+
+      {/* ESTADO PLATAFORMA */}
+      <td>
+        <span className={`status-pill ${item.has_platform_access || item.confirmed_at ? 'active' : 'pending'}`}>
+          {item.has_platform_access || item.confirmed_at ? 'ACTIVO' : 'PROSPECTO'}
+        </span>
+      </td>
+
+      {/* ACCIONES RÁPIDAS */}
+      <td className="txt-right">
+        <div className="flex justify-end gap-2">
+          <button className="btn-edit-round" onClick={(e) => { 
+            e.stopPropagation(); // Evita que dispare el router.push del TD
+            setF({ ...initialForm, ...item }); 
+            setIsDrawerOpen(true); 
+          }}>
+            <Pencil size={14} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  ))}
+</tbody>
           </table>
         </div>
       </div>
@@ -341,6 +370,28 @@ export default function AdminUsersPage() {
         .drawer-footer-pro { padding: 32px; background: white; border-top: 1px solid #f1f5f9; }
         .ff-btn-submit-pro { width: 100%; background: #0f172a; color: white; border: none; padding: 18px; border-radius: 16px; font-size: 15px; font-weight: 800; cursor: pointer; transition: 0.3s; }
         .ff-btn-submit-pro:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(15,23,42,0.2); }
+
+        .role-badge-staff {
+  background: #f1f5f9;
+  color: #475569;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  border: 1px solid #e2e8f0;
+}
+
+.ptr { cursor: pointer; }
+
+/* Efecto al pasar el mouse por la fila */
+.row-hover:hover {
+  background-color: #f8fafc !important;
+}
+
+.row-hover:hover .client-name {
+  color: #2563eb; /* Un azul sutil para indicar que es clickeable */
+}
 
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
