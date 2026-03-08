@@ -1,492 +1,221 @@
 /* =========================================
    Fresh Food Panamá Tracker
-   GLOBAL UI – SINGLE SOURCE OF TRUTH ✅
+   GLOBAL UI – MODERN BRAND INTEGRATION 🚀
 ========================================= */
 
-/* -------------------------------
-   Variables base
--------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
 :root {
-  /* Brand */
+  /* Brand Colors (Preserving your Brandbook) */
   --ff-green: #1f7a3a;
   --ff-green-dark: #145a2a;
   --ff-orange: #d17711;
+  --ff-accent-light: rgba(31, 122, 58, 0.08);
 
-  /* Surfaces */
-  --ff-bg: #f6f7f9;
+  /* Surfaces & Backgrounds */
+  --ff-bg: #f8fafc; /* Ligeramente más aireado */
   --ff-surface: #ffffff;
 
-  /* Text */
+  /* Text Hierarchy */
   --ff-text: #0f172a;
   --ff-muted: #64748b;
+  --ff-light: #94a3b8;
 
-  /* Border / shadow */
-  --ff-border: rgba(15, 23, 42, 0.1);
-  --ff-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  /* Refined Shadows & Borders */
+  --ff-border: #e2e8f0;
+  --ff-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --ff-shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
 
-  /* Radius / typography */
-  --ff-radius: 6px;
-  --ff-font: "Poppins", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  /* Modern Shapes */
+  --ff-radius: 12px; /* Esquinas más suaves */
+  --ff-font: "Inter", system-ui, sans-serif; /* Mejor para datos */
+  --ff-font-title: "Poppins", sans-serif;
 
-  /* Font sizes */
-  --ff-fs-0: 12px;
-  --ff-fs-1: 13px;
-  --ff-fs-2: 14px;
-  --ff-fs-3: 16px;
-
-  /* Layout */
-  --ff-header-h: 60px;
-
-  /* Sidebar widths */
-  --ff-sidebar-w: 220px;
-  --ff-sidebar-w-collapsed: 64px;
+  /* Layout Constants */
+  --ff-header-h: 64px;
+  --ff-sidebar-w: 260px;
+  --ff-sidebar-w-collapsed: 78px;
 }
 
 /* -------------------------------
-   Reset / base
+   Reset & Base Refinement
 -------------------------------- */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  height: 100%;
-}
+* { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
 
 body {
   margin: 0;
   background: var(--ff-bg);
   color: var(--ff-text);
   font-family: var(--ff-font);
-  font-size: var(--ff-fs-1);
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-/* =========================================
-   APP GRID (Header + Sidebar + Main)
-========================================= */
-.ff-app {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: var(--ff-sidebar-w) minmax(0, 1fr);
-  grid-template-rows: var(--ff-header-h) minmax(0, 1fr);
-  grid-template-areas:
-    "top top"
-    "side main";
-}
-
-.ff-app.is-collapsed {
-  grid-template-columns: var(--ff-sidebar-w-collapsed) minmax(0, 1fr);
-}
+h1, h2, h3, h4 { font-family: var(--ff-font-title); letter-spacing: -0.02em; }
 
 /* -------------------------------
-   Header (TOP)
+   APP GRID
 -------------------------------- */
-.ff-top {
-  grid-area: top;
-  background: #fff;
-  border-bottom: 1px solid var(--ff-border);
-  z-index: 10;
+.ff-app {
+  display: grid;
+  grid-template-columns: var(--ff-sidebar-w) 1fr;
+  grid-template-rows: var(--ff-header-h) 1fr;
+  grid-template-areas: "side top" "side main";
+  min-height: 100vh;
+  transition: grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.ff-top__inner {
-  height: var(--ff-header-h);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 18px;
-  gap: 16px;
-}
-
-.ff-top__left {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
-
-.ff-top__logo {
-  height: 44px;
-  width: auto;
-  max-width: 220px;
-  object-fit: contain;
-  display: block;
-}
-
-.ff-top__titleWrap {
-  min-width: 0;
-}
-
-.ff-top__title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: -0.2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ff-top__sub {
-  margin-top: 2px;
-  font-size: var(--ff-fs-0);
-  color: var(--ff-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ff-top__right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  white-space: nowrap;
-}
+.ff-app.is-collapsed { grid-template-columns: var(--ff-sidebar-w-collapsed) 1fr; }
 
 /* -------------------------------
-   Sidebar
+   SIDEBAR (The "Linear" Look)
 -------------------------------- */
 .ff-side {
   grid-area: side;
-  position: relative;
-  background: linear-gradient(180deg, var(--ff-green) 0%, var(--ff-green-dark) 100%);
-  color: #fff;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-  overflow: auto;
-
+  background: white; /* Cambiado a blanco para dejar el verde como acento */
+  border-right: 1px solid var(--ff-border);
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  z-index: 40;
 }
 
-.ff-side__toggle {
-  position: absolute;
-  right: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 24px;
-  height: 44px;
-  border-radius: 10px;
-  border: 1px solid rgba(15, 23, 42, 0.18);
-  background: #ffffff;
-  color: rgba(15, 23, 42, 0.85);
-  font-weight: 950;
-  cursor: pointer;
-  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.12);
-  display: grid;
-  place-items: center;
-  z-index: 20;
-}
-
-.ff-side__toggle:hover {
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 14px 34px rgba(2, 6, 23, 0.16);
-}
-
-.ff-side__nav {
-  padding: 10px;
-  display: grid;
-  gap: 6px;
-}
+.ff-side__nav { padding: 20px 14px; display: flex; flex-direction: column; gap: 4px; }
 
 .ff-side__item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px;
-  border-radius: var(--ff-radius);
-  color: rgba(255, 255, 255, 0.92);
-  font-weight: 750;
-  font-size: var(--ff-fs-1);
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--ff-muted);
+  font-weight: 600;
+  transition: all 0.2s;
 }
 
 .ff-side__item:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: #f1f5f9;
+  color: var(--ff-text);
 }
 
 .ff-side__item.is-active {
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
+  background: var(--ff-accent-light);
+  color: var(--ff-green);
 }
 
-.ff-side__ico {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-}
+.ff-side__ico { color: inherit; }
 
-.ff-side__lbl {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ✅ Collapsed behavior: icons only */
-.ff-app.is-collapsed .ff-side__nav {
-  padding: 10px 8px;
-}
-
-.ff-app.is-collapsed .ff-side__item {
-  justify-content: center;
-  gap: 0;
-  padding: 10px 8px;
-}
-
-.ff-app.is-collapsed .ff-side__lbl {
-  display: none;
-}
-
-.ff-side__foot {
-  margin-top: auto;
-  padding: 10px 12px 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.ff-side__footBadge {
+/* Toggle Button (Modern Floating Style) */
+.ff-side__toggle {
+  position: absolute;
+  right: -12px;
+  top: 72px;
+  width: 24px;
+  height: 24px;
+  background: white;
+  border: 1px solid var(--ff-border);
+  border-radius: 50%;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: var(--ff-fs-0);
-  color: rgba(255, 255, 255, 0.88);
-}
-
-.ff-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: #4ade80;
-  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.2);
-}
-
-/* ✅ Collapsed foot: keep dot only */
-.ff-app.is-collapsed .ff-side__footBadge {
   justify-content: center;
-}
-.ff-app.is-collapsed .ff-side__footText {
-  display: none;
+  cursor: pointer;
+  box-shadow: var(--ff-shadow);
+  z-index: 50;
+  color: var(--ff-muted);
 }
 
 /* -------------------------------
-   Main content
+   HEADER (TOP)
 -------------------------------- */
-.ff-main {
-  grid-area: main;
-  overflow: auto;
-  min-width: 0;
+.ff-top {
+  grid-area: top;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--ff-border);
+  position: sticky;
+  top: 0;
+  z-index: 30;
 }
 
-.ff-content {
-  padding: 18px;
-  width: 100%;
-  min-width: 0;
-  max-width: 1280px;
-  margin: 0 auto;
-}
+.ff-top__inner { height: var(--ff-header-h); padding: 0 32px; display: flex; align-items: center; justify-content: space-between; }
+.ff-top__logo { height: 32px; width: auto; }
 
-/* Cliente: ancho completo */
-.ff-content--wide {
-  max-width: none;
-  margin: 0;
-}
-
-/* =========================================
-   Cards / helpers
-========================================= */
-.ff-card,
-.ff-card2 {
-  background: var(--ff-surface);
-  border: 1px solid var(--ff-border);
+/* -------------------------------
+   CARDS & CONTAINERS
+-------------------------------- */
+.pro-card {
+  background: white;
   border-radius: var(--ff-radius);
+  border: 1px solid var(--ff-border);
   box-shadow: var(--ff-shadow);
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.ff-card-pad {
-  padding: 12px;
-}
+.pro-card:hover { box-shadow: var(--ff-shadow-lg); }
 
-.ff-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
+/* -------------------------------
+   ACORDEONES (Details Reset)
+-------------------------------- */
+details.dept-accordion summary { list-style: none; }
+details.dept-accordion summary::-webkit-details-marker { display: none; }
 
-.ff-spread {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.ff-divider {
-  height: 1px;
-  background: var(--ff-border);
-  margin: 12px 0;
-}
-
-.ff-sub {
-  color: var(--ff-muted);
-  font-size: var(--ff-fs-0);
-}
-
-/* =========================================
-   Inputs
-========================================= */
-.ff-input {
-  height: 36px;
-  padding: 0 10px;
-  border-radius: var(--ff-radius);
-  border: 1px solid var(--ff-border);
-  background: #fff;
-  font-size: var(--ff-fs-1);
-}
-
-.ff-input:focus {
-  border-color: rgba(31, 122, 58, 0.45);
-  box-shadow: 0 0 0 4px rgba(31, 122, 58, 0.1);
-  outline: none;
-}
-
-/* =========================================
-   Buttons
-========================================= */
+/* -------------------------------
+   BUTTONS (Fresh Food Style)
+-------------------------------- */
 .ff-btn {
-  height: 36px;
-  padding: 0 12px;
-  border-radius: var(--ff-radius);
-  border: 1px solid transparent;
-  cursor: pointer;
-  font-weight: 800;
-  font-size: var(--ff-fs-0);
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 13px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: #fff;
-  color: var(--ff-text);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
 }
 
 .ff-btn-primary {
   background: var(--ff-green);
-  color: #fff;
+  color: white;
 }
 
 .ff-btn-primary:hover {
   background: var(--ff-green-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(31, 122, 58, 0.2);
 }
 
-.ff-btn-ghost {
-  border-color: var(--ff-border);
-}
-
-.ff-btn-ghost:hover {
-  background: rgba(15, 23, 42, 0.03);
-}
-
-/* =========================================
-   Chips / User menu
-========================================= */
-.ff-chip,
-.ff-user__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+/* -------------------------------
+   MODERN INPUTS
+-------------------------------- */
+.ff-input {
+  background: #fcfcfd;
   border: 1px solid var(--ff-border);
-  background: #fff;
-  border-radius: var(--ff-radius);
-  padding: 8px 10px;
-  font-size: var(--ff-fs-0);
-  font-weight: 900;
-  cursor: pointer;
+  border-radius: 10px;
+  padding: 8px 12px;
+  transition: all 0.2s;
 }
 
-.ff-chip:hover,
-.ff-user__btn:hover {
-  background: rgba(15, 23, 42, 0.03);
+.ff-input:focus {
+  background: white;
+  border-color: var(--ff-green);
+  box-shadow: 0 0 0 4px rgba(31, 122, 58, 0.1);
+  outline: none;
 }
 
-.ff-user {
-  position: relative;
+/* -------------------------------
+   TOASTS (Notificaciones)
+------------------------------- */
+.ff-toast {
+  position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+  z-index: 9999; display: flex; align-items: center; gap: 12px;
+  padding: 12px 24px; border-radius: 14px; color: white;
+  font-weight: 700; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
 }
-
-.ff-user__email {
-  max-width: 240px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ff-user__menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
-  width: 260px;
-  background: #fff;
-  border: 1px solid var(--ff-border);
-  border-radius: var(--ff-radius);
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.1);
-  padding: 10px;
-  z-index: 50;
-}
-
-.ff-user__item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  border-radius: var(--ff-radius);
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  font-weight: 900;
-  font-size: var(--ff-fs-1);
-  text-align: left;
-}
-
-.ff-user__item:hover {
-  background: rgba(15, 23, 42, 0.04);
-}
-
-.ff-user__item.danger {
-  color: #b91c1c;
-}
-
-/* =========================================
-   Responsive
-========================================= */
-@media (max-width: 980px) {
-  :root {
-    --ff-sidebar-w: 200px;
-  }
-  .ff-content {
-    padding: 14px;
-  }
-}
-/* En tu archivo de estilos globales */
-:root {
-  /* Reducimos la base de 16px (estándar) a 14.5px */
-  /* Esto encoge todo el proyecto un ~10% de forma armónica */
-  font-size: 14.5px; 
-}
-
-body {
-  /* Para navegadores modernos (Chrome, Edge, Safari) */
-  zoom: 0.95; 
-  
-  /* Optativo: Mejorar el renderizado de fuentes al ser más pequeñas */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+.ff-toast.success { background: var(--ff-green); }
+.ff-toast.error { background: #e11d48; }
