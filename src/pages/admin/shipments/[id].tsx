@@ -35,6 +35,10 @@ type ShipmentDetail = {
   milestones?: ShipmentMilestone[];
   documents?: ShipmentDocument[];
   photos?: ShipmentPhoto[];
+  flight_departure_time?: string | null;
+  flight_arrival_time?: string | null;
+  flight_status?: string | null;
+  last_api_sync?: string | null;
 };
 
 const DOC_TYPES = [
@@ -124,11 +128,30 @@ export default function AdminShipmentDetail() {
     })();
   }, [id]);
 
-  const timelineItems = useMemo(() => {
-    return (data?.milestones ?? [])
-      .sort((a, b) => new Date(a.at!).getTime() - new Date(b.at!).getTime())
-      .map((m, idx) => ({ id: `${m.type}-${idx}`, type: m.type, created_at: m.at, note: m.note }));
-  }, [data?.milestones]);
+  
+    return 
+    // Dentro del useMemo de timelineItems
+const timelineItems = useMemo(() => {
+  const baseItems = (data?.milestones ?? [])
+    .sort((a, b) => new Date(a.at!).getTime() - new Date(b.at!).getTime())
+    .map((m, idx) => ({ 
+      id: `${m.type}-${idx}`, 
+      type: m.type, 
+      created_at: m.at, 
+      note: m.note 
+    }));
+
+  // Agregamos info de vuelo al hito de tránsito si existe
+  return baseItems.map(item => {
+    if (item.type === 'IN_TRANSIT' && data?.flight_departure_time) {
+      return { 
+        ...item, 
+        note: `✈️ Salida real: ${fmtDT(data.flight_departure_time)}. ${item.note || ''}` 
+      };
+    }
+    return item;
+  });
+}, [data]);
 
   const mark = async (type: MilestoneType) => {
     const has = (t: string) => (data?.milestones ?? []).some((m) => m.type.toUpperCase() === t.toUpperCase());
