@@ -13,22 +13,23 @@ import {
   Loader2, X, Hash, Globe, Scale, AlertCircle
 } from "lucide-react";
 
-// --- TIPOS ---
+// --- TIPOS CORREGIDOS SEGÚN GETSHIPMENT.TS ---
 type ShipmentMilestone = { 
   id: string; 
   type: string; 
-  at: string; 
+  at: string; // El backend envía 'at'
   note?: string | null; 
-  author?: { name: string } | null; 
+  author?: { name: string } | null; // El backend envía un objeto vía JOIN
 };
 
 type ShipmentFile = { 
   id: string; 
   filename: string; 
-  doc_type?: string | null; 
+  doc_type?: string | null; // Columna en DB
   created_at: string; 
-  url?: string | null; 
+  url?: string | null; // URL firmada que genera el backend
   kind: "doc" | "photo";
+  author?: { name: string } | null;
 };
 
 type ShipmentDetail = {
@@ -44,8 +45,8 @@ type ShipmentDetail = {
   caliber?: string | null;
   color?: string | null;
   milestones: ShipmentMilestone[];
-  documents: ShipmentFile[];
-  photos: ShipmentFile[];
+  documents: ShipmentFile[]; // Sincronizado con backend
+  photos: ShipmentFile[];    // Sincronizado con backend
 };
 
 const DOC_TYPES = [
@@ -76,7 +77,6 @@ export default function AdminShipmentDetail() {
   const [awb, setAwb] = useState("");
   const [caliber, setCaliber] = useState("");
   const [color, setColor] = useState("");
-  const [docType, setDocType] = useState<string>("packing_list");
   const [popup, setPopup] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
   const showPopup = (msg: string, type: 'success' | 'error' = 'success') => {
@@ -95,7 +95,8 @@ export default function AdminShipmentDetail() {
     if (!token) return;
 
     try {
-      const res = await fetch(`/.netlify/functions/getShipment?id=${encodeURIComponent(shipmentId)}`, {
+      // Agregamos mode=admin para asegurar que el backend use los joins de autor
+      const res = await fetch(`/.netlify/functions/getShipment?id=${encodeURIComponent(shipmentId)}&mode=admin`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error();
@@ -123,14 +124,15 @@ export default function AdminShipmentDetail() {
     })();
   }, [id]);
 
+  // --- SINCRONIZACIÓN CON TIMELINE.TSX ---
   const timelineItems = useMemo(() => {
     if (!data?.milestones) return [];
     return data.milestones.map(m => ({
       id: m.id,
       type: m.type,
-      created_at: m.at,
+      created_at: m.at, // Mapeamos 'at' del backend a 'created_at' del componente
       note: m.note,
-      author_name: m.author?.name || "Admin"
+      author_name: m.author?.name || "Admin" // Aplanamos el objeto author del backend
     }));
   }, [data?.milestones]);
 
@@ -237,7 +239,7 @@ export default function AdminShipmentDetail() {
       <div className="detail-container">
         <div className="top-nav-row">
           <Link href="/admin/shipments" className="btn-back"><ArrowLeft size={16}/> Panel</Link>
-          <div className="status-badge">Estado actual: <span className="pill">{labelStatus(data!.status)}</span></div>
+          <div className="status-badge">Estado actual: <span className="pill">{labelStatus(data?.status || "")}</span></div>
         </div>
 
         <header className="shipment-header-modern">
@@ -294,10 +296,11 @@ export default function AdminShipmentDetail() {
               <div className="photo-grid-modern">
                 {data?.photos?.length ? data.photos.map(p => (
                   <div key={p.id} className="photo-box">
+                    {/* El backend entrega 'url' firmada, la usamos directamente */}
                     <img src={p.url || ""} alt="Foto" />
                     <div className="overlay">
-                      <button onClick={() => download(p.id)}><Download size={16}/></button>
-                      <button onClick={() => deleteFile(p.id)} className="del"><X size={16}/></button>
+                      <button onClick={() => download(p.id)} title="Descargar"><Download size={16}/></button>
+                      <button onClick={() => deleteFile(p.id)} className="del" title="Eliminar"><X size={16}/></button>
                     </div>
                   </div>
                 )) : <p className="empty-text">No hay fotos cargadas</p>}
@@ -310,23 +313,24 @@ export default function AdminShipmentDetail() {
               <div className="card-head"><FileText size={18}/> <h3>Documentación</h3></div>
               <div className="docs-list-modern">
                 {DOC_TYPES.map(type => {
+                  // Buscamos en 'documents' que es el nombre que envía el backend
                   const doc = data?.documents?.find(d => d.doc_type === type.v);
                   return (
                     <div key={type.v} className={`doc-item ${doc ? 'is-ok' : 'is-off'}`}>
                       <div className="doc-info">
                         <span className="doc-name">{type.l}</span>
-                        <span className="doc-status">{doc ? 'OK' : 'Pendiente'}</span>
+                        <span className="doc-status">{doc ? 'Cargado' : 'Pendiente'}</span>
                       </div>
                       <div className="doc-actions">
                         {doc ? (
                           <>
-                            <button onClick={() => download(doc.id)} className="btn-dl"><Download size={14}/></button>
-                            <button onClick={() => deleteFile(doc.id)} className="btn-del"><X size={14}/></button>
+                            <button onClick={() => download(doc.id)} className="btn-dl" title="Descargar"><Download size={14}/></button>
+                            <button onClick={() => deleteFile(doc.id)} className="btn-del" title="Eliminar"><X size={14}/></button>
                           </>
                         ) : (
-                          <label className="btn-up">
+                          <label className="btn-up" title="Subir archivo">
                             <PlusCircle size={14}/>
-                            <input type="file" hidden onChange={e => e.target.files?.[0] && upload("doc", e.target.files[0], type.v)} />
+                            <input type="file" hidden disabled={busy} onChange={e => e.target.files?.[0] && upload("doc", e.target.files[0], type.v)} />
                           </label>
                         )}
                       </div>
@@ -338,6 +342,7 @@ export default function AdminShipmentDetail() {
 
             <section className="glass-card spacing-top">
               <div className="card-head"><CheckCircle size={18}/> <h3>Línea de Tiempo</h3></div>
+              {/* timelineItems ya tiene la transformación de 'at' a 'created_at' */}
               <ModernTimeline milestones={timelineItems as any} />
             </section>
           </aside>
@@ -346,37 +351,63 @@ export default function AdminShipmentDetail() {
 
       <style jsx>{`
         .detail-container { padding: 20px 40px; background: #f8fafc; min-height: 100vh; }
-        .popup-toast { position: fixed; top: 25px; right: 25px; z-index: 9999; display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-radius: 16px; color: white; font-weight: 700; background: #16a34a; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); }
+        .top-nav-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .btn-back { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #64748b; text-decoration: none; transition: 0.2s; }
+        .btn-back:hover { color: #1e293b; }
+        .status-badge { font-size: 12px; font-weight: 700; color: #64748b; }
+        .status-badge .pill { background: #1e293b; color: white; padding: 4px 12px; border-radius: 20px; margin-left: 8px; }
+        .popup-toast { position: fixed; top: 25px; right: 25px; z-index: 9999; display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-radius: 16px; color: white; font-weight: 700; background: #16a34a; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); animation: slideIn 0.3s ease-out; }
         .popup-toast.error { background: #dc2626; }
-        .shipment-header-modern { background: #fff; padding: 25px 30px; border-radius: 24px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .shipment-header-modern { background: #fff; padding: 25px 30px; border-radius: 24px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
         .code-tag { background: #eff6ff; color: #2563eb; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 12px; display: flex; align-items: center; gap: 5px; width: fit-content; }
-        .h-left h1 { font-size: 24px; font-weight: 900; margin: 8px 0 2px; }
-        .h-right { display: flex; gap: 24px; background: #f8fafc; padding: 12px 20px; border-radius: 16px; }
-        .h-stat label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; display: block; }
+        .h-left h1 { font-size: 24px; font-weight: 900; margin: 8px 0 2px; color: #1e293b; }
+        .h-left h1 small { color: #94a3b8; font-weight: 500; }
+        .h-left .client { font-size: 14px; color: #64748b; }
+        .h-right { display: flex; gap: 24px; background: #f8fafc; padding: 12px 20px; border-radius: 16px; border: 1px solid #f1f5f9; }
+        .h-stat label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; display: block; margin-bottom: 2px; }
         .h-stat span { font-size: 15px; font-weight: 800; color: #1e293b; }
         .divider-v { width: 1px; height: 30px; background: #e2e8f0; }
         .main-grid-layout { display: grid; grid-template-columns: 1fr 340px; gap: 24px; }
-        .glass-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 20px; }
-        .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
-        .card-head h3 { font-size: 13px; font-weight: 900; text-transform: uppercase; margin: 0; }
+        .glass-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; color: #1e293b; }
+        .card-head-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .title-group { display: flex; align-items: center; gap: 10px; color: #1e293b; }
+        .card-head h3, .title-group h3 { font-size: 13px; font-weight: 900; text-transform: uppercase; margin: 0; letter-spacing: 0.5px; }
         .input-group-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 15px; }
         .f-item.full { grid-column: span 3; }
         .f-item label { font-size: 11px; font-weight: 800; color: #64748b; margin-bottom: 4px; display: block; }
-        .f-item input, .f-item textarea { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0; }
+        .f-item input, .f-item textarea { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0; font-size: 14px; background: #f8fafc; transition: 0.2s; }
+        .f-item input:focus, .f-item textarea:focus { outline: none; border-color: #2563eb; background: #fff; }
         .actions-buttons-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
-        .btn-step { padding: 10px 5px; border-radius: 8px; border: 1px solid #e2e8f0; background: #fff; font-size: 9px; font-weight: 800; cursor: pointer; }
-        .btn-step.active { background: #16a34a; color: #fff; border-color: #16a34a; }
-        .photo-grid-modern { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
-        .photo-box { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: #f1f5f9; }
+        .btn-step { padding: 12px 5px; border-radius: 10px; border: 1px solid #e2e8f0; background: #fff; font-size: 9px; font-weight: 800; cursor: pointer; transition: 0.2s; color: #64748b; }
+        .btn-step:hover:not(:disabled) { border-color: #16a34a; color: #16a34a; }
+        .btn-step.active { background: #16a34a; color: #fff; border-color: #16a34a; box-shadow: 0 4px 10px rgba(22, 163, 74, 0.2); }
+        .btn-upload-photo { display: flex; align-items: center; gap: 6px; background: #f1f5f9; color: #1e293b; padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .btn-upload-photo:hover { background: #e2e8f0; }
+        .photo-grid-modern { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; }
+        .photo-box { position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: #f1f5f9; border: 1px solid #e2e8f0; }
         .photo-box img { width: 100%; height: 100%; object-fit: cover; }
-        .overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.4); display: flex; gap: 8px; align-items: center; justify-content: center; opacity: 0; transition: 0.2s; }
+        .overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.4); display: flex; gap: 8px; align-items: center; justify-content: center; opacity: 0; transition: 0.2s; backdrop-filter: blur(2px); }
         .photo-box:hover .overlay { opacity: 1; }
-        .doc-item { display: flex; justify-content: space-between; padding: 10px; border-radius: 10px; margin-bottom: 6px; border: 1px solid #f1f5f9; }
-        .doc-item.is-ok { background: #f0fdf4; border-color: #dcfce7; }
-        .doc-name { font-size: 12px; font-weight: 700; display: block; }
-        .doc-status { font-size: 10px; color: #94a3b8; }
-        .loader { height: 100vh; display: grid; place-items: center; }
-        .spin { animation: spin 1s linear infinite; }
+        .overlay button { background: white; border: none; width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
+        .overlay button:hover { transform: scale(1.1); }
+        .overlay button.del { color: #dc2626; }
+        .docs-list-modern { display: flex; flex-direction: column; gap: 8px; }
+        .doc-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-radius: 12px; border: 1px solid #f1f5f9; transition: 0.2s; }
+        .doc-item.is-ok { background: #f0fdf4; border-color: #bbf7d0; }
+        .doc-item.is-off { background: #fff; border-color: #f1f5f9; opacity: 0.7; }
+        .doc-name { font-size: 12px; font-weight: 700; display: block; color: #1e293b; }
+        .doc-status { font-size: 10px; color: #94a3b8; font-weight: 500; }
+        .doc-actions { display: flex; gap: 6px; }
+        .doc-actions button, .doc-actions label { background: #f8fafc; border: 1px solid #e2e8f0; width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b; transition: 0.2s; }
+        .doc-actions button:hover { background: #fff; border-color: #cbd5e1; color: #1e293b; }
+        .doc-actions .btn-up { color: #2563eb; border-color: #dbeafe; background: #eff6ff; }
+        .doc-actions .btn-up:hover { background: #2563eb; color: #fff; }
+        .spacing-top { margin-top: 24px; }
+        .empty-text { font-size: 12px; color: #94a3b8; text-align: center; padding: 20px 0; font-style: italic; }
+        .loader { height: 100vh; display: grid; place-items: center; background: #f8fafc; }
+        .spin { animation: spin 1s linear infinite; color: #2563eb; width: 40px; height: 40px; }
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </AdminLayout>
