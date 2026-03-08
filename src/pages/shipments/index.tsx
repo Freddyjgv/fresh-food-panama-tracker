@@ -29,13 +29,30 @@ export default function ShipmentsPage() {
   const [destFilter, setDestFilter] = useState("");
 
   // Helper para el icono dinámico
-  const getProductIcon = (productName: string) => {
-    const name = productName?.toLowerCase() || "";
-    if (name.includes("piña")) return "🍍";
-    if (name.includes("aguacate") || name.includes("avocado")) return "🥑";
-    if (name.includes("papaya")) return "🥭";
-    return "📦";
-  };
+  const ProductIcon = ({ name }: { name: string }) => {
+  const n = name?.toLowerCase() || "";
+  
+  // Definimos el color según el producto, pero el icono siempre es Package
+  let iconColor = "#64748b"; // Gris por defecto
+  let bgColorClass = "bg-slate";
+
+  if (n.includes("piña")) {
+    iconColor = "#ca8a04"; 
+    bgColorClass = "bg-yellow";
+  } else if (n.includes("aguacate") || n.includes("avocado")) {
+    iconColor = "#16a34a";
+    bgColorClass = "bg-green";
+  } else if (n.includes("papaya")) {
+    iconColor = "#ea580c";
+    bgColorClass = "bg-orange";
+  }
+
+  return (
+    <div className={`md-prod-icon-wrapper ${bgColorClass}`}>
+      <Package size={22} color={iconColor} strokeWidth={2.5} />
+    </div>
+  );
+};
 
   async function fetchShipments() {
     setLoading(true);
@@ -118,14 +135,15 @@ export default function ShipmentsPage() {
               <Link key={s.id} href={`/shipments/${s.id}`} className="md-card-link">
                 <div className="md-card">
                   <div className="md-col-info">
-                    <div className="md-product-emoji">{getProductIcon(s.product_name)}</div>
-                    <div>
-                      <h2 className="md-ship-code">{s.code}</h2>
-                      <p className="md-product-sub">
-                        {s.product_name} <span className="md-variety-dot">•</span> {s.product_variety}
-                      </p>
-                    </div>
-                  </div>
+  {/* Cambiamos la función por el Componente */}
+  <ProductIcon name={s.product_name} /> 
+  <div>
+    <h2 className="md-ship-code">{s.code}</h2>
+    <p className="md-product-sub">
+      {s.product_name} <span className="md-variety-dot">•</span> {s.product_variety}
+    </p>
+  </div>
+</div>
 
                   <div className="md-col-logistics">
                     <div className="md-route">
@@ -213,6 +231,38 @@ export default function ShipmentsPage() {
         @media (max-width: 1000px) {
           .md-card { grid-template-columns: 1fr; gap: 20px; }
         }
+          .md-prod-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+/* Colores de fondo ultra-soft */
+.bg-yellow { background-color: #fefce8; border: 1px solid #fef9c3; }
+.bg-green  { background-color: #f0fdf4; border: 1px solid #dcfce7; }
+.bg-orange { background-color: #fff7ed; border: 1px solid #ffedd5; }
+.bg-slate  { background-color: #f8fafc; border: 1px solid #f1f5f9; }
+
+/* El Código de Embarque ahora resalta más */
+.md-ship-code { 
+  font-size: 20px; 
+  font-weight: 800; 
+  color: #1e293b; 
+  letter-spacing: -0.5px;
+  margin: 0;
+}
+
+.md-product-sub {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
       `}</style>
     </ClientLayout>
   );
