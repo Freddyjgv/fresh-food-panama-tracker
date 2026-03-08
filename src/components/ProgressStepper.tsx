@@ -112,25 +112,71 @@ export function ProgressStepper({
 
             return (
               <div key={i} className={`ff-step-column ${isDone ? 'is-done' : ''} ${isActive ? 'is-active' : ''}`}>
-                <div className="ff-dot-wrapper">
-                  <div className="ff-step-dot">
-                    {hit?.note && <div className="ff-note-indicator-dot"></div>}
-                  </div>
-                  {isActive && <div className="ff-active-halo"></div>}
-                  {hit?.note && (
-                    <div className="ff-note-tooltip">
-                      <div className="ff-tooltip-tag">COMENTARIO TÉCNICO</div>
-                      <p className="ff-tooltip-text">{hit.note}</p>
-                      <div className="ff-tooltip-arrow"></div>
-                    </div>
-                  )}
-                </div>
-                <div className="ff-step-content">
-                  <span className="ff-label-text">{s.label}</span>
-                  <span className="ff-time-text">{timeDisplay || "—:—"}</span>
-                </div>
-                {isActive && <div className="ff-current-indicator"></div>}
-              </div>
+  <div className="ff-dot-wrapper">
+    <div className="ff-step-dot">
+      {/* El punto naranja aparece si hay nota O si hay info de vuelo en el destino */}
+      {(hit?.note || (s.type === "AT_DESTINATION" && (departureTime || arrivalTime))) && (
+        <div className="ff-note-indicator-dot"></div>
+      )}
+    </div>
+    
+    {isActive && <div className="ff-active-halo"></div>}
+
+    {/* TOOLTIP DINÁMICO */}
+    {s.type === "AT_DESTINATION" && (departureTime || arrivalTime) ? (
+      <div className="ff-note-tooltip ff-flight-info-card">
+        <div className="ff-tooltip-tag">DETALLES DEL VUELO</div>
+        
+        <div className="ff-flight-status-row">
+          <span className="ff-status-pill">{flightStatus?.toUpperCase() || 'SCHEDULED'}</span>
+          <span className="ff-flight-id">{flightNumber}</span>
+        </div>
+
+        <div className="ff-itinerary-box">
+          <div className="ff-iti-item">
+            <span className="ff-iti-label">SALIDA</span>
+            <span className="ff-iti-val">
+              {departureTime ? new Date(departureTime).toLocaleString('es-PA', {day: '2-digit', month: 'short', hour:'2-digit', minute:'2-digit', hour12: true}) : '---'}
+            </span>
+          </div>
+          
+          <div className="ff-iti-divider"></div>
+          
+          <div className="ff-iti-item">
+            <span className="ff-iti-label">LLEGADA</span>
+            <span className="ff-iti-val">
+              {arrivalTime ? new Date(arrivalTime).toLocaleString('es-PA', {day: '2-digit', month: 'short', hour:'2-digit', minute:'2-digit', hour12: true}) : '---'}
+            </span>
+          </div>
+        </div>
+
+        {/* Si además de la info de vuelo hay una nota manual, la mostramos abajo */}
+        {hit?.note && (
+          <div className="ff-combined-note">
+            <div className="ff-tooltip-tag" style={{marginTop: '10px', opacity: 0.5}}>NOTA ADICIONAL</div>
+            <p className="ff-tooltip-text">{hit.note}</p>
+          </div>
+        )}
+        <div className="ff-tooltip-arrow"></div>
+      </div>
+    ) : (
+      /* Tooltip estándar para los demás hitos */
+      hit?.note && (
+        <div className="ff-note-tooltip">
+          <div className="ff-tooltip-tag">COMENTARIO TÉCNICO</div>
+          <p className="ff-tooltip-text">{hit.note}</p>
+          <div className="ff-tooltip-arrow"></div>
+        </div>
+      )
+    )}
+  </div>
+
+  <div className="ff-step-content">
+    <span className="ff-label-text">{s.label}</span>
+    <span className="ff-time-text">{timeDisplay || "—:—"}</span>
+  </div>
+  {isActive && <div className="ff-current-indicator"></div>}
+</div>
             );
           })}
         </div>
@@ -156,6 +202,70 @@ export function ProgressStepper({
         .ff-subtitle { color: #64748b; font-size: 14px; margin-top: 5px; }
         .ff-highlight { color: #166534; font-weight: 800; }
         .ff-data-group { display: flex; gap: 12px; }
+
+        .ff-flight-info-card {
+  width: 260px !important;
+}
+
+.ff-flight-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.ff-status-pill {
+  background: #166534;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 900;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.ff-flight-id {
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.ff-itinerary-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ff-iti-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.ff-iti-label {
+  font-size: 9px;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.ff-iti-val {
+  font-size: 11px;
+  color: #f1f5f9;
+  font-weight: 600;
+  font-family: inherit;
+}
+
+.ff-iti-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.1);
+  margin: 2px 0;
+}
+
+.ff-combined-note {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
         .ff-data-card { background: #f8fafc; padding: 14px 20px; border-radius: 16px; border: 1px solid #f1f5f9; min-width: 140px; text-decoration: none; display: flex; flex-direction: column; }
         .ff-link-active:hover { border-color: #d17711; background: #fff; transform: translateY(-2px); box-shadow: 0 8px 20px rgba(209,119,17,0.1); }
         .ff-data-label { font-size: 9px; font-weight: 800; color: #94a3b8; margin-bottom: 4px; }
