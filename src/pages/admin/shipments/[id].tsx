@@ -13,11 +13,13 @@ import {
   Loader2, X, Hash, Globe, Scale, AlertCircle
 } from "lucide-react";
 
-// --- TIPOS AJUSTADOS AL GETSHIPMENT VIEJO ---
+// --- TIPOS CORREGIDOS SEGÚN TU TABLA MILESTONES REAL ---
 type ShipmentMilestone = { 
+  id?: string;           // Añadido: para que m.id no de error
   type: string; 
-  at: string; 
+  at: string;            // Tu tabla usa 'at'
   note?: string | null; 
+  actor_email?: string | null; // Añadido: para que m.actor_email no de error
   author?: { name: string } | null; 
 };
 
@@ -27,12 +29,15 @@ type ShipmentFile = {
   doc_type?: string | null; 
   filename: string; 
   created_at: string; 
-  url?: string | null; 
-  author?: { name: string } | null;
+  url?: string | null;
 };
 
 type ShipmentDetail = {
-  id: string; code: string; destination: string; status: string; created_at: string;
+  id: string; 
+  code: string; 
+  destination: string; 
+  status: string; 
+  created_at: string;
   client_name?: string | null;
   product_name?: string | null;
   product_variety?: string | null;
@@ -41,7 +46,7 @@ type ShipmentDetail = {
   weight_kg?: number | null;
   flight_number?: string | null;
   awb?: string | null;
-  caliber?: string | null;
+  calibre?: string | null; // Cambiado de caliber a calibre (como tu DB)
   color?: string | null;
   milestones: ShipmentMilestone[];
   documents: ShipmentFile[];
@@ -95,9 +100,9 @@ export default function AdminShipmentDetail() {
       
       setData(json);
       setFlight(json.flight_number || "");
-      setAwb(json.awb || "");
-      setCaliber(json.caliber || "");
-      setColor(json.color || "");
+setAwb(json.awb || "");
+setCaliber(json.calibre || ""); // <--- Cambiado a 'calibre'
+setColor(json.color || "");
     } catch (e) {
       showToast("Error al cargar embarque", "error");
     } finally {
@@ -117,15 +122,15 @@ export default function AdminShipmentDetail() {
 
   // Sincronización con Timeline.tsx
   const timelineItems = useMemo(() => {
-    if (!data?.milestones) return [];
-    return data.milestones.map((m, idx) => ({
-      id: `${m.type}-${idx}`,
-      type: m.type,
-      created_at: m.at, // Backend entrega 'at'
-      note: m.note,
-      author_name: m.author?.name || "Admin"
-    }));
-  }, [data?.milestones]);
+  if (!data?.milestones) return [];
+  return data.milestones.map((m) => ({
+    id: m.id,
+    type: m.type,
+    created_at: m.at, // 'at' es la columna real de tu tabla milestones
+    note: m.note,
+    author_name: m.actor_email || "Admin" // Usamos actor_email que sí existe
+  }));
+}, [data?.milestones]);
 
   const handleMark = async (type: MilestoneType) => {
     setBusy(true);
@@ -135,10 +140,14 @@ export default function AdminShipmentDetail() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({
-          shipmentId: data?.id, type, note: note.trim(),
-          flight_number: flight.trim(), awb: awb.trim(),
-          caliber: caliber.trim(), color: color.trim(),
-        }),
+          shipmentId: data?.id, 
+  type, 
+  note: note.trim(),
+  flight_number: flight.trim(), 
+  awb: awb.trim(),
+  calibre: caliber.trim(), // <--- Enviamos 'calibre' al hito
+  color: color.trim(),
+}),
       });
       if (res.ok) {
         showToast("Estado actualizado");
