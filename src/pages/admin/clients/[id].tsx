@@ -12,6 +12,44 @@ import Link from 'next/link';
 export default function ClientDetailPage() {
   const router = useRouter();
   const { id } = router.query;
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      const file = e.target.files?.[0];
+      if (!file || !id) return;
+
+      setUploading(true);
+      
+      // Generamos un nombre único para evitar problemas de caché
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${id}-${Date.now()}.${fileExt}`;
+
+      // 1. Subir a Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('client-logos')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      // 2. Obtener la URL (O el nombre del archivo para construirla después)
+      // Actualizamos la tabla 'clients' con el nuevo nombre de archivo
+      const { error: updateError } = await supabase
+        .from('clients')
+        .update({ logo_url: fileName })
+        .eq('id', id);
+
+      if (updateError) throw updateError;
+
+      // 3. Actualizamos el estado local para que el cambio sea instantáneo
+      setClient({ ...client, logo_url: fileName });
+      notify("Logo actualizado correctamente", "success");
+
+    } catch (err: any) {
+      console.error(err);
+      notify("Error al subir el logo", "error");
+    } finally {
+      setUploading(false);
+    }
+  };
   
   const [client, setClient] = useState<any>(null);
   const [shipments, setShipments] = useState<any[]>([]);
@@ -23,6 +61,7 @@ export default function ClientDetailPage() {
     purchasing: { name: '', email: '', phone: '' },
     accounting: { name: '', email: '', phone: '' },
     logistics: { name: '', email: '', phone: '' }
+    
   }
 });
 
@@ -91,24 +130,62 @@ export default function ClientDetailPage() {
         <header className="header-pro">
           <div className="header-left">
             <div className="logo-section">
-              <div className="logo-holder">
-                {client.logo_url ? (
-                  <img src={`https://fofvskqshlyqmsvshnps.supabase.co/storage/v1/object/public/client-logos/${client.logo_url}`} alt="Logo" />
-                ) : (
-                  <Building2 size={24} className="opacity-20" />
-                )}
-                <label className="upload-btn"><FileUp size={14} /><input type="file" hidden /></label>
-              </div>
+              <div className={`logo-holder ${uploading ? 'is-loading' : ''}`}>
+  {client.logo_url ? (
+    <img 
+      src={`https://fofvskqshlyqmsvshnps.supabase.co/storage/v1/object/public/client-logos/${client.logo_url}`} 
+      alt="Logo" 
+      onError={(e: any) => e.target.src = '/placeholder-logo.png'} 
+    />
+  ) : (
+    <Building2 size={24} className="opacity-20" />
+  )}
+  <label className="upload-btn">
+    {uploading ? <Loader2 className="animate-spin" size={14} /> : <FileUp size={14} />}
+    <input type="file" hidden onChange={handleLogoUpload} disabled={uploading} />
+  </label>
+</div>
               <div className="client-titles">
-                <div className="name-row">
-                  <h1>{client.name}</h1>
-                  <span className="badge-active">Cuenta Activa</span>
-                </div>
-                <div className="meta-links">
-                  <span className="tax-id"><Hash size={12}/> {client.tax_id || 'PENDIENTE'}</span>
-                  <a href={client.website} target="_blank" className="web-link"><Globe size={12}/> {client.website?.replace('https://','')}</a>
-                </div>
-              </div>
+  <div className="name-row">
+    {isEditing ? (
+      <input 
+        className="header-input-name" 
+        value={editData.name} 
+        onChange={e => setEditData({...editData, name: e.target.value})} 
+      />
+    ) : (
+      <h1>{client.name}</h1>
+    )}
+    <span className="badge-active">Cuenta Activa</span>
+  </div>
+  <div className="meta-links">
+    <span className="tax-id">
+      <Hash size={12}/> 
+      {isEditing ? (
+        <input 
+          className="header-input-meta" 
+          value={editData.tax_id} 
+          onChange={e => setEditData({...editData, tax_id: e.target.value})} 
+        />
+      ) : (
+        client.tax_id || 'SIN RUC'
+      )}
+    </span>
+    <span className="web-link">
+      <Globe size={12}/> 
+      {isEditing ? (
+        <input 
+          className="header-input-meta" 
+          value={editData.website} 
+          placeholder="https://..."
+          onChange={e => setEditData({...editData, website: e.target.value})} 
+        />
+      ) : (
+        <a href={client.website} target="_blank">{client.website?.replace('https://','')}</a>
+      )}
+    </span>
+  </div>
+</div>
             </div>
           </div>
 
@@ -223,6 +300,39 @@ export default function ClientDetailPage() {
           {/* --- SIDEBAR: CONTACTOS Y STAKEHOLDERS --- */}
           <aside className="side-col">
             <div className="pro-card mini-padding">
+  <h4 className="side-label">Datos Maestros</h4>
+  <div className="master-data-stack">
+    <div className="master-item">
+      <label>País de Origen</label>
+      {isEditing ? (
+        <input 
+          value={editData.country} 
+          onChange={e => setEditData({...editData, country: e.target.value})} 
+        />
+      ) : (
+        <div className="val-box"><MapPin size={12}/> {client.country || 'Panamá'}</div>
+      )}
+    </div>
+    
+    <div className="master-item">
+      <label>Incoterm Preferido</label>
+      {isEditing ? (
+        <select 
+          value={editData.default_incoterm} 
+          onChange={e => setEditData({...editData, default_incoterm: e.target.value})}
+        >
+          <option value="FOB">FOB</option>
+          <option value="CIF">CIF</option>
+          <option value="EXW">EXW</option>
+          <option value="DDP">DDP</option>
+        </select>
+      ) : (
+        <div className="val-box"><ShoppingBag size={12}/> {client.default_incoterm || 'FOB'}</div>
+      )}
+    </div>
+  </div>
+</div>
+            <div className="pro-card mini-padding">
               <h4 className="side-label">Directorio Interno</h4>
               <div className="stakeholders-stack">
                 {[
@@ -325,6 +435,56 @@ export default function ClientDetailPage() {
         .btn-add-doc { width: 100%; padding: 10px; background: none; border: 1.5px dashed #e2e8f0; border-radius: 10px; color: #94a3b8; font-weight: 700; cursor: pointer; font-size: 12px; }
 
         .loader-full { display: grid; place-items: center; height: 100vh; color: #16a34a; }
+        .header-input-name {
+  font-size: 22px;
+  font-weight: 900;
+  border: 1px solid #2563eb;
+  border-radius: 8px;
+  padding: 2px 8px;
+  color: #0f172a;
+  width: 100%;
+  outline: none;
+}
+
+.header-input-meta {
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  width: 120px;
+}
+
+.master-data-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.master-item label {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  color: #94a3b8;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.master-item input, .master-item select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.val-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
       `}</style>
     </AdminLayout>
   );
