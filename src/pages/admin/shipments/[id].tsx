@@ -33,8 +33,9 @@ type ShipmentDetail = {
   caliber?: string | null;
   color?: string | null;
   milestones?: ShipmentMilestone[];
-  documents?: ShipmentDocument[];
-  photos?: ShipmentPhoto[];
+  // IMPORTANTE: Adaptamos a lo que viene de la base de datos
+  shipment_documents?: ShipmentDocument[]; 
+  shipment_photos?: ShipmentPhoto[];
 };
 
 const DOC_TYPES = [
@@ -53,10 +54,6 @@ const DOC_TYPES = [
 type MilestoneType = "PACKED" | "DOCS_READY" | "AT_ORIGIN" | "IN_TRANSIT" | "AT_DESTINATION";
 const CHAIN: MilestoneType[] = ["PACKED", "DOCS_READY", "AT_ORIGIN", "IN_TRANSIT", "AT_DESTINATION"];
 
-function fmtDT(iso: string) {
-  try { return new Date(iso).toLocaleString("es-PA"); } catch { return iso; }
-}
-
 export default function AdminShipmentDetail() {
   const router = useRouter();
   const { id } = router.query;
@@ -67,15 +64,13 @@ export default function AdminShipmentDetail() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Estados de Formulario e Hitos
   const [note, setNote] = useState("");
   const [flight, setFlight] = useState("");
   const [awb, setAwb] = useState("");
   const [caliber, setCaliber] = useState("");
   const [color, setColor] = useState("");
-  const [docType, setDocType] = useState<(typeof DOC_TYPES)[number]["v"] | null>("packing_list");
+  const [docType, setDocType] = useState<string>("packing_list");
 
-  // Nuevo Estado para Popups (Toasts)
   const [popup, setPopup] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
   const showPopup = (msg: string, type: 'success' | 'error' = 'success') => {
@@ -95,23 +90,24 @@ export default function AdminShipmentDetail() {
     const token = await getTokenOrRedirect();
     if (!token) return;
 
-    const res = await fetch(`/.netlify/functions/getShipment?id=${encodeURIComponent(shipmentId)}&mode=admin`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    try {
+      const res = await fetch(`/.netlify/functions/getShipment?id=${encodeURIComponent(shipmentId)}&mode=admin`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-    if (!res.ok) {
-      setError("Error al cargar datos");
+      if (!res.ok) throw new Error("Error al cargar");
+
+      const json = await res.json();
+      setData(json);
+      setFlight(json.flight_number ?? "");
+      setAwb(json.awb ?? "");
+      setCaliber(json.caliber ?? "");
+      setColor(json.color ?? "");
+    } catch (err) {
+      setError("No se pudo cargar el embarque");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const json = await res.json();
-    setData(json);
-    setFlight(json.flight_number ?? "");
-    setAwb(json.awb ?? "");
-    setCaliber(json.caliber ?? "");
-    setColor(json.color ?? "");
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -125,17 +121,15 @@ export default function AdminShipmentDetail() {
   }, [id]);
 
   const timelineItems = useMemo(() => {
-    return 
-    (data?.milestones ?? [])
+    return (data?.milestones ?? [])
       .sort((a, b) => new Date(a.at!).getTime() - new Date(b.at!).getTime())
       .map((m, idx) => ({ id: `${m.type}-${idx}`, type: m.type, created_at: m.at, note: m.note }));
   }, [data?.milestones]);
 
   const mark = async (type: MilestoneType) => {
     const has = (t: string) => (data?.milestones ?? []).some((m) => m.type.toUpperCase() === t.toUpperCase());
-    
-    // Validaciones de lógica intactas
     if (has(type)) return showPopup("Hito ya marcado", "error");
+    
     if (type === "PACKED" && (!caliber.trim() || !color.trim())) return showPopup("Falta Calibre/Color", "error");
     if (type === "IN_TRANSIT" && !flight.trim()) return showPopup("Falta N° de Vuelo", "error");
 
@@ -153,7 +147,7 @@ export default function AdminShipmentDetail() {
 
     setBusy(false);
     if (res.ok) {
-      showPopup(`Hito ${labelStatus(type)} registrado ✅`);
+      showPopup(`Hito registrado ✅`);
       setNote("");
       load(data!.id);
     } else {
@@ -167,14 +161,16 @@ export default function AdminShipmentDetail() {
     const token = await getTokenOrRedirect();
     const bucket = kind === "doc" ? "shipment-docs" : "shipment-photos";
 
-    const res1 = await fetch("/.netlify/functions/getUploadUrl", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ bucket, shipmentCode: data.code, filename: file.name }),
-    });
+    try {
+      const res1 = await fetch("/.netlify/functions/getUploadUrl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ bucket, shipmentCode: data.code, filename: file.name }),
+      });
 
-    if (res1.ok) {
+      if (!res1.ok) throw new Error("Upload URL Error");
       const { uploadUrl, path } = await res1.json();
+      
       await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
       
       await fetch("/.netlify/functions/registerFile", {
@@ -185,10 +181,13 @@ export default function AdminShipmentDetail() {
           filename: file.name, storage_path: path, bucket,
         }),
       });
-      showPopup(`${kind === 'doc' ? 'Documento' : 'Foto'} cargado`);
+      showPopup("Archivo cargado");
       load(data.id);
+    } catch (e) {
+      showPopup("Error al subir archivo", "error");
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   async function deleteFile(fileId: string, kind: "doc" | "photo") {
@@ -201,7 +200,7 @@ export default function AdminShipmentDetail() {
       body: JSON.stringify({ fileId, kind, shipmentId: data?.id }),
     });
     setBusy(false);
-    if (res.ok) { showPopup("Archivo eliminado 🗑️"); load(data!.id); }
+    if (res.ok) { showPopup("Eliminado 🗑️"); load(data!.id); }
   }
 
   async function download(fileId: string) {
@@ -217,8 +216,6 @@ export default function AdminShipmentDetail() {
 
   return (
     <AdminLayout title={`Embarque ${data?.code}`}>
-      
-      {/* POPUP FLOTANTE */}
       {popup && (
         <div className={`popup-toast ${popup.type}`}>
           {popup.type === 'success' ? <CheckCircle size={18}/> : <AlertCircle size={18}/>}
@@ -228,13 +225,11 @@ export default function AdminShipmentDetail() {
       )}
 
       <div className="detail-container">
-        
         <div className="top-nav-row">
           <Link href="/admin/shipments" className="btn-back"><ArrowLeft size={16}/> Volver</Link>
           <div className="status-badge">Estado: <span className="pill">{labelStatus(data!.status)}</span></div>
         </div>
 
-        {/* 1. HEADER RESUMEN */}
         <header className="shipment-header-modern">
           <div className="h-left">
             <div className="code-tag"><Hash size={14}/> {data?.code}</div>
@@ -251,16 +246,14 @@ export default function AdminShipmentDetail() {
         </header>
 
         <div className="main-grid-layout">
-          
           <div className="left-column">
-            {/* ACCIONES E HITOS */}
             <section className="glass-card">
               <div className="card-head"><ClipboardCheck size={18}/> <h3>Control de Hitos</h3></div>
               <div className="milestone-controls">
                 <div className="input-group-row">
-                  <div className="f-item full"><label>Nota de estado</label><textarea placeholder="Detalles para el cliente..." value={note} onChange={e => setNote(e.target.value)} /></div>
-                  <div className="f-item"><label>Vuelo *</label><input value={flight} onChange={e => setFlight(e.target.value)} placeholder="Ej: IB123" /></div>
-                  <div className="f-item"><label>AWB</label><input value={awb} onChange={e => setAwb(e.target.value)} placeholder="Ej: 123-..." /></div>
+                  <div className="f-item full"><label>Nota de estado</label><textarea placeholder="Detalles..." value={note} onChange={e => setNote(e.target.value)} /></div>
+                  <div className="f-item"><label>Vuelo *</label><input value={flight} onChange={e => setFlight(e.target.value)} /></div>
+                  <div className="f-item"><label>AWB</label><input value={awb} onChange={e => setAwb(e.target.value)} /></div>
                 </div>
                 <div className="actions-buttons-grid">
                   {CHAIN.map(step => (
@@ -272,7 +265,6 @@ export default function AdminShipmentDetail() {
               </div>
             </section>
 
-            {/* DATOS TÉCNICOS */}
             <section className="glass-card spacing-top">
               <div className="card-head"><Info size={18}/> <h3>Datos de Empaque</h3></div>
               <div className="technical-grid">
@@ -281,7 +273,7 @@ export default function AdminShipmentDetail() {
               </div>
             </section>
 
-            {/* REGISTRO FOTOGRÁFICO */}
+            {/* FOTOS - Corregido mapeo de shipment_photos */}
             <section className="glass-card spacing-top">
               <div className="card-head-between">
                 <div className="title-group"><ImageIcon size={18}/> <h3>Fotos de Evidencia</h3></div>
@@ -291,26 +283,28 @@ export default function AdminShipmentDetail() {
                 </label>
               </div>
               <div className="photo-grid-modern">
-                {data?.photos?.map(p => (
-                  <div key={p.id} className="photo-box">
-                    {p.url ? <img src={p.url} alt="Foto" /> : <div className="placeholder" />}
-                    <div className="overlay">
-                      <button onClick={() => download(p.id)}><Download size={16}/></button>
-                      <button onClick={() => deleteFile(p.id, "photo")} className="del"><X size={16}/></button>
+                {data?.shipment_photos?.length ? (
+                  data.shipment_photos.map(p => (
+                    <div key={p.id} className="photo-box">
+                      <img src={p.url || "/placeholder-img.png"} alt="Foto" onError={(e) => (e.currentTarget.src = "/placeholder-img.png")} />
+                      <div className="overlay">
+                        <button onClick={() => download(p.id)} title="Descargar"><Download size={16}/></button>
+                        <button onClick={() => deleteFile(p.id, "photo")} className="del" title="Eliminar"><X size={16}/></button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                ) : <p className="empty-text">Sin fotos cargadas</p>}
               </div>
             </section>
           </div>
 
           <aside className="right-column">
-            {/* DOCUMENTOS */}
+            {/* DOCUMENTOS - Corregido mapeo de shipment_documents */}
             <section className="glass-card">
               <div className="card-head"><FileText size={18}/> <h3>Documentación</h3></div>
               <div className="docs-list-modern">
                 {DOC_TYPES.map(type => {
-                  const doc = data?.documents?.find(d => d.doc_type === type.v);
+                  const doc = data?.shipment_documents?.find(d => d.doc_type === type.v);
                   return (
                     <div key={type.v} className={`doc-item ${doc ? 'is-ok' : 'is-off'}`}>
                       <div className="doc-info">
@@ -336,7 +330,6 @@ export default function AdminShipmentDetail() {
               </div>
             </section>
 
-            {/* TIMELINE */}
             <section className="glass-card spacing-top">
               <div className="card-head"><CheckCircle size={18}/> <h3>Línea de Tiempo</h3></div>
               <ModernTimeline milestones={timelineItems as any} />
@@ -347,27 +340,12 @@ export default function AdminShipmentDetail() {
 
       <style jsx>{`
         .detail-container { padding: 20px 40px; background: #f8fafc; min-height: 100vh; }
-        
-        /* POPUP TOAST */
-        .popup-toast {
-          position: fixed; top: 25px; right: 25px; z-index: 9999;
-          display: flex; align-items: center; gap: 12px;
-          padding: 16px 20px; border-radius: 16px;
-          color: white; font-weight: 700; font-size: 14px;
-          box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);
-          animation: slideIn 0.3s ease-out;
-        }
+        .popup-toast { position: fixed; top: 25px; right: 25px; z-index: 9999; display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-radius: 16px; color: white; font-weight: 700; font-size: 14px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); animation: slideIn 0.3s ease-out; }
         .popup-toast.success { background: #16a34a; border-left: 5px solid #052e16; }
         .popup-toast.error { background: #dc2626; border-left: 5px solid #450a0a; }
         .popup-toast button { background: transparent; border: none; color: white; cursor: pointer; opacity: 0.7; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-        /* HEADER */
-        .shipment-header-modern { 
-          background: #fff; padding: 25px 30px; border-radius: 24px; border: 1px solid #e2e8f0; 
-          display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; 
-          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
+        .shipment-header-modern { background: #fff; padding: 25px 30px; border-radius: 24px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .code-tag { background: #eff6ff; color: #2563eb; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 12px; display: flex; align-items: center; gap: 5px; width: fit-content; }
         .h-left h1 { font-size: 24px; font-weight: 900; margin: 8px 0 2px; }
         .h-left h1 small { color: #64748b; font-weight: 400; font-size: 16px; margin-left: 8px; }
@@ -376,31 +354,22 @@ export default function AdminShipmentDetail() {
         .h-stat label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; display: flex; align-items: center; gap: 4px; }
         .h-stat span { font-size: 15px; font-weight: 800; color: #1e293b; }
         .divider-v { width: 1px; height: 30px; background: #e2e8f0; }
-
-        /* GRID */
-        .top-nav-row { display: flex; justify-content: space-between; margin-bottom: 15px; }
         .main-grid-layout { display: grid; grid-template-columns: 1fr 340px; gap: 24px; }
         .glass-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 20px; }
         .spacing-top { margin-top: 24px; }
         .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
         .card-head h3 { font-size: 13px; font-weight: 900; text-transform: uppercase; color: #1e293b; margin: 0; }
         .card-head-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-
-        /* FORMS */
         .input-group-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #f8fafc; padding: 20px; border-radius: 16px; margin-bottom: 15px; }
         .f-item { display: flex; flex-direction: column; gap: 6px; }
         .f-item.full { grid-column: span 3; }
         .f-item label { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; }
         .f-item input, .f-item textarea { padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0; font-size: 13px; outline: none; }
         .f-item textarea { height: 60px; resize: none; }
-
-        /* BUTTONS */
         .actions-buttons-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
         .btn-step { padding: 12px 5px; border-radius: 10px; border: 1px solid #e2e8f0; background: #fff; font-size: 10px; font-weight: 800; cursor: pointer; transition: 0.2s; }
         .btn-step.active { background: #16a34a; color: #fff; border-color: #16a34a; box-shadow: 0 4px 10px rgba(22, 163, 74, 0.2); }
         .technical-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-
-        /* PHOTOS */
         .photo-grid-modern { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
         .photo-box { position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden; border: 1px solid #e2e8f0; background: #f1f5f9; }
         .photo-box img { width: 100%; height: 100%; object-fit: cover; }
@@ -408,8 +377,6 @@ export default function AdminShipmentDetail() {
         .photo-box:hover .overlay { opacity: 1; }
         .overlay button { width: 32px; height: 32px; border-radius: 8px; border: none; cursor: pointer; display: grid; place-items: center; background: #fff; color: #1e293b; }
         .overlay button.del { background: #ef4444; color: #fff; }
-
-        /* DOCS */
         .docs-list-modern { display: flex; flex-direction: column; gap: 8px; }
         .doc-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-radius: 12px; border: 1px solid #f1f5f9; }
         .doc-item.is-ok { background: #f0fdf4; border-color: #dcfce7; }
@@ -420,9 +387,9 @@ export default function AdminShipmentDetail() {
         .btn-dl { color: #16a34a; }
         .btn-del { color: #ef4444; margin-left: 8px; }
         .actions-ok { display: flex; align-items: center; }
-
         .loader { height: 80vh; display: grid; place-items: center; color: #16a34a; }
         .spin { animation: rotate 1s linear infinite; }
+        .empty-text { font-size: 12px; color: #94a3b8; text-align: center; grid-column: 1/-1; padding: 20px; }
         @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </AdminLayout>
