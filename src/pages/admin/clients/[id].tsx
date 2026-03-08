@@ -388,166 +388,152 @@ export default function ClientDetailPage() {
       </div>
 
       <style jsx>{`
-  /* 1. LAYOUT BASE */
+  /* 1. RESET Y CONTENEDOR RAIZ */
   .view-container { 
     padding: 30px 40px; 
     max-width: 1600px; 
     margin: 0 auto; 
     background: #f8fafc; 
     min-height: 100vh; 
-    font-family: 'Inter', sans-serif;
-  }
-  .main-grid { 
-    display: grid; 
-    grid-template-columns: 1fr 360px; 
-    gap: 24px; 
-    align-items: start;
-  }
-  .pro-card { 
-    background: white; 
-    border-radius: 20px; 
-    border: 1px solid #e2e8f0; 
-    margin-bottom: 24px; 
-    overflow: hidden; 
+    font-family: 'Inter', -apple-system, sans-serif;
   }
 
-  /* 2. HEADER COMMAND CENTER (CORREGIDO) */
+  /* 2. HEADER COMMAND CENTER */
   .header-pro { 
     display: flex; 
     justify-content: space-between; 
-    align-items: flex-start; /* Alinea arriba para dar espacio a los botones */
+    align-items: flex-start; 
     background: white; 
-    padding: 28px; 
+    padding: 32px; 
     border-radius: 24px; 
     border: 1px solid #e2e8f0; 
-    margin-bottom: 24px; 
-    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.04); 
+    margin-bottom: 32px; 
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); 
   }
 
-  .header-left { 
-    display: flex; 
-    align-items: center; 
-    gap: 24px; 
-    flex: 1; /* Toma todo el espacio sobrante */
-  }
-
-  /* LOGO */
+  .header-left { display: flex; align-items: center; gap: 24px; flex: 1; }
+  
   .logo-holder { 
-    width: 80px; height: 80px; 
+    width: 85px; height: 85px; 
     background: #f8fafc; 
-    border-radius: 18px; 
+    border-radius: 20px; 
     position: relative; 
     display: flex; align-items: center; justify-content: center; 
     overflow: hidden; border: 1px solid #e2e8f0;
     flex-shrink: 0;
   }
   .logo-holder img { width: 100%; height: 100%; object-fit: contain; padding: 10px; }
+  
   .upload-btn { 
-    position: absolute; inset: 0; background: rgba(0,0,0,0.6); 
+    position: absolute; inset: 0; background: rgba(15, 23, 42, 0.7); 
     color: white; display: flex; align-items: center; justify-content: center; 
     opacity: 0; cursor: pointer; transition: 0.2s; 
   }
   .logo-holder:hover .upload-btn { opacity: 1; }
 
-  /* TITLES & INPUTS */
-  .client-titles { display: flex; flex-direction: column; gap: 4px; }
-  .name-row { display: flex; align-items: center; gap: 12px; }
-  .name-row h1 { font-size: 26px; font-weight: 900; color: #0f172a; margin: 0; letter-spacing: -0.03em; }
+  .client-titles h1 { font-size: 28px; font-weight: 850; color: #0f172a; margin: 0; letter-spacing: -0.03em; }
+  .badge-active { font-size: 10px; font-weight: 800; color: #166534; background: #dcfce7; padding: 4px 12px; border-radius: 20px; text-transform: uppercase; border: 1px solid #bbf7d0; }
   
-  .header-input-name { 
-    font-size: 24px; font-weight: 800; border: 2px solid #16a34a; 
-    border-radius: 10px; padding: 6px 14px; background: #f0fdf4; 
-    color: #0f172a; width: 400px; outline: none;
-  }
-  
-  .badge-active { 
-    font-size: 10px; font-weight: 800; color: #166534; background: #dcfce7; 
-    padding: 4px 10px; border-radius: 20px; text-transform: uppercase; 
-  }
-
-  .meta-links { display: flex; gap: 20px; margin-top: 8px; align-items: center; }
-  .tax-id, .web-link { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #64748b; font-weight: 600; }
+  .meta-links { display: flex; gap: 20px; margin-top: 10px; font-size: 13px; color: #64748b; font-weight: 600; }
+  .tax-id, .web-link { display: flex; align-items: center; gap: 6px; }
   .web-link a { color: #2563eb; text-decoration: none; }
-  
-  .header-input-meta { 
-    border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 10px; 
-    font-size: 12px; width: 180px; background: #f8fafc;
-  }
 
-  /* 3. BOTONES MODERNOS (ZONA DERECHA) */
-  .header-actions-sidebar { 
-    display: flex; 
-    flex-direction: column; 
-    gap: 10px; 
-    min-width: 220px; 
-    padding-left: 20px;
-    border-left: 1px solid #f1f5f9;
-  }
+  /* INPUTS DE EDICIÓN EN HEADER */
+  .header-input-name { font-size: 24px; font-weight: 800; border: 2px solid #3b82f6; border-radius: 12px; padding: 6px 14px; background: #f0f7ff; width: 450px; outline: none; }
+  .header-input-meta { border: 1px solid #cbd5e1; border-radius: 8px; padding: 4px 10px; font-size: 12px; width: 200px; }
+
+  /* 3. BOTONES DEL HEADER (ESTILO DARK SAAS) */
+  .header-actions-sidebar { display: flex; flex-direction: column; gap: 10px; min-width: 240px; }
   
   .btn-modern-primary { 
-    background: #16a34a; color: white; border: none; padding: 12px 20px; 
-    border-radius: 12px; font-weight: 700; font-size: 14px; cursor: pointer; 
-    transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);
-    width: 100%;
+    background: #0f172a; color: white; border: none; padding: 14px 20px; 
+    border-radius: 14px; font-weight: 700; font-size: 14px; cursor: pointer; 
+    display: flex; align-items: center; justify-content: space-between;
+    transition: all 0.2s; box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.1);
   }
-  .btn-modern-primary:hover { background: #15803d; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(22, 163, 74, 0.35); }
-  
+  .btn-modern-primary:hover { background: #1e293b; transform: translateY(-2px); }
+
   .btn-modern-secondary { 
-    background: #ffffff; color: #334155; border: 1px solid #e2e8f0; padding: 12px 20px; 
-    border-radius: 12px; font-weight: 600; font-size: 14px; cursor: pointer; transition: 0.2s;
-    width: 100%;
+    background: white; color: #334155; border: 1px solid #e2e8f0; padding: 13px 20px; 
+    border-radius: 14px; font-weight: 600; font-size: 14px; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between; transition: 0.2s;
   }
-  .btn-modern-secondary:hover { background: #f8fafc; border-color: #cbd5e1; color: #0f172a; }
+  .btn-modern-secondary:hover { background: #f8fafc; border-color: #cbd5e1; }
 
-  .btn-modern-ghost { 
-    background: transparent; color: #94a3b8; border: none; padding: 6px; 
-    font-weight: 700; font-size: 12px; cursor: pointer; text-align: right; 
-    transition: 0.2s;
-  }
-  .btn-modern-ghost:hover { color: #16a34a; background: #f0fdf4; border-radius: 6px; }
+  .btn-modern-ghost { background: transparent; color: #94a3b8; border: none; padding: 8px; font-weight: 700; font-size: 12px; cursor: pointer; text-align: right; }
+  .btn-modern-ghost:hover { color: #0f172a; }
 
-  /* MODO EDICIÓN */
-  .editing-stack { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-  .btn-modern-save { 
-    background: #0f172a; color: white; border: none; padding: 14px; 
-    border-radius: 12px; font-weight: 700; cursor: pointer; width: 100%;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-  }
-  .btn-modern-cancel { 
-    background: #fff1f2; color: #e11d48; border: none; padding: 10px; 
-    border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer; width: 100%;
-  }
+  .editing-stack { display: flex; flex-direction: column; gap: 8px; }
+  .btn-modern-save { background: #16a34a; color: white; border: none; padding: 14px; border-radius: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .btn-modern-cancel { background: #f1f5f9; color: #64748b; border: none; padding: 10px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
 
-  /* 4. CONTENIDO (TABLES & CARDS) */
-  .card-header-v2 { padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
-  .card-header-v2 h3 { font-size: 15px; font-weight: 800; color: #1e293b; margin: 0; }
-  
+  /* 4. GRID PRINCIPAL */
+  .main-grid { display: grid; grid-template-columns: 1fr 340px; gap: 30px; }
+  .pro-card { background: white; border-radius: 24px; border: 1px solid #e2e8f0; margin-bottom: 24px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+  .card-header-v2 { padding: 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+  .card-header-v2 h3 { font-size: 16px; font-weight: 750; color: #0f172a; margin: 0; }
+
+  /* 5. CONFIGURACIÓN DE DIRECCIONES (REPARADO) */
   .logistics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: #e2e8f0; }
   .address-box { background: white; padding: 24px; display: flex; flex-direction: column; gap: 12px; }
-  .address-header { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 900; color: #94a3b8; text-transform: uppercase; }
-  .address-text { font-size: 13px; color: #334155; line-height: 1.6; font-weight: 500; margin: 0; }
-  .edit-area { border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px; font-size: 13px; min-height: 90px; resize: none; width: 100%; }
+  .address-header { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 850; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+  .address-text { font-size: 14px; color: #334155; line-height: 1.6; font-weight: 500; min-height: 64px; margin: 0; }
+  .edit-area { border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px; font-size: 13px; min-height: 100px; resize: none; width: 100%; background: #f8fafc; }
+  .maps-link { font-size: 11px; font-weight: 800; color: #2563eb; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; margin-top: auto; }
 
-  /* STAKEHOLDERS & SIDEBAR */
-  .side-label { font-size: 11px; font-weight: 900; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 16px; display: block; }
-  .master-data-stack { display: flex; flex-direction: column; gap: 16px; }
-  .master-item label { display: block; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 6px; }
-  .master-item input, .master-item select { width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 13px; font-weight: 600; }
+  /* 6. TABLA DE EMBARQUES (REPARADO) */
+  .table-wrapper { width: 100%; overflow-x: auto; }
+  .table-refine { width: 100%; border-collapse: collapse; }
+  .table-refine th { text-align: left; padding: 16px 24px; font-size: 11px; color: #94a3b8; font-weight: 800; text-transform: uppercase; background: #fafafa; border-bottom: 1px solid #f1f5f9; }
+  .table-refine td { padding: 18px 24px; border-bottom: 1px solid #f1f5f9; font-size: 14px; vertical-align: middle; }
+  .code-tag { font-family: 'JetBrains Mono', monospace; font-weight: 800; color: #2563eb; background: #eff6ff; padding: 4px 10px; border-radius: 8px; font-size: 12px; }
+  .prod-cell { display: flex; flex-direction: column; }
+  .prod-cell strong { color: #0f172a; font-weight: 700; }
+  .prod-cell span { font-size: 12px; color: #64748b; }
+  .pill-status-v2 { font-size: 10px; font-weight: 900; padding: 6px 12px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.02em; }
   
-  .dept-accordion { margin-bottom: 12px; border-radius: 14px; border: 1px solid #f1f5f9; overflow: hidden; }
-  .dept-accordion summary { 
-    padding: 14px 18px; background: #fafafa; display: flex; justify-content: space-between; 
-    align-items: center; cursor: pointer; list-style: none; font-weight: 700; font-size: 13px; border-left: 4px solid #cbd5e1; 
-  }
+  /* ESTADOS TABLA */
+  .created { background: #fef3c7; color: #92400e; }
+  .packed { background: #dcfce7; color: #166534; }
+  .transit { background: #e0e7ff; color: #3730a3; }
+  .delivered { background: #f0fdf4; color: #166534; border: 1px solid #bcf0da; }
 
-  /* UTILS */
-  .pulse-green { animation: pulse-sutil 2s infinite; }
-  @keyframes pulse-sutil {
-    0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4); }
-    70% { box-shadow: 0 0 0 10px rgba(22, 163, 74, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+  /* 7. SIDEBAR Y DATOS MAESTROS (REPARADO) */
+  .mini-padding { padding: 24px; }
+  .side-label { font-size: 11px; font-weight: 900; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 20px; display: block; }
+  
+  .master-data-stack { display: flex; flex-direction: column; gap: 18px; }
+  .master-item label { display: block; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 6px; }
+  .master-item input, .master-item select { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 14px; font-weight: 600; background: #f8fafc; color: #1e293b; }
+  .val-box { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: #1e293b; background: #f8fafc; padding: 10px; border-radius: 10px; border: 1px solid #f1f5f9; }
+
+  /* DIRECTORIO / ACORDEONES */
+  .dept-accordion { margin-bottom: 12px; border-radius: 16px; border: 1px solid #f1f5f9; overflow: hidden; transition: 0.2s; }
+  .dept-accordion:hover { border-color: #e2e8f0; }
+  .dept-accordion summary { padding: 16px 20px; background: #fafafa; display: flex; justify-content: space-between; align-items: center; cursor: pointer; list-style: none; font-weight: 750; font-size: 13px; border-left: 5px solid #cbd5e1; }
+  .dept-form { padding: 20px; background: white; display: flex; flex-direction: column; gap: 12px; border-top: 1px solid #f1f5f9; }
+  .dept-form input { padding: 10px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 13px; }
+  .dept-view { display: flex; flex-direction: column; gap: 8px; }
+  .dept-view p { margin: 0; font-size: 14px; font-weight: 700; color: #0f172a; }
+  .mailto-btn, .tel-btn { font-size: 12px; color: #64748b; text-decoration: none; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+  .mailto-btn:hover { color: #2563eb; }
+
+  /* KYC Y DOCUMENTOS */
+  .kyc-list { display: flex; flex-direction: column; gap: 10px; }
+  .kyc-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; font-size: 13px; font-weight: 600; }
+  .kyc-item.done { background: #f0fdf4; color: #166534; }
+  .kyc-item.pending { background: #fffbeb; color: #92400e; }
+  .btn-add-doc { width: 100%; padding: 12px; background: white; border: 2px dashed #e2e8f0; border-radius: 12px; color: #94a3b8; font-weight: 750; cursor: pointer; font-size: 12px; margin-top: 10px; transition: 0.2s; }
+  .btn-add-doc:hover { border-color: #cbd5e1; color: #64748b; }
+
+  /* ANIMACIONES Y LOADER */
+  .loader-full { display: grid; place-items: center; height: 100vh; color: #16a34a; background: #f8fafc; }
+  .pulse-green { animation: soft-pulse 2s infinite; }
+  @keyframes soft-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
   }
-  .loader-full { display: grid; place-items: center; height: 100vh; color: #16a34a; }
 `}</style>
     </AdminLayout>
   );
