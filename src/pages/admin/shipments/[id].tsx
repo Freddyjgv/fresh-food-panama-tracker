@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { supabase } from "../../../lib/supabaseClient";
@@ -10,250 +10,260 @@ import { Timeline as ModernTimeline } from "../../../components/Timeline";
 import {
   FileText, Image as ImageIcon, Download, PackageCheck, Plane,
   MapPin, ClipboardCheck, ArrowLeft, Info, Package, PlusCircle,
-  CheckCircle, Loader2, X, Hash, Globe, Scale, Droplets, Trash2,
-  AlertCircle
+  CheckCircle, Loader2, X, Hash, Globe, Scale, Trash2, AlertCircle
 } from "lucide-react";
 
-// --- CONFIGURACIÓN DE TIPOS Y CONSTANTES ---
+// --- TIPOS ---
+type ShipmentMilestone = { type: string; at?: string | null; note?: string | null; };
+type ShipmentDocument = { id: string; filename: string; doc_type?: string | null; created_at: string; };
+type ShipmentPhoto = { id: string; filename: string; created_at: string; url?: string | null; };
+
+type ShipmentDetail = {
+  id: string; code: string; destination: string; status: string; created_at: string;
+  client_name?: string | null;
+  client?: { name?: string | null } | null;
+  product_name?: string | null;
+  product_variety?: string | null;
+  product_mode?: string | null;
+  boxes?: number | null;
+  pallets?: number | null;
+  weight_kg?: number | null;
+  flight_number?: string | null;
+  awb?: string | null;
+  caliber?: string | null;
+  color?: string | null;
+  milestones?: ShipmentMilestone[];
+  documents?: ShipmentDocument[];
+  photos?: ShipmentPhoto[];
+};
+
 const DOC_TYPES = [
   { v: "invoice", l: "Factura" },
   { v: "packing_list", l: "Packing list" },
   { v: "awb", l: "AWB (guía aérea)" },
   { v: "phytosanitary", l: "Certificado fitosanitario" },
   { v: "eur1", l: "EUR1" },
-  { v: "export_declaration", l: "Declaración de aduana" },
-  { v: "non_recyclable_plastics", l: "Plásticos no reciclables" },
+  { v: "export_declaration", l: "Decl. Exportación" },
+  { v: "non_recyclable_plastics", l: "Plásticos no Reciclables" },
   { v: "sanitary_general_info", l: "Info. Sanitaria" },
-  { v: "additives_declaration", l: "Declaración de aditivos" },
-  { v: "quality_report", l: "Informe de calidad" },
+  { v: "additives_declaration", l: "Decl. Aditivos" },
+  { v: "quality_report", l: "Informe de Calidad" },
 ] as const;
 
 type MilestoneType = "PACKED" | "DOCS_READY" | "AT_ORIGIN" | "IN_TRANSIT" | "AT_DESTINATION";
 const CHAIN: MilestoneType[] = ["PACKED", "DOCS_READY", "AT_ORIGIN", "IN_TRANSIT", "AT_DESTINATION"];
+
+function fmtDT(iso: string) {
+  try { return new Date(iso).toLocaleString("es-PA"); } catch { return iso; }
+}
 
 export default function AdminShipmentDetail() {
   const router = useRouter();
   const { id } = router.query;
 
   const [authReady, setAuthReady] = useState(false);
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<ShipmentDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  
-  // Popups/Toasts de estado
-  const [popup, setPopup] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
-  // Formulario de configuración técnica
-  const [editForm, setEditForm] = useState({
-    product_name: "",
-    product_variety: "",
-    caliber: "",
-    color: "",
-    brix_grade: "",
-    boxes: 0,
-    pallets: 0,
-    weight_kg: 0,
-    destination: "",
-    destination_port: "",
-    incoterm: ""
-  });
-
+  // Estados de Formulario e Hitos
   const [note, setNote] = useState("");
   const [flight, setFlight] = useState("");
   const [awb, setAwb] = useState("");
+  const [caliber, setCaliber] = useState("");
+  const [color, setColor] = useState("");
+  const [docType, setDocType] = useState<(typeof DOC_TYPES)[number]["v"] | null>("packing_list");
+
+  // Nuevo Estado para Popups (Toasts)
+  const [popup, setPopup] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
   const showPopup = (msg: string, type: 'success' | 'error' = 'success') => {
     setPopup({ msg, type });
-    setTimeout(() => setPopup(null), 4000);
+    setTimeout(() => setPopup(null), 3500);
   };
 
-  const load = useCallback(async (sid: string) => {
-    setLoading(true);
-    const { data: res } = await supabase
-      .from('shipments')
-      .select('*, clients(name), shipment_documents(*), shipment_photos(*), status_history(*)')
-      .eq('id', sid)
-      .single();
+  async function getTokenOrRedirect() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) { window.location.href = "/login"; return null; }
+    return token;
+  }
 
-    if (res) {
-      setData(res);
-      setEditForm({
-        product_name: res.product_name || "",
-        product_variety: res.product_variety || "",
-        caliber: res.caliber || "",
-        color: res.color || "",
-        brix_grade: res.brix_grade || "",
-        boxes: res.boxes || 0,
-        pallets: res.pallets || 0,
-        weight_kg: res.weight_kg || 0,
-        destination: res.destination || "",
-        destination_port: res.destination_port || "",
-        incoterm: res.incoterm || ""
-      });
-      setFlight(res.flight_number || "");
-      setAwb(res.awb || "");
+  async function load(shipmentId: string) {
+    setLoading(true);
+    const token = await getTokenOrRedirect();
+    if (!token) return;
+
+    const res = await fetch(`/.netlify/functions/getShipment?id=${encodeURIComponent(shipmentId)}&mode=admin`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (!res.ok) {
+      setError("Error al cargar datos");
+      setLoading(false);
+      return;
     }
+
+    const json = await res.json();
+    setData(json);
+    setFlight(json.flight_number ?? "");
+    setAwb(json.awb ?? "");
+    setCaliber(json.caliber ?? "");
+    setColor(json.color ?? "");
     setLoading(false);
-  }, []);
+  }
 
   useEffect(() => {
     (async () => {
       const r = await requireAdminOrRedirect();
       if (r.ok) {
         setAuthReady(true);
-        if (id) load(id as string);
+        if (typeof id === "string") load(id);
       }
     })();
-  }, [id, load]);
+  }, [id]);
 
-  const saveConfig = async () => {
-    setBusy(true);
-    const { error } = await supabase.from('shipments').update(editForm).eq('id', id);
-    setBusy(false);
-    if (error) showPopup("Error al guardar configuración", "error");
-    else showPopup("Datos del embarque actualizados ✅");
-  };
+  const timelineItems = useMemo(() => {
+    return (data?.milestones ?? [])
+      .sort((a, b) => new Date(a.at!).getTime() - new Date(b.at!).getTime())
+      .map((m, idx) => ({ id: `${m.type}-${idx}`, type: m.type, created_at: m.at, note: m.note }));
+  }, [data?.milestones]);
 
-  const handleUpdateStatus = async (type: MilestoneType) => {
-    setBusy(true);
-    // Llamada a RPC o API para actualizar hito
-    const { error } = await supabase.rpc('update_shipment_status_v2', {
-      p_shipment_id: id,
-      p_new_status: type,
-      p_note: note,
-      p_flight: flight,
-      p_awb: awb
-    });
+  const mark = async (type: MilestoneType) => {
+    const has = (t: string) => (data?.milestones ?? []).some((m) => m.type.toUpperCase() === t.toUpperCase());
     
-    setBusy(false);
-    if (!error) {
-      showPopup(`Hito ${labelStatus(type)} registrado correctamente`);
-      setNote("");
-      load(id as string);
-    } else {
-      showPopup("No se pudo actualizar el hito", "error");
-    }
-  };
+    // Validaciones de lógica intactas
+    if (has(type)) return showPopup("Hito ya marcado", "error");
+    if (type === "PACKED" && (!caliber.trim() || !color.trim())) return showPopup("Falta Calibre/Color", "error");
+    if (type === "IN_TRANSIT" && !flight.trim()) return showPopup("Falta N° de Vuelo", "error");
 
-  const uploadFile = async (kind: 'doc' | 'photo', file: File, docType?: string) => {
     setBusy(true);
-    try {
-      const path = `${id}/${Date.now()}_${file.name}`;
-      const bucket = kind === 'doc' ? 'shipment-documents' : 'shipment-photos';
-      const { error: upErr } = await supabase.storage.from(bucket).upload(path, file);
-      if (upErr) throw upErr;
+    const token = await getTokenOrRedirect();
+    const res = await fetch("/.netlify/functions/updateMilestone", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        shipmentId: data?.id, type, note: note.trim() || null,
+        flight_number: flight.trim() || null, awb: awb.trim() || null,
+        caliber: caliber.trim() || null, color: color.trim() || null,
+      }),
+    });
 
-      const table = kind === 'doc' ? 'shipment_documents' : 'shipment_photos';
-      const payload: any = { shipment_id: id, file_url: path, file_name: file.name };
-      if (docType) payload.doc_type = docType;
-
-      await supabase.from(table).insert(payload);
-      showPopup(`${kind === 'doc' ? 'Documento' : 'Foto'} cargada con éxito`);
-      load(id as string);
-    } catch (e) { showPopup("Error en la subida", "error"); }
-    finally { setBusy(false); }
-  };
-
-  const deleteFile = async (fileId: string, kind: 'doc' | 'photo') => {
-    if (!confirm("¿Estás seguro de eliminar este archivo permanentemente?")) return;
-    const table = kind === 'doc' ? 'shipment_documents' : 'shipment_photos';
-    const { error } = await supabase.from(table).delete().eq('id', fileId);
-    if (!error) {
-      showPopup("Archivo eliminado 🗑️");
-      load(id as string);
+    setBusy(false);
+    if (res.ok) {
+      showPopup(`Hito ${labelStatus(type)} registrado ✅`);
+      setNote("");
+      load(data!.id);
+    } else {
+      showPopup("Error al actualizar", "error");
     }
   };
 
-  if (!authReady || loading || !data) return (
-    <div className="loader-screen">
-      <Loader2 className="animate-spin" size={40} color="#16a34a" />
-      <p>Cargando detalles del embarque...</p>
-    </div>
-  );
+  async function upload(kind: "doc" | "photo", file: File) {
+    if (!data) return;
+    setBusy(true);
+    const token = await getTokenOrRedirect();
+    const bucket = kind === "doc" ? "shipment-docs" : "shipment-photos";
+
+    const res1 = await fetch("/.netlify/functions/getUploadUrl", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ bucket, shipmentCode: data.code, filename: file.name }),
+    });
+
+    if (res1.ok) {
+      const { uploadUrl, path } = await res1.json();
+      await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+      
+      await fetch("/.netlify/functions/registerFile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          shipmentId: data.id, kind, doc_type: kind === "doc" ? docType : null,
+          filename: file.name, storage_path: path, bucket,
+        }),
+      });
+      showPopup(`${kind === 'doc' ? 'Documento' : 'Foto'} cargado`);
+      load(data.id);
+    }
+    setBusy(false);
+  }
+
+  async function deleteFile(fileId: string, kind: "doc" | "photo") {
+    if (!confirm("¿Eliminar archivo?")) return;
+    setBusy(true);
+    const token = await getTokenOrRedirect();
+    const res = await fetch("/.netlify/functions/deleteFile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ fileId, kind, shipmentId: data?.id }),
+    });
+    setBusy(false);
+    if (res.ok) { showPopup("Archivo eliminado 🗑️"); load(data!.id); }
+  }
+
+  async function download(fileId: string) {
+    const token = await getTokenOrRedirect();
+    const res = await fetch(`/.netlify/functions/getDownloadUrl?fileId=${encodeURIComponent(fileId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const { url } = await res.json();
+    window.open(url, "_blank");
+  }
+
+  if (!authReady || loading) return <div className="loader"><Loader2 className="spin" /></div>;
 
   return (
-    <AdminLayout title={`Embarque ${data.code}`}>
-      <div className="admin-container">
-        
-        {/* POPUP NOTIFICATION SYSTEM */}
-        {popup && (
-          <div className={`popup-msg ${popup.type}`}>
-            {popup.type === 'success' ? <CheckCircle size={18}/> : <AlertCircle size={18}/>}
-            <span>{popup.msg}</span>
-            <button onClick={() => setPopup(null)}><X size={14}/></button>
-          </div>
-        )}
+    <AdminLayout title={`Embarque ${data?.code}`}>
+      
+      {/* POPUP FLOTANTE */}
+      {popup && (
+        <div className={`popup-toast ${popup.type}`}>
+          {popup.type === 'success' ? <CheckCircle size={18}/> : <AlertCircle size={18}/>}
+          <span>{popup.msg}</span>
+          <button onClick={() => setPopup(null)}><X size={14}/></button>
+        </div>
+      )}
 
-        <div className="top-nav-actions">
-          <Link href="/admin/shipments" className="btn-back">
-            <ArrowLeft size={16}/> Volver al listado
-          </Link>
-          <div className="status-badge-wrapper">
-             Estado Actual: <span className={`pill ${data.status.toLowerCase()}`}>{labelStatus(data.status)}</span>
-          </div>
+      <div className="detail-container">
+        
+        <div className="top-nav-row">
+          <Link href="/admin/shipments" className="btn-back"><ArrowLeft size={16}/> Volver</Link>
+          <div className="status-badge">Estado: <span className="pill">{labelStatus(data!.status)}</span></div>
         </div>
 
         {/* 1. HEADER RESUMEN */}
-        <header className="shipment-header-v3">
-          <div className="header-info">
-            <div className="id-tag"><Hash size={14}/> {data.code}</div>
-            <h1>{data.product_name} <small>{data.product_variety}</small></h1>
-            <p className="client-name">Cliente: <strong>{data.clients?.name}</strong></p>
+        <header className="shipment-header-modern">
+          <div className="h-left">
+            <div className="code-tag"><Hash size={14}/> {data?.code}</div>
+            <h1>{data?.product_name} <small>{data?.product_variety}</small></h1>
+            <p className="client">Cliente: <strong>{data?.client_name || (data as any)?.client?.name}</strong></p>
           </div>
-          <div className="header-stats">
-            <div className="stat-card">
-              <label><Package size={14}/> Cajas / Pallets</label>
-              <span>{data.boxes || 0} / {data.pallets || 0}</span>
-            </div>
-            <div className="stat-divider" />
-            <div className="stat-card">
-              <label><Scale size={14}/> Peso Neto</label>
-              <span>{data.weight_kg || 0} kg</span>
-            </div>
-            <div className="stat-divider" />
-            <div className="stat-card">
-              <label><Globe size={14}/> Destino</label>
-              <span>{data.destination_port || data.destination}</span>
-            </div>
+          <div className="h-right">
+            <div className="h-stat"><label><Package size={14}/> Cajas / Pallets</label><span>{data?.boxes || 0} / {data?.pallets || 0}</span></div>
+            <div className="divider-v" />
+            <div className="h-stat"><label><Scale size={14}/> Peso Neto</label><span>{data?.weight_kg || 0} kg</span></div>
+            <div className="divider-v" />
+            <div className="h-stat"><label><Globe size={14}/> Destino</label><span>{data?.destination}</span></div>
           </div>
         </header>
 
         <div className="main-grid-layout">
           
           <div className="left-column">
-            {/* BLOQUE DE CONFIGURACIÓN TÉCNICA */}
+            {/* ACCIONES E HITOS */}
             <section className="glass-card">
-              <div className="card-header">
-                <div className="title-group"><Info size={18} /> <h3>Configuración técnica</h3></div>
-                <button className="btn-save-config" onClick={saveConfig} disabled={busy}>
-                  {busy ? <Loader2 size={14} className="spin"/> : 'Actualizar Datos'}
-                </button>
-              </div>
-              <div className="config-form-grid">
-                <div className="f-group"><label>Producto</label><input value={editForm.product_name} onChange={e => setEditForm({...editForm, product_name: e.target.value})} /></div>
-                <div className="f-group"><label>Variedad</label><input value={editForm.product_variety} onChange={e => setEditForm({...editForm, product_variety: e.target.value})} /></div>
-                <div className="f-group"><label>Calibre</label><input value={editForm.caliber} onChange={e => setEditForm({...editForm, caliber: e.target.value})} /></div>
-                <div className="f-group"><label>Color</label><input value={editForm.color} onChange={e => setEditForm({...editForm, color: e.target.value})} /></div>
-                <div className="f-group"><label><Droplets size={12}/> Brix</label><input value={editForm.brix_grade} onChange={e => setEditForm({...editForm, brix_grade: e.target.value})} /></div>
-                <div className="f-group"><label>Incoterm</label><input value={editForm.incoterm} onChange={e => setEditForm({...editForm, incoterm: e.target.value})} /></div>
-                <div className="f-group"><label>Cajas</label><input type="number" value={editForm.boxes} onChange={e => setEditForm({...editForm, boxes: parseInt(e.target.value)})} /></div>
-                <div className="f-group"><label>Pallets</label><input type="number" value={editForm.pallets} onChange={e => setEditForm({...editForm, pallets: parseInt(e.target.value)})} /></div>
-                <div className="f-group"><label>Peso (kg)</label><input type="number" value={editForm.weight_kg} onChange={e => setEditForm({...editForm, weight_kg: parseFloat(e.target.value)})} /></div>
-              </div>
-            </section>
-
-            {/* CONTROL DE HITOS */}
-            <section className="glass-card spacing-top">
-              <div className="card-header"><ClipboardCheck size={18} /> <h3>Control de Hitos de Progreso</h3></div>
+              <div className="card-head"><ClipboardCheck size={18}/> <h3>Control de Hitos</h3></div>
               <div className="milestone-controls">
-                <div className="inputs-row">
-                  <div className="f-group full"><label>Observaciones/Nota para el Cliente</label><textarea placeholder="Detalla novedades para el cliente..." value={note} onChange={e => setNote(e.target.value)} /></div>
-                  <div className="f-group"><label>N° de Vuelo</label><input value={flight} onChange={e => setFlight(e.target.value)} /></div>
-                  <div className="f-group"><label>N° Guía AWB</label><input value={awb} onChange={e => setAwb(e.target.value)} /></div>
+                <div className="input-group-row">
+                  <div className="f-item full"><label>Nota de estado</label><textarea placeholder="Detalles para el cliente..." value={note} onChange={e => setNote(e.target.value)} /></div>
+                  <div className="f-item"><label>Vuelo *</label><input value={flight} onChange={e => setFlight(e.target.value)} placeholder="Ej: IB123" /></div>
+                  <div className="f-item"><label>AWB</label><input value={awb} onChange={e => setAwb(e.target.value)} placeholder="Ej: 123-..." /></div>
                 </div>
-                <div className="buttons-grid">
+                <div className="actions-buttons-grid">
                   {CHAIN.map(step => (
-                    <button key={step} className={`btn-step ${data.status === step ? 'active' : ''}`} onClick={() => handleUpdateStatus(step)} disabled={busy}>
+                    <button key={step} className={`btn-step ${data?.status === step ? 'active' : ''}`} onClick={() => mark(step)} disabled={busy}>
                       {labelStatus(step)}
                     </button>
                   ))}
@@ -261,21 +271,31 @@ export default function AdminShipmentDetail() {
               </div>
             </section>
 
-            {/* FOTOS */}
+            {/* DATOS TÉCNICOS */}
             <section className="glass-card spacing-top">
-              <div className="card-header-between">
-                <div className="title-group"><ImageIcon size={18}/> <h3>Evidencia Fotográfica</h3></div>
-                <label className="btn-add-mini">
+              <div className="card-head"><Info size={18}/> <h3>Datos de Empaque</h3></div>
+              <div className="technical-grid">
+                <div className="f-item"><label>Calibre *</label><input value={caliber} onChange={e => setCaliber(e.target.value)} /></div>
+                <div className="f-item"><label>Color *</label><input value={color} onChange={e => setColor(e.target.value)} /></div>
+              </div>
+            </section>
+
+            {/* REGISTRO FOTOGRÁFICO */}
+            <section className="glass-card spacing-top">
+              <div className="card-head-between">
+                <div className="title-group"><ImageIcon size={18}/> <h3>Fotos de Evidencia</h3></div>
+                <label className="btn-upload-photo">
                   <PlusCircle size={14}/> Subir Foto
-                  <input type="file" hidden accept="image/*" onChange={e => e.target.files?.[0] && uploadFile('photo', e.target.files[0])} />
+                  <input type="file" accept="image/*" hidden disabled={busy} onChange={e => e.target.files?.[0] && upload("photo", e.target.files[0])} />
                 </label>
               </div>
-              <div className="photo-grid">
-                {data.shipment_photos?.map((p: any) => (
-                  <div key={p.id} className="photo-card">
-                    <img src={`https://oqgkbduqztrpfhfclker.supabase.co/storage/v1/object/public/shipment-photos/${p.file_url}`} alt="evidencia" />
-                    <div className="photo-overlay">
-                        <button className="del-btn" onClick={() => deleteFile(p.id, 'photo')}><Trash2 size={14}/></button>
+              <div className="photo-grid-modern">
+                {data?.photos?.map(p => (
+                  <div key={p.id} className="photo-box">
+                    {p.url ? <img src={p.url} alt="Foto" /> : <div className="placeholder" />}
+                    <div className="overlay">
+                      <button onClick={() => download(p.id)}><Download size={16}/></button>
+                      <button onClick={() => deleteFile(p.id, "photo")} className="del"><X size={16}/></button>
                     </div>
                   </div>
                 ))}
@@ -284,28 +304,28 @@ export default function AdminShipmentDetail() {
           </div>
 
           <aside className="right-column">
-            {/* DOCUMENTACIÓN */}
+            {/* DOCUMENTOS */}
             <section className="glass-card">
-              <div className="card-header"><FileText size={18} /> <h3>Expediente Digital</h3></div>
-              <div className="docs-list">
+              <div className="card-head"><FileText size={18}/> <h3>Documentación</h3></div>
+              <div className="docs-list-modern">
                 {DOC_TYPES.map(type => {
-                  const doc = data.shipment_documents?.find((d: any) => d.doc_type === type.v);
+                  const doc = data?.documents?.find(d => d.doc_type === type.v);
                   return (
-                    <div key={type.v} className={`doc-row ${doc ? 'active' : 'empty'}`}>
-                      <div className="doc-indicator" />
+                    <div key={type.v} className={`doc-item ${doc ? 'is-ok' : 'is-off'}`}>
                       <div className="doc-info">
                         <span className="doc-name">{type.l}</span>
-                        <span className="doc-status">{doc ? 'Completado' : 'Pendiente'}</span>
+                        <span className="doc-status">{doc ? 'Cargado' : 'Pendiente'}</span>
                       </div>
                       <div className="doc-actions">
                         {doc ? (
-                          <div className="doc-actions-done">
-                            <button onClick={() => deleteFile(doc.id, 'doc')} className="btn-icon-del"><X size={14}/></button>
+                          <div className="actions-ok">
+                            <button onClick={() => download(doc.id)} className="btn-dl"><Download size={14}/></button>
+                            <button onClick={() => deleteFile(doc.id, "doc")} className="btn-del"><X size={14}/></button>
                           </div>
                         ) : (
-                          <label className="btn-icon-up">
+                          <label className="btn-up">
                             <PlusCircle size={14}/>
-                            <input type="file" hidden onChange={e => e.target.files?.[0] && uploadFile('doc', e.target.files[0], type.v)} />
+                            <input type="file" hidden onChange={e => { setDocType(type.v); if(e.target.files?.[0]) upload("doc", e.target.files[0]); }} />
                           </label>
                         )}
                       </div>
@@ -315,119 +335,94 @@ export default function AdminShipmentDetail() {
               </div>
             </section>
 
-            {/* HISTORIAL / TIMELINE */}
+            {/* TIMELINE */}
             <section className="glass-card spacing-top">
-              <div className="card-header"><CheckCircle size={18}/> <h3>Historial Cliente</h3></div>
-              <div className="timeline-wrapper">
-                <ModernTimeline milestones={data.status_history?.map((h: any) => ({
-                  id: h.id, type: h.type, created_at: h.at || h.created_at, note: h.note
-                }))} />
-              </div>
+              <div className="card-head"><CheckCircle size={18}/> <h3>Línea de Tiempo</h3></div>
+              <ModernTimeline milestones={timelineItems as any} />
             </section>
           </aside>
         </div>
       </div>
 
       <style jsx>{`
-        .admin-container { padding: 20px 40px; background: #f8fafc; min-height: 100vh; position: relative; font-family: 'Inter', sans-serif; }
+        .detail-container { padding: 20px 40px; background: #f8fafc; min-height: 100vh; }
         
-        /* POPUP SYSTEM */
-        .popup-msg {
-          position: fixed; top: 20px; right: 20px; z-index: 9999;
+        /* POPUP TOAST */
+        .popup-toast {
+          position: fixed; top: 25px; right: 25px; z-index: 9999;
           display: flex; align-items: center; gap: 12px;
           padding: 16px 20px; border-radius: 16px;
           color: white; font-weight: 700; font-size: 14px;
           box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);
-          animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          animation: slideIn 0.3s ease-out;
         }
-        .popup-msg.success { background: #16a34a; border-left: 5px solid #052e16; }
-        .popup-msg.error { background: #dc2626; border-left: 5px solid #450a0a; }
-        .popup-msg button { background: transparent; border: none; color: white; cursor: pointer; opacity: 0.7; }
+        .popup-toast.success { background: #16a34a; border-left: 5px solid #052e16; }
+        .popup-toast.error { background: #dc2626; border-left: 5px solid #450a0a; }
+        .popup-toast button { background: transparent; border: none; color: white; cursor: pointer; opacity: 0.7; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-        /* LOADER */
-        .loader-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh; gap: 15px; color: #64748b; font-weight: 600; }
-
         /* HEADER */
-        .shipment-header-v3 { background: #fff; padding: 25px 30px; border-radius: 24px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .id-tag { background: #eff6ff; color: #2563eb; padding: 4px 10px; border-radius: 8px; font-family: monospace; font-weight: 800; font-size: 11px; display: flex; align-items: center; gap: 5px; }
-        .header-info h1 { font-size: 24px; font-weight: 900; margin: 8px 0 2px; color: #0f172a; }
-        .header-info h1 small { color: #64748b; font-weight: 400; font-size: 16px; margin-left: 8px; }
-        .client-name { color: #64748b; font-size: 14px; margin: 0; }
+        .shipment-header-modern { 
+          background: #fff; padding: 25px 30px; border-radius: 24px; border: 1px solid #e2e8f0; 
+          display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; 
+          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .code-tag { background: #eff6ff; color: #2563eb; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 12px; display: flex; align-items: center; gap: 5px; width: fit-content; }
+        .h-left h1 { font-size: 24px; font-weight: 900; margin: 8px 0 2px; }
+        .h-left h1 small { color: #64748b; font-weight: 400; font-size: 16px; margin-left: 8px; }
+        .h-right { display: flex; gap: 24px; background: #f8fafc; padding: 12px 20px; border-radius: 16px; }
+        .h-stat { display: flex; flex-direction: column; }
+        .h-stat label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; display: flex; align-items: center; gap: 4px; }
+        .h-stat span { font-size: 15px; font-weight: 800; color: #1e293b; }
+        .divider-v { width: 1px; height: 30px; background: #e2e8f0; }
 
-        .header-stats { display: flex; gap: 24px; background: #f8fafc; padding: 12px 20px; border-radius: 16px; border: 1px solid #f1f5f9; }
-        .stat-card { display: flex; flex-direction: column; }
-        .stat-card label { font-size: 9px; font-weight: 800; color: #94a3b8; text-transform: uppercase; display: flex; align-items: center; gap: 4px; margin-bottom: 2px; }
-        .stat-card span { font-size: 15px; font-weight: 800; color: #1e293b; }
-        .stat-divider { width: 1px; height: 30px; background: #e2e8f0; }
-
-        /* NAVIGATION */
-        .top-nav-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-        .btn-back { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #64748b; text-decoration: none; transition: 0.2s; }
-        .btn-back:hover { color: #0f172a; }
-
-        /* LAYOUT & CARDS */
-        .main-grid-layout { display: grid; grid-template-columns: 1fr 360px; gap: 24px; }
-        .glass-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 22px; transition: box-shadow 0.3s; }
-        .glass-card:hover { box-shadow: 0 10px 15px -3px rgba(0,0,0,0.02); }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .card-header-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .title-group { display: flex; align-items: center; gap: 10px; }
-        .card-header h3 { font-size: 13px; font-weight: 900; margin: 0; text-transform: uppercase; color: #1e293b; letter-spacing: 0.5px; }
+        /* GRID */
+        .top-nav-row { display: flex; justify-content: space-between; margin-bottom: 15px; }
+        .main-grid-layout { display: grid; grid-template-columns: 1fr 340px; gap: 24px; }
+        .glass-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 20px; }
         .spacing-top { margin-top: 24px; }
+        .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+        .card-head h3 { font-size: 13px; font-weight: 900; text-transform: uppercase; color: #1e293b; margin: 0; }
+        .card-head-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 
-        /* CONFIG FORM */
-        .config-form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-        .f-group { display: flex; flex-direction: column; gap: 4px; }
-        .f-group label { font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.3px; }
-        .f-group input, .f-group textarea { padding: 11px; border-radius: 10px; border: 1px solid #e2e8f0; font-size: 13px; font-weight: 600; outline: none; transition: 0.2s; background: #fcfcfc; }
-        .f-group input:focus { border-color: #16a34a; background: #fff; box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.05); }
-        .full { grid-column: span 3; }
-        .btn-save-config { background: #0f172a; color: #fff; border: none; padding: 10px 18px; border-radius: 12px; font-size: 12px; font-weight: 700; cursor: pointer; transition: 0.2s; }
-        .btn-save-config:hover { background: #1e293b; transform: translateY(-1px); }
+        /* FORMS */
+        .input-group-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #f8fafc; padding: 20px; border-radius: 16px; margin-bottom: 15px; }
+        .f-item { display: flex; flex-direction: column; gap: 6px; }
+        .f-item.full { grid-column: span 3; }
+        .f-item label { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; }
+        .f-item input, .f-item textarea { padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0; font-size: 13px; outline: none; }
+        .f-item textarea { height: 60px; resize: none; }
 
-        /* MILESTONE PROGRESS */
-        .inputs-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; background: #f8fafc; padding: 18px; border-radius: 14px; margin-bottom: 15px; border: 1px solid #f1f5f9; }
-        .buttons-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-        .btn-step { padding: 12px; border-radius: 12px; border: 1px solid #e2e8f0; background: #fff; font-size: 10px; font-weight: 800; cursor: pointer; transition: all 0.2s; color: #64748b; }
-        .btn-step:hover { border-color: #16a34a; color: #16a34a; background: #f0fdf4; }
-        .btn-step.active { background: #16a34a; color: #fff; border-color: #16a34a; box-shadow: 0 8px 15px rgba(22, 163, 74, 0.25); }
-
-        /* DOCS LIST */
-        .docs-list { display: flex; flex-direction: column; gap: 8px; }
-        .doc-row { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: 14px; border: 1px solid transparent; transition: 0.2s; }
-        .doc-row.active { background: #f0fdf4; border-color: #dcfce7; }
-        .doc-row.empty { background: #f8fafc; border-color: #f1f5f9; }
-        .doc-indicator { width: 8px; height: 8px; border-radius: 50%; background: #cbd5e1; flex-shrink: 0; }
-        .active .doc-indicator { background: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1); }
-        .doc-info { flex: 1; display: flex; flex-direction: column; }
-        .doc-name { font-size: 12px; font-weight: 700; color: #1e293b; }
-        .doc-status { font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; }
-
-        /* DOC ACTIONS */
-        .btn-icon-up { width: 32px; height: 32px; border-radius: 8px; background: #fff; border: 1px solid #e2e8f0; display: grid; place-items: center; cursor: pointer; color: #64748b; transition: 0.2s; }
-        .btn-icon-up:hover { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
-        .btn-icon-del { width: 32px; height: 32px; border-radius: 8px; background: #fff; border: 1px solid #fee2e2; display: grid; place-items: center; cursor: pointer; color: #ef4444; transition: 0.2s; }
-        .btn-icon-del:hover { background: #fef2f2; transform: scale(1.1); }
+        /* BUTTONS */
+        .actions-buttons-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+        .btn-step { padding: 12px 5px; border-radius: 10px; border: 1px solid #e2e8f0; background: #fff; font-size: 10px; font-weight: 800; cursor: pointer; transition: 0.2s; }
+        .btn-step.active { background: #16a34a; color: #fff; border-color: #16a34a; box-shadow: 0 4px 10px rgba(22, 163, 74, 0.2); }
+        .technical-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
 
         /* PHOTOS */
-        .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; }
-        .photo-card { position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden; border: 1px solid #e2e8f0; background: #f8fafc; }
-        .photo-card img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }
-        .photo-card:hover img { transform: scale(1.05); }
-        .photo-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.4); opacity: 0; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
-        .photo-card:hover .photo-overlay { opacity: 1; }
-        .btn-add-mini { font-size: 11px; font-weight: 800; color: #2563eb; background: #eff6ff; padding: 6px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; border: 1px solid #dbeafe; transition: 0.2s; }
-        .btn-add-mini:hover { background: #dbeafe; }
+        .photo-grid-modern { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+        .photo-box { position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden; border: 1px solid #e2e8f0; background: #f1f5f9; }
+        .photo-box img { width: 100%; height: 100%; object-fit: cover; }
+        .overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); display: flex; gap: 10px; align-items: center; justify-content: center; opacity: 0; transition: 0.2s; }
+        .photo-box:hover .overlay { opacity: 1; }
+        .overlay button { width: 32px; height: 32px; border-radius: 8px; border: none; cursor: pointer; display: grid; place-items: center; background: #fff; color: #1e293b; }
+        .overlay button.del { background: #ef4444; color: #fff; }
 
-        /* STATUS PILLS */
-        .pill { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; }
-        .pill.packed { background: #fef3c7; color: #d97706; }
-        .pill.docs_ready { background: #dcfce7; color: #16a34a; }
-        .pill.in_transit { background: #dbeafe; color: #2563eb; }
+        /* DOCS */
+        .docs-list-modern { display: flex; flex-direction: column; gap: 8px; }
+        .doc-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-radius: 12px; border: 1px solid #f1f5f9; }
+        .doc-item.is-ok { background: #f0fdf4; border-color: #dcfce7; }
+        .doc-item.is-off { background: #f8fafc; border-style: dashed; }
+        .doc-name { display: block; font-size: 12px; font-weight: 800; color: #1e293b; }
+        .doc-status { font-size: 10px; color: #94a3b8; font-weight: 600; text-transform: uppercase; }
+        .btn-up, .btn-dl, .btn-del { cursor: pointer; display: grid; place-items: center; transition: 0.2s; }
+        .btn-dl { color: #16a34a; }
+        .btn-del { color: #ef4444; margin-left: 8px; }
+        .actions-ok { display: flex; align-items: center; }
 
-        .spin { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .loader { height: 80vh; display: grid; place-items: center; color: #16a34a; }
+        .spin { animation: rotate 1s linear infinite; }
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </AdminLayout>
   );
