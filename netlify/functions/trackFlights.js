@@ -1,5 +1,5 @@
 // netlify/functions/trackFlights.js
-const { createClient } = require('@supabase/supabase-api');
+const { createClient } = require('@supabase/supabase-js');
 const axios = require('axios');
 
 exports.handler = async () => {
