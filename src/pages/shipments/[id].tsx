@@ -350,17 +350,40 @@ export default function ShipmentDetailPage() {
   .header-icon.orange { background: #fff7ed; color: #ea580c; }
 
   /* 2. PREMIUM HEADER */
-  .ff-header-premium {
-    background: #ffffff;
-    padding: 28px 36px;
-    border-radius: 24px;
-    border: 1px solid #f1f5f9;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 30px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.02);
-  }
+ .ff-header-premium {
+  /* Fondo: Blanco con un toque de naranja ultra sutil (3% opacidad) */
+  background: linear-gradient(135deg, #ffffff 0%, rgba(209, 119, 17, 0.03) 100%);
+  
+  padding: 28px 36px;
+  border-radius: 24px;
+  
+  /* Borde: Usamos el naranja al 10% para que defina la forma sin "gritar" */
+  border: 1px solid rgba(209, 119, 17, 0.1);
+  
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+  
+  /* Sombra: Un poco de naranja en la sombra hace que el componente "flote" mejor */
+  box-shadow: 0 10px 30px rgba(209, 119, 17, 0.05);
+  
+  /* Efecto Glassmorphism opcional */
+  backdrop-filter: blur(4px);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Detalle premium: una línea naranja muy fina en la parte superior */
+.ff-header-premium::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(209, 119, 17, 0.3), transparent);
+}
 
   .ff-id-badge { 
     display: inline-flex; align-items: center; gap: 8px; 
