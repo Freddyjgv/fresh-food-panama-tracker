@@ -44,8 +44,18 @@ export const handler: Handler = async (event) => {
       weight_kg,
       incoterm,
       milestones(at),
-      clients(name, legal_name, tax_id, country, logo_url)
-    `;
+      *,
+  clients (
+name, 
+    legal_name, 
+    tax_id, 
+    country, 
+    logo_url, 
+    phone, 
+    website, 
+    billing_address
+  )
+`;
 
     let query = sbAdmin.from("shipments").select(selectFields, { count: "exact" });
 
