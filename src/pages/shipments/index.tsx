@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, Calendar, Package, MapPin, RefreshCcw, Plane, PlusCircle, ArrowRight, Layers } from "lucide-react";
+import { Search, Calendar, Package, MapPin, RefreshCcw, Plane, PlusCircle, ArrowRight, Plus, Layers } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import { labelStatus, statusBadgeClass } from "../../lib/shipmentFlow";
 import { ClientLayout } from "../../components/ClientLayout";
@@ -20,11 +20,14 @@ type Shipment = {
   client_name?: string;
   last_event_at?: string; // Nueva propiedad que envía Netlify
   clients?: {
+    id: string;
     name: string;
-    legal_name?: string;
-    tax_id?: string;
-    country?: string;
-    logo_url?: string;
+    logo_url?: string | null;
+    tax_id?: string | null;
+    billing_address?: string | null;
+    phone?: string | null;
+    website?: string | null;
+    country?: string | null;
   }; 
 };
 
@@ -94,44 +97,60 @@ export default function ShipmentsPage() {
     <ClientLayout title="Panel de Logística" wide>
       <div className="md-container">
         
-       <header className="ff-header-portal-clean">
-  <div className="ff-header-main-content">
+      <header className="ff-header-premium">
+  {/* LADO IZQUIERDO: PERFIL REAL CON DATOS DE LA TABLA CLIENTS */}
+  <div className="ff-client-profile">
+    <div className="ff-logo-wrapper">
+      {items[0]?.clients?.logo_url ? (
+        <img 
+          src={`https://oqgkbduqztrpfhfclker.supabase.co/storage/v1/object/public/client-logos/${items[0].clients.logo_url}`} 
+          alt="Logo" 
+          className="ff-logo-img"
+        />
+      ) : (
+        <div className="ff-logo-placeholder">
+          {items[0]?.client_name?.charAt(0) || 'C'}
+        </div>
+      )}
+    </div>
     
-    {/* IZQUIERDA: IDENTIDAD DEL CLIENTE */}
-    <div className="ff-client-profile-minimal">
-      <div className="ff-logo-container-glass">
-        {items[0]?.clients?.logo_url ? (
-          <img 
-            src={`https://oqgkbduqztrpfhfclker.supabase.co/storage/v1/object/public/client-logos/${items[0].clients.logo_url}`} 
-            alt="Logo" 
-            className="ff-logo-img-clean"
-          />
-        ) : (
-          <div className="ff-logo-placeholder-clean">
-            {items[0]?.client_name?.charAt(0) || 'C'}
-          </div>
-        )}
-      </div>
+    <div className="ff-client-info">
+      <h1 className="ff-client-name-display">
+        {items[0]?.clients?.name || items[0]?.client_name || 'Panel de Control'}
+      </h1>
       
-      <div className="ff-client-text">
-        <h1 className="ff-client-title">{items[0]?.client_name || 'Panel de Cliente'}</h1>
-        <div className="ff-client-id-pill">
-          <span className="ff-id-label">TAX ID:</span>
-          <span className="ff-id-value">{items[0]?.clients?.tax_id || '—'}</span>
+      <div className="ff-client-meta-stack">
+        <div className="ff-meta-row">
+          <span className="ff-meta-label">TAX ID:</span>
+          <span className="ff-meta-value">{items[0]?.clients?.tax_id || '—'}</span>
+          <span className="ff-meta-divider">•</span>
+          {/* Usamos billing_address que es tu columna real */}
+          <span className="ff-meta-value">{items[0]?.clients?.billing_address || '—'}</span>
+        </div>
+        
+        <div className="ff-meta-row ff-secondary-meta">
+          {/* Usamos phone y website de tu tabla */}
+          <span className="ff-meta-value">{items[0]?.clients?.phone || '—'}</span>
+          {items[0]?.clients?.website && (
+            <>
+              <span className="ff-meta-divider">|</span>
+              <span className="ff-meta-value ff-website-link">{items[0].clients.website}</span>
+            </>
+          )}
         </div>
       </div>
     </div>
+  </div>
 
-    {/* DERECHA: ACCIÓN ÚNICA Y DISCRETA */}
-    <div className="ff-header-action-zone">
-      <button 
-        className="ff-btn-request-quote"
-        onClick={() => window.open(`https://wa.me/TUNUMERO?text=Hola, deseo solicitar una nueva cotización.`, '_blank')}
-      >
-        <PlusCircle size={14} />
-        <span>NUEVA COTIZACIÓN</span>
-      </button>
-    </div>
+  {/* LADO DERECHO: BOTÓN REFINADO (CÁPSULA) */}
+  <div className="ff-header-actions">
+    <button 
+      className="ff-btn-quote-minimal"
+      onClick={() => window.open(`https://wa.me/TUNUMERO?text=Hola, deseo solicitar una nueva cotización.`, '_blank')}
+    >
+      <Plus size={14} />
+      <span>SOLICITAR COTIZACIÓN</span>
+    </button>
   </div>
 </header>
 
@@ -236,6 +255,110 @@ export default function ShipmentsPage() {
     padding: 24px 32px;
     margin-bottom: 30px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+  }
+
+  .ff-header-premium {
+    /* Gradiente 3% Naranja según tu especificación */
+    background: linear-gradient(135deg, #ffffff 0%, rgba(209, 119, 17, 0.03) 100%);
+    padding: 28px 36px;
+    border-radius: 24px;
+    border: 1px solid rgba(209, 119, 17, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 30px;
+    box-shadow: 0 10px 30px rgba(209, 119, 17, 0.05);
+    backdrop-filter: blur(4px);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ff-client-profile {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .ff-logo-wrapper {
+    width: 70px;
+    height: 70px;
+    background: white;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(0,0,0,0.03);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+  }
+
+  .ff-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 10px;
+  }
+
+  .ff-client-name-display {
+    font-size: 22px;
+    font-weight: 800;
+    color: #1a202c;
+    margin: 0 0 6px 0;
+    letter-spacing: -0.03em;
+  }
+
+  .ff-client-meta-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .ff-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #4a5568;
+  }
+
+  .ff-meta-label {
+    font-weight: 700;
+    color: #718096;
+    font-size: 10px;
+  }
+
+  .ff-meta-divider {
+    color: rgba(209, 119, 17, 0.3);
+  }
+
+  .ff-secondary-meta {
+    opacity: 0.8;
+  }
+
+  .ff-website-link {
+    color: #d17711;
+    font-weight: 500;
+  }
+
+  .ff-btn-quote-minimal {
+    background: transparent;
+    border: 1px solid rgba(209, 119, 17, 0.3);
+    color: #d17711;
+    padding: 8px 20px;
+    border-radius: 50px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .ff-btn-quote-minimal:hover {
+    background: rgba(209, 119, 17, 0.05);
+    border-color: rgba(209, 119, 17, 0.6);
+    transform: translateY(-1px);
   }
 
   .ff-header-main-content {
