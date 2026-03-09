@@ -22,6 +22,7 @@ type Shipment = {
   clients?: {
     id: string;
     name: string;
+    legal_name: string;
     logo_url?: string | null;
     tax_id?: string | null;
     billing_address?: string | null;
@@ -94,72 +95,66 @@ export default function ShipmentsPage() {
   useEffect(() => { fetchShipments(); }, [destFilter]);
 
   return (
-    <ClientLayout title="Panel de Logística" wide>
-      <div className="md-container">
-      <div className="ff-page-wrapper"></div>  
-
-      <header className="ff-header-premium">
-  {/* LADO IZQUIERDO: PERFIL REAL CON DATOS DE LA TABLA CLIENTS */}
-  <div className="ff-client-profile">
-    <div className="ff-logo-wrapper">
-      {items[0]?.clients?.logo_url ? (
-        <img 
-          src={`https://oqgkbduqztrpfhfclker.supabase.co/storage/v1/object/public/client-logos/${items[0].clients.logo_url}`} 
-          alt="Logo" 
-          className="ff-logo-img"
-        />
-      ) : (
-        <div className="ff-logo-placeholder">
-          {items[0]?.client_name?.charAt(0) || 'C'}
-        </div>
-      )}
-    </div>
-    
-    <div className="ff-client-info">
-      <h1 className="ff-client-name-display">
-        {items[0]?.clients?.name || items[0]?.client_name || 'Panel de Control'}
-      </h1>
+  <ClientLayout title="Panel de Logística" wide>
+    {/* 1. Este wrapper es el que controla el ancho completo y el padding lateral */}
+    <div className="ff-page-wrapper">
       
-      <div className="ff-client-meta-stack">
-  {/* FILA 1: TAX ID */}
-  <div className="ff-meta-row">
-    <span className="ff-meta-label">TAX ID:</span>
-    <span className="ff-meta-value">{items[0]?.clients?.tax_id || '—'}</span>
-  </div>
-  
-  {/* FILA 2: DIRECCIÓN (Justo debajo del TAX ID) */}
-  <div className="ff-meta-row">
-    <span className="ff-meta-label">Dirección:</span>
-    <span className="ff-meta-value">{items[0]?.clients?.billing_address || '—'}</span>
-  </div>
-  
-  {/* FILA 3: CONTACTO */}
-  <div className="ff-meta-row ff-secondary-meta">
-    <span className="ff-meta-label">Telf:</span>
-    <span className="ff-meta-value">{items[0]?.clients?.phone || '—'}</span>
-    {items[0]?.clients?.website && (
-      <>
-        <span className="ff-meta-divider">|</span>
-        <span className="ff-meta-label">Web:</span>
-        <span className="ff-meta-value ff-website-link">{items[0].clients.website}</span>
-      </>
-    )}
-  </div>
-</div>
-    </div>
-  </div>
+      <header className="ff-header-premium">
+        {/* LADO IZQUIERDO: PERFIL */}
+        <div className="ff-client-profile">
+          <div className="ff-logo-wrapper">
+            {items[0]?.clients?.logo_url ? (
+              <img 
+                src={`https://oqgkbduqztrpfhfclker.supabase.co/storage/v1/object/public/client-logos/${items[0].clients.logo_url}`} 
+                alt="Logo" 
+                className="ff-logo-img"
+              />
+            ) : (
+              <div className="ff-logo-placeholder">
+                {items[0]?.clients?.name?.charAt(0) || 'C'}
+              </div>
+            )}
+          </div>
+          
+          <div className="ff-client-info">
+            <h1 className="ff-client-name-display">
+              {items[0]?.clients?.legal_name || items[0]?.clients?.name || 'Panel de Control'}
+            </h1>
+            
+            <div className="ff-client-meta-stack">
+              <div className="ff-meta-row">
+                <span className="ff-meta-label">TAX ID:</span>
+                <span className="ff-meta-value">{items[0]?.clients?.tax_id || '—'}</span>
+              </div>
+              
+              <div className="ff-meta-row">
+                <span className="ff-meta-value">{items[0]?.clients?.billing_address || '—'}</span>
+              </div>
+              
+              <div className="ff-meta-row ff-secondary-meta">
+                <span className="ff-meta-value">T: {items[0]?.clients?.phone || '—'}</span>
+                {items[0]?.clients?.website && (
+                  <>
+                    <span className="ff-meta-divider">|</span>
+                    <span className="ff-meta-value ff-website-link">{items[0].clients.website}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
-  {/* LADO DERECHO: BOTÓN REFINADO (CÁPSULA) */}
-  <div className="ff-header-actions">
-    <button 
-      className="ff-btn-quote-minimal"
-      onClick={() => window.open(`https://wa.me/TUNUMERO?text=Hola, deseo solicitar una nueva cotización.`, '_blank')}
-    >
-      <Plus size={14} />
-      <span>SOLICITAR COTIZACIÓN</span>
-    </button>
-  </div>
-</header>
+        {/* LADO DERECHO: BOTÓN */}
+        <div className="ff-header-actions">
+          <button 
+            className="ff-btn-quote-minimal"
+            onClick={() => window.open(`https://wa.me/34932620121?text=Hola, deseo solicitar una nueva cotización.`, '_blank')}
+          >
+            <Plus size={14} />
+            <span>SOLICITAR COTIZACIÓN</span>
+          </button>
+        </div>
+      </header>
 
         <div className="md-toolbar">
           <div className="md-search-box">
