@@ -11,11 +11,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // PALETA FRESHFOOD PANAMA
   const FF_DARK_GREEN = "#234d23";
 
-  /** * ✅ TU LÓGICA ORIGINAL DE REDIRECCIÓN 
-   */
   async function routeByRole(): Promise<boolean> {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
@@ -72,7 +69,7 @@ export default function LoginPage() {
     setLoading(false);
 
     if (!redirected) {
-      setError("Sesión creada, pero no se pudo determinar tu rol. Intenta de nuevo.");
+      setError("Sesión creada, pero no se pudo determinar tu rol.");
     }
   }
 
@@ -81,10 +78,10 @@ export default function LoginPage() {
       <div className="ff-login-viewport">
         <div className="ff-loading-box">
           <div className="ff-spinner"></div>
-          <p style={{ color: FF_DARK_GREEN }}>Verificando credenciales FreshFood...</p>
+          <p>Sincronizando con Fresh Connect...</p>
         </div>
         <style jsx>{`
-          .ff-login-viewport { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #ffffff; }
+          .ff-login-viewport { min-height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Poppins', sans-serif; }
           .ff-spinner { width: 30px; height: 30px; border: 3px solid #f1f5f9; border-top-color: ${FF_DARK_GREEN}; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px; }
           @keyframes spin { to { transform: rotate(360deg); } }
         `}</style>
@@ -96,28 +93,28 @@ export default function LoginPage() {
     <div className="ff-login-viewport">
       <div className="ff-login-container">
         
-        {/* LADO IZQUIERDO: VISUAL (VISTA AÉREA) */}
+        {/* LADO IZQUIERDO: CAMPO DE PIÑAS */}
         <div className="ff-login-visual">
           <div className="ff-visual-overlay"></div>
           <div className="ff-visual-content">
-            <img 
-              src="/brand/freshfood_logo.png" 
-              alt="FreshFood Panama" 
-              className="ff-v-logo" 
-            />
             <h2>Logística de exportación que conecta a Panamá con el mundo.</h2>
             <div className="ff-features">
               <div className="ff-f-item"><CheckCircle2 size={16} /> <span>Trazabilidad Fresh Connect</span></div>
-              <div className="ff-f-item"><CheckCircle2 size={16} /> <span>Documentación Centralizada</span></div>
+              <div className="ff-f-item"><CheckCircle2 size={16} /> <span>Gestión de Documentos</span></div>
             </div>
           </div>
         </div>
 
-        {/* LADO DERECHO: FORMULARIO */}
+        {/* LADO DERECHO: FORMULARIO CON LOGO CENTRADO */}
         <div className="ff-login-form-side">
           <div className="ff-form-header">
+            <img 
+              src="/public/brand/freshfood_logo.png" 
+              alt="FreshFood Panama" 
+              className="ff-form-logo" 
+            />
             <h1>Portal de Clientes</h1>
-            <p>Ingresa tus datos para gestionar tus embarques.</p>
+            <p>Ingresa tus credenciales para continuar.</p>
           </div>
 
           <form onSubmit={onSubmit} className="ff-login-form">
@@ -127,7 +124,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 type="email"
-                placeholder="usuario@freshfoodpanama.com"
+                placeholder="ejemplo@freshfoodpanama.com"
                 required
               />
             </div>
@@ -153,81 +150,95 @@ export default function LoginPage() {
 
           <div className="ff-form-footer">
             <ShieldCheck size={14} />
-            <span>Seguridad FreshFood | Acceso Encriptado</span>
+            <span>Acceso Encriptado SSL</span>
           </div>
         </div>
       </div>
 
       <style jsx>{`
+        /* Importar Poppins si no está en tu layout global */
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;700;800;900&display=swap');
+
         .ff-login-viewport {
           min-height: 100vh;
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #f0f4f1;
+          background: #f4f7f5;
           padding: 24px;
-          font-family: 'Inter', system-ui, sans-serif;
+          font-family: 'Poppins', sans-serif;
         }
 
         .ff-login-container {
           display: flex;
           width: 100%;
-          max-width: 1000px;
-          min-height: 620px;
+          max-width: 1050px;
+          min-height: 640px;
           background: white;
-          border-radius: 32px;
+          border-radius: 40px;
           overflow: hidden;
-          box-shadow: 0 40px 100px -20px rgba(35, 77, 35, 0.2);
+          box-shadow: 0 40px 100px -20px rgba(35, 77, 35, 0.15);
         }
 
         .ff-login-visual {
-          flex: 1;
-          background-image: url('https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80'); 
+          flex: 1.2;
+          background-image: url('/public/brand/pineapplefield.jpg'); 
           background-size: cover;
           background-position: center;
           position: relative;
           display: flex;
-          padding: 48px;
+          padding: 50px;
           align-items: flex-end;
         }
 
         .ff-visual-overlay {
           position: absolute;
           inset: 0;
-          background: linear-gradient(135deg, rgba(35, 77, 35, 0.85) 0%, rgba(0,0,0,0.4) 100%);
+          background: linear-gradient(135deg, rgba(35, 77, 35, 0.8) 0%, rgba(0,0,0,0.3) 100%);
         }
 
         .ff-visual-content { position: relative; z-index: 2; color: white; }
-        .ff-v-logo { height: 60px; margin-bottom: 24px; filter: brightness(0) invert(1); } /* Fuerza el logo a blanco si el fondo es oscuro */
-        .ff-visual-content h2 { font-size: 24px; font-weight: 300; line-height: 1.3; margin-bottom: 32px; letter-spacing: -0.02em; }
+        .ff-visual-content h2 { font-size: 26px; font-weight: 300; line-height: 1.3; margin-bottom: 24px; }
         .ff-features { display: grid; gap: 12px; }
-        .ff-f-item { display: flex; align-items: center; gap: 10px; font-size: 14px; opacity: 0.9; font-weight: 500; }
+        .ff-f-item { display: flex; align-items: center; gap: 10px; font-size: 14px; opacity: 0.9; }
 
         .ff-login-form-side {
-          width: 440px;
+          flex: 1;
           padding: 60px;
           display: flex;
           flex-direction: column;
           justify-content: center;
+          align-items: center; /* Centra el contenido del formulario */
+          text-align: center;
         }
 
-        .ff-form-header h1 { font-size: 28px; font-weight: 900; color: ${FF_DARK_GREEN}; margin-bottom: 6px; letter-spacing: -0.04em; }
-        .ff-form-header p { color: #64748b; font-size: 14px; margin-bottom: 36px; }
+        .ff-form-logo {
+          height: 65px;
+          width: auto;
+          margin-bottom: 20px;
+          object-fit: contain;
+        }
 
+        .ff-form-header { width: 100%; }
+        .ff-form-header h1 { font-size: 26px; font-weight: 800; color: ${FF_DARK_GREEN}; margin-bottom: 4px; letter-spacing: -0.03em; }
+        .ff-form-header p { color: #64748b; font-size: 13px; margin-bottom: 35px; }
+
+        .ff-login-form { width: 100%; text-align: left; }
         .ff-input-group { margin-bottom: 20px; }
-        .ff-input-group label { display: block; font-size: 11px; font-weight: 800; color: ${FF_DARK_GREEN}; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.05em; }
+        .ff-input-group label { display: block; font-size: 11px; font-weight: 700; color: ${FF_DARK_GREEN}; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.05em; }
         .ff-input-group input {
           width: 100%;
-          padding: 14px 16px;
-          border-radius: 12px;
+          padding: 14px 18px;
+          border-radius: 14px;
           border: 1.5px solid #edf2f7;
           background: #f8fafc;
-          font-size: 15px;
-          transition: all 0.2s;
+          font-family: 'Poppins', sans-serif;
+          font-size: 14px;
+          transition: 0.2s;
         }
-        .ff-input-group input:focus { border-color: ${FF_DARK_GREEN}; background: white; outline: none; box-shadow: 0 0 0 4px rgba(35, 77, 35, 0.05); }
+        .ff-input-group input:focus { border-color: ${FF_DARK_GREEN}; background: white; outline: none; box-shadow: 0 0 0 4px rgba(35, 77, 35, 0.06); }
 
-        .ff-error-msg { background: #fef2f2; border: 1px solid #fee2e2; color: #991b1b; padding: 12px; border-radius: 10px; font-size: 13px; margin-bottom: 20px; font-weight: 600; }
+        .ff-error-msg { background: #fff5f5; border: 1px solid #fed7d7; color: #c53030; padding: 12px; border-radius: 10px; font-size: 12px; margin-bottom: 20px; font-weight: 600; width: 100%; }
 
         .ff-submit-btn {
           width: 100%;
@@ -235,9 +246,10 @@ export default function LoginPage() {
           background: ${FF_DARK_GREEN};
           color: white;
           border: none;
-          border-radius: 12px;
+          border-radius: 14px;
           font-weight: 700;
-          font-size: 16px;
+          font-size: 15px;
+          font-family: 'Poppins', sans-serif;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -245,14 +257,13 @@ export default function LoginPage() {
           cursor: pointer;
           transition: 0.2s;
         }
-        .ff-submit-btn:hover { background: #1a3a1a; transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(35, 77, 35, 0.3); }
-        .ff-submit-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+        .ff-submit-btn:hover { background: #1a3a1a; transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(35, 77, 35, 0.2); }
 
-        .ff-form-footer { margin-top: 32px; display: flex; align-items: center; justify-content: center; gap: 8px; color: #a0aec0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+        .ff-form-footer { margin-top: 30px; display: flex; align-items: center; gap: 8px; color: #a0aec0; font-size: 11px; font-weight: 600; text-transform: uppercase; }
 
-        @media (max-width: 850px) {
+        @media (max-width: 900px) {
           .ff-login-visual { display: none; }
-          .ff-login-form-side { width: 100%; padding: 40px; }
+          .ff-login-form-side { padding: 40px; }
         }
       `}</style>
     </div>
