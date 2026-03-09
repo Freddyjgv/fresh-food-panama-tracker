@@ -96,7 +96,8 @@ export default function ShipmentsPage() {
   return (
     <ClientLayout title="Panel de Logística" wide>
       <div className="md-container">
-        
+      <div className="ff-page-wrapper"></div>  
+
       <header className="ff-header-premium">
   {/* LADO IZQUIERDO: PERFIL REAL CON DATOS DE LA TABLA CLIENTS */}
   <div className="ff-client-profile">
@@ -308,7 +309,7 @@ export default function ShipmentsPage() {
     font-size: 22px;
     font-weight: 800;
     color: #1a202c;
-    margin: 0 0 6px 0;
+    margin: 0 0 12px 0;
     letter-spacing: -0.03em;
   }
 
@@ -471,10 +472,6 @@ export default function ShipmentsPage() {
 .ff-logo-img { width: 100%; height: 100%; object-fit: contain; padding: 10px; }
 .ff-logo-placeholder { font-size: 32px; font-weight: 900; color: #cbd5e1; }
 
-.ff-client-name-display { 
-  font-size: 34px; font-weight: 900; color: #0f172a; 
-  letter-spacing: -0.04em; margin: 0; line-height: 0.9;
-}
 
 .ff-client-meta-row { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
 .ff-meta-label { font-size: 11px; font-weight: 800; color: #94a3b8; letter-spacing: 0.05em; }
