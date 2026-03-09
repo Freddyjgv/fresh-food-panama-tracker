@@ -182,7 +182,7 @@ export default function LoginPage() {
 
         .ff-login-visual {
           flex: 1.2;
-          background-image: url('/public/brand/pineapplefield.jpg'); 
+          background-image: url('/pineapplefield.jpg'); 
           background-size: cover;
           background-position: center;
           position: relative;
