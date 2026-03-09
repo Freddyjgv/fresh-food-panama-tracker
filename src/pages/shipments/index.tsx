@@ -120,25 +120,31 @@ export default function ShipmentsPage() {
       </h1>
       
       <div className="ff-client-meta-stack">
-        <div className="ff-meta-row">
-          <span className="ff-meta-label">TAX ID:</span>
-          <span className="ff-meta-value">{items[0]?.clients?.tax_id || '—'}</span>
-          <span className="ff-meta-divider">•</span>
-          {/* Usamos billing_address que es tu columna real */}
-          <span className="ff-meta-value">{items[0]?.clients?.billing_address || '—'}</span>
-        </div>
-        
-        <div className="ff-meta-row ff-secondary-meta">
-          {/* Usamos phone y website de tu tabla */}
-          <span className="ff-meta-value">{items[0]?.clients?.phone || '—'}</span>
-          {items[0]?.clients?.website && (
-            <>
-              <span className="ff-meta-divider">|</span>
-              <span className="ff-meta-value ff-website-link">{items[0].clients.website}</span>
-            </>
-          )}
-        </div>
-      </div>
+  {/* FILA 1: TAX ID */}
+  <div className="ff-meta-row">
+    <span className="ff-meta-label">TAX ID:</span>
+    <span className="ff-meta-value">{items[0]?.clients?.tax_id || '—'}</span>
+  </div>
+  
+  {/* FILA 2: DIRECCIÓN (Justo debajo del TAX ID) */}
+  <div className="ff-meta-row">
+    <span className="ff-meta-label">Dirección:</span>
+    <span className="ff-meta-value">{items[0]?.clients?.billing_address || '—'}</span>
+  </div>
+  
+  {/* FILA 3: CONTACTO */}
+  <div className="ff-meta-row ff-secondary-meta">
+    <span className="ff-meta-label">Telf:</span>
+    <span className="ff-meta-value">{items[0]?.clients?.phone || '—'}</span>
+    {items[0]?.clients?.website && (
+      <>
+        <span className="ff-meta-divider">|</span>
+        <span className="ff-meta-label">Web:</span>
+        <span className="ff-meta-value ff-website-link">{items[0].clients.website}</span>
+      </>
+    )}
+  </div>
+</div>
     </div>
   </div>
 
