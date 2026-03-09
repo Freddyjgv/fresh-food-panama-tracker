@@ -109,7 +109,7 @@ export default function LoginPage() {
         <div className="ff-login-form-side">
           <div className="ff-form-header">
             <img 
-              src="/public/brand/freshfood_logo.png" 
+              src="/brand/freshfood_logo.png" 
               alt="FreshFood Panama" 
               className="ff-form-logo" 
             />
@@ -182,7 +182,7 @@ export default function LoginPage() {
 
         .ff-login-visual {
           flex: 1.2;
-          background-image: url('/pineapplefield.jpg'); 
+          background-image: url('/brand/pineapplefield.jpg'); 
           background-size: cover;
           background-position: center;
           position: relative;
