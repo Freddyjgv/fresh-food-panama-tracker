@@ -8,7 +8,6 @@ import {
   CreditCard, Truck, ChevronDown, Calculator
 } from 'lucide-react';
 import Link from 'next/link';
-
 export default function ClientDetailPage() {
   const router = useRouter();
   const { id } = router.query;
@@ -18,6 +17,8 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true);
   const [isEditingMaster, setIsEditingMaster] = useState(false);
   const [editData, setEditData] = useState<any>({});
+  const [isEditingAddresses, setIsEditingAddresses] = useState(false);
+  const [isEditingStakeholders, setIsEditingStakeholders] = useState(false);
 
   const statusConfig: any = {
     'CREATED': { label: 'Creado', class: 'created' },
@@ -26,6 +27,7 @@ export default function ClientDetailPage() {
     'DELIVERED': { label: 'Entregado', class: 'delivered' }
   };
 
+  // 1. CARGA DE DATOS
   const fetchData = useCallback(async (clientId: string) => {
     try {
       const { data: clientData, error: cErr } = await supabase
@@ -62,6 +64,8 @@ export default function ClientDetailPage() {
     if (router.isReady && id) fetchData(id as string);
   }, [id, router.isReady, fetchData]);
 
+  // 2. FUNCIONES DE GUARDADO (Ahora en el lugar correcto)
+  
   const saveMasterData = async () => {
     try {
       const payload = {
@@ -84,6 +88,34 @@ export default function ClientDetailPage() {
       setIsEditingMaster(false);
       notify("Datos Maestros actualizados", "success");
     } catch (err: any) { notify("Error al guardar", "error"); }
+  };
+
+  const saveAddresses = async () => {
+    try {
+      const payload = {
+        billing_info: editData.billing_info,
+        consignee_info: editData.consignee_info,
+        notify_info: editData.notify_info
+      };
+      const { error } = await supabase.from('clients').update(payload).eq('id', id);
+      if (error) throw error;
+      setClient({ ...client, ...payload });
+      setIsEditingAddresses(false);
+      notify("Direcciones actualizadas", "success");
+    } catch (err) { notify("Error al guardar direcciones", "error"); }
+  };
+
+  const saveStakeholders = async () => {
+    try {
+      const payload = {
+        stakeholders: editData.stakeholders
+      };
+      const { error } = await supabase.from('clients').update(payload).eq('id', id);
+      if (error) throw error;
+      setClient({ ...client, ...payload });
+      setIsEditingStakeholders(false);
+      notify("Directorio actualizado", "success");
+    } catch (err) { notify("Error al guardar directorio", "error"); }
   };
 
   if (loading || !client) return <div className="loader-full"><Loader2 className="animate-spin" size={40}/></div>;
@@ -223,56 +255,105 @@ export default function ClientDetailPage() {
 
           {/* SIDEBAR */}
           <aside className="side-col">
-            <div className="pro-card mini-padding">
-              <h4 className="side-label">Direcciones BL/AWB</h4>
-              <div className="stakeholders-stack">
-                {[
-                  { id: 'billing_info', label: 'Billing Party', icon: <CreditCard size={14}/> },
-                  { id: 'consignee_info', label: 'Consignee Default', icon: <User size={14}/> },
-                  { id: 'notify_info', label: 'Notify Party', icon: <Bell size={14}/> }
-                ].map(addr => (
-                  <details className="dept-accordion" key={addr.id}>
-                    <summary className="ff-summary-clean">
-                      <div className="sum-left">{addr.icon} <span>{addr.label}</span></div>
-                      <div className="sum-right">
-                        <button className="ff-btn-mini-edit"><Pencil size={10} /></button>
-                        <ChevronDown size={14} className="chevron-icon"/>
-                      </div>
-                    </summary>
-                    <div className="dept-view">
-                      <p className="ff-address-text">{client[addr.id]?.address || 'No definida'}</p>
-                    </div>
-                  </details>
-                ))}
-              </div>
-            </div>
+  {/* DIRECCIONES BL/AWB */}
+  <div className="pro-card mini-padding">
+    <div className="side-header-row">
+      <h4 className="side-label">Direcciones BL/AWB</h4>
+      {!isEditingAddresses ? (
+        <button className="ff-btn-mini-edit" onClick={() => setIsEditingAddresses(true)}><Pencil size={10}/></button>
+      ) : (
+        <button className="ff-btn-mini-save" onClick={saveAddresses}><Save size={10}/></button>
+      )}
+    </div>
+    <div className="stakeholders-stack">
+      {[
+        { id: 'billing_info', label: 'Billing Party', icon: <CreditCard size={14}/> },
+        { id: 'consignee_info', label: 'Consignee Default', icon: <User size={14}/> },
+        { id: 'notify_info', label: 'Notify Party', icon: <Bell size={14}/> }
+      ].map(addr => (
+        <details className="dept-accordion" key={addr.id} open={isEditingAddresses}>
+          <summary className="ff-summary-clean">
+            <div className="sum-left">{addr.icon} <span>{addr.label}</span></div>
+            <ChevronDown size={14} className="chevron-icon"/>
+          </summary>
+          <div className="dept-view">
+            {isEditingAddresses ? (
+              <textarea 
+                className="ff-edit-textarea"
+                value={editData[addr.id]?.address || ''}
+                onChange={e => setEditData({
+                  ...editData, 
+                  [addr.id]: { ...editData[addr.id], address: e.target.value }
+                })}
+              />
+            ) : (
+              <p className="ff-address-text">{client[addr.id]?.address || 'No definida'}</p>
+            )}
+          </div>
+        </details>
+      ))}
+    </div>
+  </div>
 
-            <div className="pro-card mini-padding">
-              <h4 className="side-label">Directorio Interno</h4>
-              <div className="stakeholders-stack">
-                {[
-                  { id: 'purchasing', label: 'Compras', icon: <ShoppingBag size={14}/>, color: '#3b82f6' },
-                  { id: 'accounting', label: 'Pagos / Contab.', icon: <CreditCard size={14}/>, color: '#ef4444' },
-                  { id: 'logistics', label: 'Logística', icon: <Truck size={14}/>, color: '#10b981' }
-                ].map(dept => (
-                  <details className="dept-accordion" key={dept.id}>
-                    <summary className="ff-summary-clean" style={{ borderLeft: `4px solid ${dept.color}` }}>
-                      <div className="sum-left">{dept.icon} <span>{dept.label}</span></div>
-                      <div className="sum-right">
-                        <button className="ff-btn-mini-edit"><Pencil size={10} /></button>
-                        <ChevronDown size={14} className="chevron-icon"/>
-                      </div>
-                    </summary>
-                    <div className="dept-view">
-                      <p className="ff-contact-name">{client.stakeholders?.[dept.id]?.name || 'No asignado'}</p>
-                      <div className="ff-contact-item"><Mail size={12}/> <span>{client.stakeholders?.[dept.id]?.email || '—'}</span></div>
-                      <div className="ff-contact-item"><Phone size={12}/> <span>{client.stakeholders?.[dept.id]?.phone || '—'}</span></div>
-                    </div>
-                  </details>
-                ))}
+  {/* DIRECTORIO INTERNO */}
+  <div className="pro-card mini-padding">
+    <div className="side-header-row">
+      <h4 className="side-label">Directorio Interno</h4>
+      {!isEditingStakeholders ? (
+        <button className="ff-btn-mini-edit" onClick={() => setIsEditingStakeholders(true)}><Pencil size={10}/></button>
+      ) : (
+        <button className="ff-btn-mini-save" onClick={saveStakeholders}><Save size={10}/></button>
+      )}
+    </div>
+    <div className="stakeholders-stack">
+      {[
+        { id: 'purchasing', label: 'Compras', icon: <ShoppingBag size={14}/>, color: '#3b82f6' },
+        { id: 'accounting', label: 'Pagos / Contab.', icon: <CreditCard size={14}/>, color: '#ef4444' },
+        { id: 'logistics', label: 'Logística', icon: <Truck size={14}/>, color: '#10b981' }
+      ].map(dept => (
+        <details className="dept-accordion" key={dept.id} open={isEditingStakeholders}>
+          <summary className="ff-summary-clean" style={{ borderLeft: `4px solid ${dept.color}` }}>
+            <div className="sum-left">{dept.icon} <span>{dept.label}</span></div>
+            <ChevronDown size={14} className="chevron-icon"/>
+          </summary>
+          <div className="dept-view">
+            {isEditingStakeholders ? (
+              <div className="ff-edit-stack-mini">
+                <input 
+                  placeholder="Nombre"
+                  value={editData.stakeholders?.[dept.id]?.name || ''}
+                  onChange={e => setEditData({
+                    ...editData,
+                    stakeholders: {
+                      ...editData.stakeholders,
+                      [dept.id]: { ...editData.stakeholders[dept.id], name: e.target.value }
+                    }
+                  })}
+                />
+                <input 
+                  placeholder="Email"
+                  value={editData.stakeholders?.[dept.id]?.email || ''}
+                  onChange={e => setEditData({
+                    ...editData,
+                    stakeholders: {
+                      ...editData.stakeholders,
+                      [dept.id]: { ...editData.stakeholders[dept.id], email: e.target.value }
+                    }
+                  })}
+                />
               </div>
-            </div>
-          </aside>
+            ) : (
+              <>
+                <p className="ff-contact-name">{client.stakeholders?.[dept.id]?.name || 'No asignado'}</p>
+                <div className="ff-contact-item"><Mail size={12}/> <span>{client.stakeholders?.[dept.id]?.email || '—'}</span></div>
+              </>
+            )}
+          </div>
+        </details>
+      ))}
+    </div>
+  </div>
+</aside>
         </div>
       </div>
 
@@ -314,6 +395,12 @@ export default function ClientDetailPage() {
         .sum-left { display: flex; align-items: center; gap: 10px; font-weight: 700; color: #475569; font-size: 13px; }
         .sum-right { display: flex; align-items: center; gap: 12px; }
         .chevron-icon { transition: 0.2s; color: #94a3b8; }
+        .side-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.ff-btn-mini-save { width: 22px; height: 22px; border-radius: 6px; border: none; background: #16a34a; color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.ff-edit-textarea { width: 100%; min-height: 80px; padding: 8px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 12px; font-family: inherit; resize: none; outline: none; }
+.ff-edit-stack-mini { display: flex; flex-direction: column; gap: 6px; }
+.ff-edit-stack-mini input { padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 12px; outline: none; }
+.ff-edit-stack-mini input:focus, .ff-edit-textarea:focus { border-color: #234d23; }
         .dept-accordion[open] .chevron-icon { transform: rotate(180deg); }
         .ff-btn-mini-edit { width: 22px; height: 22px; border-radius: 6px; border: 1px solid #e2e8f0; background: white; color: #94a3b8; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         .dept-view { padding: 0 16px 16px 16px; background: #fafafa; }
