@@ -78,6 +78,7 @@ a {
 .ff-app {
   min-height: 100vh;
   display: grid;
+  /* El header (top) ocupa todo el ancho, side y main abajo */
   grid-template-columns: var(--ff-sidebar-w) minmax(0, 1fr);
   grid-template-rows: var(--ff-header-h) minmax(0, 1fr);
   grid-template-areas:
@@ -101,29 +102,39 @@ a {
 
 .ff-top__inner {
   height: var(--ff-header-h);
-  padding: 0 30px; /* Más espacio a los lados */
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* Esto empuja los grupos a los extremos */
+  padding: 0 35px;
+  gap: 20px;
+  width: 100%; /* Ocupa todo el ancho disponible */
 }
 
 .ff-top__left {
   display: flex;
   align-items: center;
-  gap: 14px;
-  min-width: 0;
+  gap: 24px;
+  flex-shrink: 0; /* Evita que el logo se encoja */
 }
 
 .ff-top__logo {
-  height: 55px; /* Subimos el tamaño del logo */
+  height: 52px; /* Tu tamaño deseado */
   width: auto;
-  margin-right: 20px;
+  display: block;
 }
 
 .ff-top__titleWrap {
-  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .ff-top__title {
-  font-size: 18px; /* Título un poco más imponente */
+  font-family: 'Poppins', sans-serif;
+  font-weight: 800;
+  font-size: 19px;
   color: var(--ff-green);
+  line-height: 1.2;
 }
 
 .ff-top__sub {
@@ -138,8 +149,9 @@ a {
 .ff-top__right {
   display: flex;
   align-items: center;
-  gap: 10px;
-  white-space: nowrap;
+  gap: 15px;
+  flex-shrink: 0; /* Evita que los botones se amontonen */
+  margin-left: auto; /* Refuerza el empuje a la derecha */
 }
 
 /* -------------------------------
