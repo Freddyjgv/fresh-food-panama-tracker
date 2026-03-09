@@ -11,10 +11,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // TUS COLORES OFICIALES
+  // PALETA FRESHFOOD PANAMA
   const FF_DARK_GREEN = "#234d23";
 
-  /** * ✅ TU LÓGICA ORIGINAL INTACTA
+  /** * ✅ TU LÓGICA ORIGINAL DE REDIRECCIÓN 
    */
   async function routeByRole(): Promise<boolean> {
     const { data } = await supabase.auth.getSession();
@@ -76,18 +76,16 @@ export default function LoginPage() {
     }
   }
 
-  // PANTALLA DE CARGA (Sincronizada con tu estilo)
   if (checking) {
     return (
       <div className="ff-login-viewport">
         <div className="ff-loading-box">
           <div className="ff-spinner"></div>
-          <p>Verificando sesión segura...</p>
+          <p style={{ color: FF_DARK_GREEN }}>Verificando credenciales FreshFood...</p>
         </div>
         <style jsx>{`
-          .ff-login-viewport { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f8fafc; }
-          .ff-loading-box { text-align: center; color: ${FF_DARK_GREEN}; font-weight: 600; }
-          .ff-spinner { width: 30px; height: 30px; border: 3px solid #e2e8f0; border-top-color: ${FF_DARK_GREEN}; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 10px; }
+          .ff-login-viewport { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #ffffff; }
+          .ff-spinner { width: 30px; height: 30px; border: 3px solid #f1f5f9; border-top-color: ${FF_DARK_GREEN}; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px; }
           @keyframes spin { to { transform: rotate(360deg); } }
         `}</style>
       </div>
@@ -98,19 +96,19 @@ export default function LoginPage() {
     <div className="ff-login-viewport">
       <div className="ff-login-container">
         
-        {/* LADO IZQUIERDO: BRANDING & VISUAL */}
+        {/* LADO IZQUIERDO: VISUAL (VISTA AÉREA) */}
         <div className="ff-login-visual">
           <div className="ff-visual-overlay"></div>
           <div className="ff-visual-content">
             <img 
-              src="https://www.freshfoodpanama.com/wp-content/uploads/2023/08/logo-fresh-food-panama.png" 
+              src="/brand/freshfood_logo.png" 
               alt="FreshFood Panama" 
               className="ff-v-logo" 
             />
             <h2>Logística de exportación que conecta a Panamá con el mundo.</h2>
             <div className="ff-features">
-              <div className="ff-f-item"><CheckCircle2 size={16} /> <span>Trazabilidad en tiempo real</span></div>
-              <div className="ff-f-item"><CheckCircle2 size={16} /> <span>Documentación digital segura</span></div>
+              <div className="ff-f-item"><CheckCircle2 size={16} /> <span>Trazabilidad Fresh Connect</span></div>
+              <div className="ff-f-item"><CheckCircle2 size={16} /> <span>Documentación Centralizada</span></div>
             </div>
           </div>
         </div>
@@ -119,7 +117,7 @@ export default function LoginPage() {
         <div className="ff-login-form-side">
           <div className="ff-form-header">
             <h1>Portal de Clientes</h1>
-            <p>Ingresa tus credenciales para acceder a tus embarques.</p>
+            <p>Ingresa tus datos para gestionar tus embarques.</p>
           </div>
 
           <form onSubmit={onSubmit} className="ff-login-form">
@@ -148,14 +146,14 @@ export default function LoginPage() {
             {error && <div className="ff-error-msg">{error}</div>}
 
             <button disabled={loading} className="ff-submit-btn">
-              {loading ? "Verificando..." : "Ingresar al Portal"}
+              {loading ? "Ingresando..." : "Acceder al Panel"}
               {!loading && <LogIn size={18} />}
             </button>
           </form>
 
           <div className="ff-form-footer">
             <ShieldCheck size={14} />
-            <span>Acceso encriptado mediante SSL</span>
+            <span>Seguridad FreshFood | Acceso Encriptado</span>
           </div>
         </div>
       </div>
@@ -166,73 +164,70 @@ export default function LoginPage() {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #f0f4f2;
-          padding: 20px;
+          background: #f0f4f1;
+          padding: 24px;
           font-family: 'Inter', system-ui, sans-serif;
         }
 
         .ff-login-container {
           display: flex;
           width: 100%;
-          max-width: 1050px;
+          max-width: 1000px;
           min-height: 620px;
           background: white;
-          border-radius: 30px;
+          border-radius: 32px;
           overflow: hidden;
-          box-shadow: 0 40px 100px -20px rgba(35, 77, 35, 0.15);
+          box-shadow: 0 40px 100px -20px rgba(35, 77, 35, 0.2);
         }
 
         .ff-login-visual {
-          flex: 1.1;
-          background-image: url('https://images.unsplash.com/photo-1550411234-747356d3293e?auto=format&fit=crop&q=80'); 
+          flex: 1;
+          background-image: url('https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80'); 
           background-size: cover;
           background-position: center;
           position: relative;
           display: flex;
-          padding: 50px;
+          padding: 48px;
           align-items: flex-end;
         }
 
         .ff-visual-overlay {
           position: absolute;
           inset: 0;
-          background: linear-gradient(135deg, rgba(35, 77, 35, 0.9) 0%, rgba(0,0,0,0.5) 100%);
+          background: linear-gradient(135deg, rgba(35, 77, 35, 0.85) 0%, rgba(0,0,0,0.4) 100%);
         }
 
         .ff-visual-content { position: relative; z-index: 2; color: white; }
-        .ff-v-logo { height: 70px; margin-bottom: 30px; }
-        .ff-visual-content h2 { font-size: 26px; font-weight: 300; line-height: 1.3; margin-bottom: 30px; }
+        .ff-v-logo { height: 60px; margin-bottom: 24px; filter: brightness(0) invert(1); } /* Fuerza el logo a blanco si el fondo es oscuro */
+        .ff-visual-content h2 { font-size: 24px; font-weight: 300; line-height: 1.3; margin-bottom: 32px; letter-spacing: -0.02em; }
         .ff-features { display: grid; gap: 12px; }
-        .ff-f-item { display: flex; align-items: center; gap: 10px; font-size: 14px; opacity: 0.9; }
+        .ff-f-item { display: flex; align-items: center; gap: 10px; font-size: 14px; opacity: 0.9; font-weight: 500; }
 
         .ff-login-form-side {
-          flex: 1;
+          width: 440px;
           padding: 60px;
           display: flex;
           flex-direction: column;
           justify-content: center;
         }
 
-        .ff-form-header h1 { font-size: 28px; font-weight: 800; color: ${FF_DARK_GREEN}; margin-bottom: 8px; }
-        .ff-form-header p { color: #64748b; font-size: 14px; margin-bottom: 40px; }
+        .ff-form-header h1 { font-size: 28px; font-weight: 900; color: ${FF_DARK_GREEN}; margin-bottom: 6px; letter-spacing: -0.04em; }
+        .ff-form-header p { color: #64748b; font-size: 14px; margin-bottom: 36px; }
 
         .ff-input-group { margin-bottom: 20px; }
-        .ff-input-group label { display: block; font-size: 11px; font-weight: 700; color: ${FF_DARK_GREEN}; text-transform: uppercase; margin-bottom: 8px; }
+        .ff-input-group label { display: block; font-size: 11px; font-weight: 800; color: ${FF_DARK_GREEN}; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.05em; }
         .ff-input-group input {
           width: 100%;
-          padding: 14px 18px;
+          padding: 14px 16px;
           border-radius: 12px;
-          border: 2px solid #f1f5f9;
+          border: 1.5px solid #edf2f7;
           background: #f8fafc;
           font-size: 15px;
           transition: all 0.2s;
         }
-        .ff-input-group input:focus { border-color: ${FF_DARK_GREEN}; background: white; outline: none; }
+        .ff-input-group input:focus { border-color: ${FF_DARK_GREEN}; background: white; outline: none; box-shadow: 0 0 0 4px rgba(35, 77, 35, 0.05); }
 
-        .ff-error-msg { 
-          background: #fef2f2; border: 1px solid #fee2e2; color: #991b1b; 
-          padding: 12px; border-radius: 10px; font-size: 13px; margin-bottom: 20px;
-        }
+        .ff-error-msg { background: #fef2f2; border: 1px solid #fee2e2; color: #991b1b; padding: 12px; border-radius: 10px; font-size: 13px; margin-bottom: 20px; font-weight: 600; }
 
         .ff-submit-btn {
           width: 100%;
@@ -240,7 +235,7 @@ export default function LoginPage() {
           background: ${FF_DARK_GREEN};
           color: white;
           border: none;
-          border-radius: 14px;
+          border-radius: 12px;
           font-weight: 700;
           font-size: 16px;
           display: flex;
@@ -250,13 +245,14 @@ export default function LoginPage() {
           cursor: pointer;
           transition: 0.2s;
         }
-        .ff-submit-btn:hover { background: #1a3a1a; transform: translateY(-1px); }
-        .ff-submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .ff-submit-btn:hover { background: #1a3a1a; transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(35, 77, 35, 0.3); }
+        .ff-submit-btn:disabled { opacity: 0.7; cursor: not-allowed; }
 
-        .ff-form-footer { margin-top: 40px; display: flex; align-items: center; justify-content: center; gap: 8px; color: #94a3b8; font-size: 11px; }
+        .ff-form-footer { margin-top: 32px; display: flex; align-items: center; justify-content: center; gap: 8px; color: #a0aec0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
 
-        @media (max-width: 900px) {
+        @media (max-width: 850px) {
           .ff-login-visual { display: none; }
+          .ff-login-form-side { width: 100%; padding: 40px; }
         }
       `}</style>
     </div>
